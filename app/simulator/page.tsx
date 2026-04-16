@@ -2,39 +2,69 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import SimulatorForm from '@/components/SimulatorForm';
-import SimulatorResults from '@/components/SimulatorResults';
-import type { SimulatorInput, SimulatorResult } from '@/lib/types';
-import { runSimulation } from '@/lib/calculations';
+import type { WizardState, WizardStep, CustomerCategory, SupplyData } from '@/lib/types';
+import ProgressBar from '@/components/ui/ProgressBar';
+import StepCustomerType from '@/components/simulator/StepCustomerType';
+import StepContact from '@/components/simulator/StepContact';
+import StepSupply from '@/components/simulator/StepSupply';
+import StepBills from '@/components/simulator/StepBills';
+import StepBillReview from '@/components/simulator/StepBillReview';
+import StepFutureConsumption from '@/components/simulator/StepFutureConsumption';
+import StepResults from '@/components/simulator/StepResults';
+
+// ─── Orden y estado inicial del wizard ───────────────────────────────────────
+
+export const STEP_ORDER: WizardStep[] = [
+  'customer-type',
+  'contact',
+  'supply',
+  'bills',
+  'bill-review',
+  'future-consumption',
+  'results',
+];
+
+const INITIAL_STATE: WizardState = {
+  step: 'customer-type',
+  customerCategory: null,
+  contact: null,
+  supply: null,
+  consumptionProfile: null,
+  futureConsumption: null,
+  simulationResult: null,
+};
+
+// ─── Página principal del wizard ──────────────────────────────────────────────
 
 export default function SimulatorPage() {
-  const [result, setResult] = useState<SimulatorResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<WizardState>(INITIAL_STATE);
 
-  function handleSimulate(input: SimulatorInput) {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const simulation = runSimulation(input);
-      setResult(simulation);
-      // Scroll suave a los resultados en móvil
-      setTimeout(() => {
-        document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    } catch (err) {
-      setError('Error al calcular la simulación. Por favor intenta nuevamente.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
+  function goTo(step: WizardStep) {
+    setState((prev) => ({ ...prev, step }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  function goNext() {
+    const idx = STEP_ORDER.indexOf(state.step);
+    if (idx < STEP_ORDER.length - 1) goTo(STEP_ORDER[idx + 1]);
+  }
+
+  function goBack() {
+    const idx = STEP_ORDER.indexOf(state.step);
+    if (idx > 0) goTo(STEP_ORDER[idx - 1]);
+  }
+
+  function update(partial: Partial<WizardState>) {
+    setState((prev) => ({ ...prev, ...partial }));
+  }
+
+  const isFirstStep = state.step === STEP_ORDER[0];
 
   return (
     <main className="min-h-screen bg-slate-50">
       {/* Barra de navegación */}
       <nav className="bg-white border-b border-gray-100 px-4 py-3">
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
           <Link href="/" className="text-green-600 hover:text-green-700 text-sm font-medium">
             ← Inicio
           </Link>
@@ -43,38 +73,88 @@ export default function SimulatorPage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Simulador de ahorro solar</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Ingresa los datos de tu suministro y calcula cuánto puedes ahorrar con energía fotovoltaica.
-          </p>
-        </div>
+      {/* Barra de progreso */}
+      <ProgressBar currentStep={state.step} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Formulario */}
-          <div className="lg:col-span-2">
-            <SimulatorForm onSubmit={handleSimulate} isLoading={isLoading} />
-          </div>
+      {/* Contenido del paso activo */}
+      <div className="max-w-3xl mx-auto px-4 py-10">
+        {state.step === 'customer-type' && (
+          <StepCustomerType
+            selected={state.customerCategory}
+            onSelect={(category: CustomerCategory) => {
+              update({ customerCategory: category });
+              goNext();
+            }}
+          />
+        )}
 
-          {/* Resultados */}
-          <div id="results" className="lg:col-span-3">
-            {error && (
-              <div className="bg-red-50 text-red-700 border border-red-200 p-4 rounded-xl text-sm">
-                {error}
-              </div>
-            )}
-            {result && <SimulatorResults result={result} />}
-            {!result && !error && (
-              <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-gray-100 shadow-sm text-center px-6">
-                <div className="text-4xl mb-3">☀️</div>
-                <p className="text-gray-500 text-sm">
-                  Completa el formulario y presiona <strong>Simular</strong> para ver tu ahorro estimado.
-                </p>
-              </div>
-            )}
+        {state.step === 'contact' && (
+          <StepContact
+            category={state.customerCategory!}
+            initialData={state.contact}
+            onSubmit={(contact) => {
+              update({ contact });
+              goNext();
+            }}
+          />
+        )}
+
+        {state.step === 'supply' && (
+          <StepSupply
+            category={state.customerCategory!}
+            initialData={state.supply}
+            onSubmit={(supply: SupplyData) => {
+              update({ supply });
+              goNext();
+            }}
+          />
+        )}
+
+        {state.step === 'bills' && (
+          <StepBills
+            initialData={state.consumptionProfile}
+            supply={state.supply!}
+            onSubmit={(consumptionProfile) => {
+              update({ consumptionProfile });
+              goNext();
+            }}
+          />
+        )}
+
+        {state.step === 'bill-review' && (
+          <StepBillReview
+            profile={state.consumptionProfile!}
+            onConfirm={goNext}
+          />
+        )}
+
+        {state.step === 'future-consumption' && (
+          <StepFutureConsumption
+            initialData={state.futureConsumption}
+            averageMonthlyKWh={state.consumptionProfile!.averageMonthlyKWh}
+            onSubmit={(futureConsumption) => {
+              update({ futureConsumption });
+              goNext();
+            }}
+          />
+        )}
+
+        {state.step === 'results' && (
+          <StepResults state={state} />
+        )}
+
+        {/* Navegación inferior */}
+        {!isFirstStep && (
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={goBack}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              ← Volver
+            </button>
           </div>
-        </div>
+        )}
       </div>
     </main>
   );

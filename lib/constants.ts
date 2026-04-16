@@ -20,6 +20,7 @@ export const SOLAR_DEFAULTS = {
   batteryDailyCycleEfficiency: 0.80,   // eficiencia de ciclo diario de la batería
   minAlternativeCoveragePercent: 65,   // cobertura mínima para mostrar kit alternativo
   businessCoverageTarget: 0.90,        // % del consumo anual que se intenta cubrir en clientes empresa
+  evConsumptionIncreasePerCar: 0.33,   // incremento de consumo por auto eléctrico sobre consumo actual
   // Perfil de consumo residencial (parametrizable)
   dayConsumptionRatio: 0.70,           // 70% del consumo ocurre durante el día
   nightConsumptionRatio: 0.30,         // 30% del consumo ocurre durante la noche
