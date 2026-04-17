@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { ConsumptionProfile, MonthlyBill, SupplyData } from '@/lib/types';
+import type { ConsumptionProfile, MonthlyBill, SupplyData, TarifaType } from '@/lib/types';
+import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route';
 import { MONTH_NAMES } from '@/lib/constants';
+import BillOCRUpload from './BillOCRUpload';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -10,15 +12,16 @@ interface StepBillsProps {
   initialData: ConsumptionProfile | null;
   supply: SupplyData;
   onSubmit: (profile: ConsumptionProfile) => void;
+  onUpdateSupply?: (partial: Pick<SupplyData, 'distribuidora' | 'tarifa'>) => void;
 }
 
 // ─── Tipos internos ───────────────────────────────────────────────────────────
 
 interface MonthSlot {
-  month: number;  // 1–12
+  month: number;
   year: number;
-  key: string;    // "YYYY-MM"
-  label: string;  // "Enero 2026"
+  key: string;
+  label: string;
 }
 
 interface RowValues {
@@ -28,7 +31,6 @@ interface RowValues {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Genera los últimos 12 meses en orden del más reciente al más antiguo. */
 function generateMonthSlots(): MonthSlot[] {
   const now = new Date();
   const slots: MonthSlot[] = [];
@@ -46,7 +48,6 @@ function generateMonthSlots(): MonthSlot[] {
   return slots;
 }
 
-/** Reconstruye el mapa de valores desde un ConsumptionProfile existente (volver atrás). */
 function initRowsFromProfile(
   slots: MonthSlot[],
   profile: ConsumptionProfile | null,
@@ -54,74 +55,151 @@ function initRowsFromProfile(
   const map: Record<string, RowValues> = {};
   slots.forEach((s) => { map[s.key] = { kWh: '', clp: '' }; });
   if (!profile) return map;
-  profile.bills.forEach((b) => {
-    const key = `${b.year}-${String(b.month).padStart(2, '0')}`;
-    if (map[key] !== undefined) {
-      map[key] = {
-        kWh: b.consumptionKWh.toString(),
-        clp: b.variableAmountCLP?.toString() ?? '',
-      };
-    }
-  });
+  profile.bills
+    .filter((b) => b.source !== 'interpolated')
+    .forEach((b) => {
+      const key = `${b.year}-${String(b.month).padStart(2, '0')}`;
+      if (map[key] !== undefined) {
+        map[key] = {
+          kWh: b.consumptionKWh.toString(),
+          clp: b.variableAmountCLP?.toString() ?? '',
+        };
+      }
+    });
   return map;
 }
 
-/** Construye el ConsumptionProfile a partir del mapa de filas. */
 function buildProfile(
   slots: MonthSlot[],
   rows: Record<string, RowValues>,
   supply: SupplyData,
+  manualDistribuidora: string,
+  manualTarifa: TarifaType,
 ): ConsumptionProfile {
-  const bills: MonthlyBill[] = [];
+  const distribuidora = supply.distribuidora || manualDistribuidora || undefined;
+  const tarifa = supply.tarifa !== 'unknown' ? supply.tarifa : manualTarifa;
+
+  const realBills: MonthlyBill[] = [];
 
   slots.forEach((s) => {
     const row = rows[s.key];
     const kWh = parseFloat(row.kWh);
     if (!row.kWh || isNaN(kWh) || kWh <= 0) return;
-
     const clp = row.clp ? parseFloat(row.clp) : undefined;
     const kWhPrice = clp && kWh > 0 ? Math.round(clp / kWh) : undefined;
-
-    bills.push({
+    realBills.push({
       month: s.month,
       year: s.year,
       consumptionKWh: kWh,
       variableAmountCLP: clp,
       kWhPriceCLP: kWhPrice,
-      distribuidora: supply.distribuidora,
-      tarifa: supply.tarifa !== 'unknown' ? supply.tarifa : undefined,
+      distribuidora,
+      tarifa: tarifa !== 'unknown' ? tarifa : undefined,
       source: 'manual',
     });
   });
 
-  const values = bills.map((b) => b.consumptionKWh);
-  const average = values.length > 0
-    ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+  // ── Interpolación estacional para meses faltantes ─────────────────────────
+  const allBills: MonthlyBill[] = [...realBills];
+
+  if (realBills.length >= 2) {
+    const monthKWh = new Map<number, number>();
+    realBills.forEach((b) => monthKWh.set(b.month, b.consumptionKWh));
+
+    slots.forEach((slot) => {
+      if (monthKWh.has(slot.month)) return;
+
+      const neighborValues: number[] = [];
+      for (const offset of [-2, -1, 1, 2]) {
+        const m = ((slot.month - 1 + offset + 12) % 12) + 1;
+        const v = monthKWh.get(m);
+        if (v !== undefined) neighborValues.push(v);
+      }
+      if (neighborValues.length === 0) return;
+
+      const estimated = Math.round(
+        neighborValues.reduce((a, b) => a + b, 0) / neighborValues.length,
+      );
+      allBills.push({
+        month: slot.month,
+        year: slot.year,
+        consumptionKWh: estimated,
+        source: 'interpolated',
+      });
+    });
+  }
+
+  const realValues = realBills.map((b) => b.consumptionKWh);
+  const allValues  = allBills.map((b) => b.consumptionKWh);
+  const average    = allValues.length > 0
+    ? Math.round(allValues.reduce((a, b) => a + b, 0) / allValues.length)
     : 0;
 
   return {
-    bills,
+    bills: allBills,
     averageMonthlyKWh: average,
-    peakMonthKWh: values.length > 0 ? Math.max(...values) : 0,
-    minMonthKWh:  values.length > 0 ? Math.min(...values) : 0,
-    isComplete: bills.length === 12,
+    peakMonthKWh: realValues.length > 0 ? Math.max(...realValues) : 0,
+    minMonthKWh:  realValues.length > 0 ? Math.min(...realValues) : 0,
+    isComplete: realBills.length === 12,
   };
 }
+
+// ─── Opciones de tarifa ───────────────────────────────────────────────────────
+
+const TARIFA_OPTIONS: { value: TarifaType; label: string }[] = [
+  { value: 'unknown', label: 'No sé / No aparece en la boleta' },
+  { value: 'BT1',     label: 'BT1 — Residencial (< 10 kW)' },
+  { value: 'BT2',     label: 'BT2 — Comercial con potencia contratada' },
+  { value: 'BT3',     label: 'BT3 — Demanda máxima medida' },
+  { value: 'BT4.1',   label: 'BT4.1 — Demanda punta contratada' },
+  { value: 'BT4.2',   label: 'BT4.2 — Demanda punta medida' },
+  { value: 'BT4.3',   label: 'BT4.3 — Demanda punta y máxima medidas' },
+];
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 const SLOTS = generateMonthSlots();
 
-export default function StepBills({ initialData, supply, onSubmit }: StepBillsProps) {
+export default function StepBills({ initialData, supply, onSubmit, onUpdateSupply }: StepBillsProps) {
   const [rows, setRows] = useState<Record<string, RowValues>>(
     () => initRowsFromProfile(SLOTS, initialData),
+  );
+  const [showOCR, setShowOCR] = useState(false);
+  const [ocrMatchCount, setOcrMatchCount] = useState<number | null>(null);
+  const [ocrUsed, setOcrUsed] = useState(false);
+
+  const [manualDistribuidora, setManualDistribuidora] = useState(supply.distribuidora ?? '');
+  const [manualTarifa, setManualTarifa] = useState<TarifaType>(
+    supply.tarifa !== 'unknown' ? supply.tarifa : 'unknown',
   );
 
   function setRow(key: string, field: keyof RowValues, value: string) {
     setRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }
 
-  // ─── Métricas en vivo ──────────────────────────────────────────────────────
+  function handleOCRConfirm(periods: ExtractedPeriod[], matchCount: number, billData: ExtractedBill) {
+    const updated = { ...rows };
+    periods.forEach((p) => {
+      const key = `${p.year}-${String(p.month).padStart(2, '0')}`;
+      if (updated[key] !== undefined) {
+        updated[key] = {
+          kWh: p.consumptionKWh.toString(),
+          clp: p.variableAmountCLP?.toString() ?? '',
+        };
+      }
+    });
+    setRows(updated);
+    setOcrMatchCount(matchCount);
+    setOcrUsed(true);
+    setShowOCR(false);
+
+    if (onUpdateSupply && (billData.distribuidora || billData.tarifa)) {
+      onUpdateSupply({
+        distribuidora: billData.distribuidora ?? supply.distribuidora,
+        tarifa: (billData.tarifa as TarifaType) ?? supply.tarifa,
+      });
+    }
+  }
 
   const { filledCount, liveAverage } = useMemo(() => {
     const values = SLOTS
@@ -136,11 +214,18 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
   }, [rows]);
 
   const canSubmit = filledCount >= 1;
+  const showManualFields = !ocrUsed && (!supply.distribuidora || supply.tarifa === 'unknown');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit(buildProfile(SLOTS, rows, supply));
+    if (onUpdateSupply && !ocrUsed) {
+      onUpdateSupply({
+        distribuidora: manualDistribuidora || supply.distribuidora,
+        tarifa: manualTarifa,
+      });
+    }
+    onSubmit(buildProfile(SLOTS, rows, supply, manualDistribuidora, manualTarifa));
   }
 
   return (
@@ -154,15 +239,34 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
+        {/* OCR */}
+        {showOCR ? (
+          <BillOCRUpload
+            availableSlotKeys={SLOTS.map((s) => s.key)}
+            onConfirm={handleOCRConfirm}
+            onCancel={() => setShowOCR(false)}
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => { setShowOCR(true); setOcrMatchCount(null); }}
+              className="w-full rounded-2xl border-2 border-dashed border-green-300 bg-green-50 hover:bg-green-100 text-green-700 font-medium py-3 text-sm transition-colors flex items-center justify-center gap-2"
+            >
+              <span>📄</span> Subir boleta para autocompletar
+            </button>
+            {ocrMatchCount !== null && (
+              <p className="text-xs text-green-700 bg-green-50 rounded-xl px-3 py-2 text-center">
+                ✓ Se pre-rellenaron <strong>{ocrMatchCount} mes{ocrMatchCount !== 1 ? 'es' : ''}</strong> desde la boleta. Puedes editar los valores si es necesario.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Resumen en vivo */}
         <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-3">
           <div className="flex items-center gap-2">
-            <span
-              className={[
-                'text-2xl font-bold tabular-nums',
-                filledCount === 12 ? 'text-green-600' : 'text-gray-800',
-              ].join(' ')}
-            >
+            <span className={['text-2xl font-bold tabular-nums', filledCount === 12 ? 'text-green-600' : 'text-gray-800'].join(' ')}>
               {filledCount}
             </span>
             <span className="text-sm text-gray-500">de 12 meses ingresados</span>
@@ -177,14 +281,11 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
 
         {/* Tabla de meses */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Encabezado */}
           <div className="grid grid-cols-[1fr_120px_120px] gap-3 px-5 py-2.5 bg-gray-50 border-b border-gray-100">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mes</span>
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">kWh</span>
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Monto ($)</span>
           </div>
-
-          {/* Filas */}
           {SLOTS.map((slot, idx) => {
             const row = rows[slot.key];
             const isFilled = !!row.kWh && parseFloat(row.kWh) > 0;
@@ -201,10 +302,7 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
                   {slot.label}
                 </span>
                 <input
-                  type="number"
-                  min="1"
-                  max="99999"
-                  step="1"
+                  type="number" min="1" max="99999" step="1"
                   value={row.kWh}
                   onChange={(e) => setRow(slot.key, 'kWh', e.target.value)}
                   placeholder="—"
@@ -212,9 +310,7 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
                   className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
                 />
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
+                  type="number" min="1" step="1"
                   value={row.clp}
                   onChange={(e) => setRow(slot.key, 'clp', e.target.value)}
                   placeholder="opcional"
@@ -226,7 +322,50 @@ export default function StepBills({ initialData, supply, onSubmit }: StepBillsPr
           })}
         </div>
 
-        {/* Ayuda */}
+        {/* Distribuidora y tarifa manual (cuando no vino de OCR) */}
+        {showManualFields && filledCount > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Datos de tu suministro</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Opcional — puedes encontrarlos en tu boleta.</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              {!supply.distribuidora && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="manualDistribuidora" className="text-xs font-medium text-gray-600">
+                    Empresa distribuidora
+                  </label>
+                  <input
+                    id="manualDistribuidora"
+                    type="text"
+                    value={manualDistribuidora}
+                    onChange={(e) => setManualDistribuidora(e.target.value)}
+                    placeholder="Ej: Enel, CGE, Chilquinta…"
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  />
+                </div>
+              )}
+              {supply.tarifa === 'unknown' && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="manualTarifa" className="text-xs font-medium text-gray-600">
+                    Tarifa eléctrica
+                  </label>
+                  <select
+                    id="manualTarifa"
+                    value={manualTarifa}
+                    onChange={(e) => setManualTarifa(e.target.value as TarifaType)}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  >
+                    {TARIFA_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <p className="text-xs text-gray-400 text-center px-4">
           El consumo en kWh aparece en tu boleta junto al período de medición.
           El monto es la parte variable (sin cargos fijos) — opcional pero mejora el cálculo del precio por kWh.

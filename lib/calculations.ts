@@ -42,24 +42,33 @@ function calcAnnualCoveragePercent(
 function selectResidentialKit(
   monthlyConsumptionKWh: number,
   annualProductionPerKWp: number,
+  empalmeMaxKW?: number,
 ): KitRecommendation {
   const annualConsumptionKWh = monthlyConsumptionKWh * 12;
   const targetAnnualProduction = annualConsumptionKWh * SOLAR_DEFAULTS.dayConsumptionRatio;
   const requiredKWp = targetAnnualProduction / annualProductionPerKWp;
 
-  const base = KIT_CATALOG
+  const allBase = KIT_CATALOG
     .filter((k) => !k.includesBattery)
     .sort((a, b) => a.sizekWp - b.sizekWp);
+
+  // Filtramos por límite del empalme si está definido
+  const base = empalmeMaxKW != null
+    ? allBase.filter((k) => k.sizekWp <= empalmeMaxKW)
+    : allBase;
+
+  // Si ningún kit cabe en el empalme, usamos el más pequeño disponible
+  const eligibleBase = base.length > 0 ? base : allBase.slice(0, 1);
 
   const withBattery = KIT_CATALOG
     .filter((k) => k.includesBattery)
     .sort((a, b) => a.sizekWp - b.sizekWp);
 
-  const primary = base.find((k) => k.sizekWp >= requiredKWp) ?? base[base.length - 1];
+  const primary = eligibleBase.find((k) => k.sizekWp >= requiredKWp) ?? eligibleBase[eligibleBase.length - 1];
   const primaryWithBattery = withBattery.find((k) => k.sizekWp === primary.sizekWp);
 
-  const primaryIndex = base.indexOf(primary);
-  const alternativeKit = primaryIndex > 0 ? base[primaryIndex - 1] : undefined;
+  const primaryIndex = eligibleBase.indexOf(primary);
+  const alternativeKit = primaryIndex > 0 ? eligibleBase[primaryIndex - 1] : undefined;
   const altCoverage = alternativeKit
     ? calcAnnualCoveragePercent(alternativeKit, annualConsumptionKWh, annualProductionPerKWp)
     : undefined;
@@ -74,10 +83,11 @@ function selectResidentialKit(
   };
 }
 
-function buildBusinessKit(monthlyConsumptionKWh: number, annualProductionPerKWp: number): SolarKit {
+function buildBusinessKit(monthlyConsumptionKWh: number, annualProductionPerKWp: number, empalmeMaxKW?: number): SolarKit {
   const annualConsumption = monthlyConsumptionKWh * 12;
   const rawKWp = (annualConsumption * SOLAR_DEFAULTS.businessCoverageTarget) / annualProductionPerKWp;
-  const sizekWp = Math.ceil(rawKWp * 2) / 2;
+  const uncappedKWp = Math.ceil(rawKWp * 2) / 2;
+  const sizekWp = empalmeMaxKW != null ? Math.min(uncappedKWp, empalmeMaxKW) : uncappedKWp;
   const panelCount = Math.ceil((sizekWp * 1000) / SOLAR_DEFAULTS.panelWattage);
   return {
     id: `business-${sizekWp}kwp`,
@@ -174,8 +184,8 @@ export function runSimulation(input: SimulatorInput): SimulatorResult {
 
   const kitRecommendation: KitRecommendation =
     input.customerType === 'residential'
-      ? selectResidentialKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp)
-      : { primary: buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp) };
+      ? selectResidentialKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW)
+      : { primary: buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW) };
 
   const selectedKit = kitRecommendation.primary;
 

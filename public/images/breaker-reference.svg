@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 220" width="380" height="220">
+
+  <!-- Fondo -->
+  <rect width="380" height="220" fill="#f8fafc" rx="14"/>
+
+  <!-- ── DIN Rail ─────────────────────────────────────────────── -->
+  <rect x="80" y="22" width="120" height="10" rx="2" fill="#9ca3af"/>
+  <rect x="80" y="25" width="120" height="4" rx="1" fill="#d1d5db"/>
+  <rect x="82" y="27" width="6" height="1" rx="0.5" fill="#6b7280"/>
+  <rect x="192" y="27" width="6" height="1" rx="0.5" fill="#6b7280"/>
+
+  <!-- ── Cuerpo del breaker ───────────────────────────────────── -->
+  <!-- Sombra -->
+  <rect x="114" y="34" width="54" height="148" rx="7" fill="#1f2937" opacity="0.15"/>
+  <!-- Cuerpo principal -->
+  <rect x="112" y="32" width="56" height="148" rx="7" fill="#374151"/>
+  <!-- Borde lateral izquierdo (highlight) -->
+  <rect x="112" y="32" width="4" height="148" rx="7" fill="#4b5563"/>
+  <!-- Cara frontal -->
+  <rect x="118" y="36" width="44" height="140" rx="5" fill="#1f2937"/>
+
+  <!-- Terminal superior -->
+  <rect x="127" y="28" width="26" height="12" rx="3" fill="#6b7280"/>
+  <rect x="132" y="30" width="16" height="6" rx="2" fill="#9ca3af"/>
+  <rect x="138" y="31" width="4" height="4" rx="1" fill="#374151"/>
+
+  <!-- Terminal inferior -->
+  <rect x="127" y="160" width="26" height="12" rx="3" fill="#6b7280"/>
+  <rect x="132" y="162" width="16" height="6" rx="2" fill="#9ca3af"/>
+  <rect x="138" y="163" width="4" height="4" rx="1" fill="#374151"/>
+
+  <!-- Zona del switch -->
+  <rect x="122" y="44" width="36" height="64" rx="4" fill="#111827"/>
+
+  <!-- Palanca ON (verde, arriba) -->
+  <rect x="128" y="48" width="24" height="36" rx="5" fill="#22c55e"/>
+  <rect x="130" y="50" width="20" height="14" rx="3" fill="#16a34a" opacity="0.6"/>
+  <rect x="135" y="52" width="10" height="6" rx="2" fill="#4ade80" opacity="0.5"/>
+  <!-- Texto ON -->
+  <text x="140" y="72" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="white" text-anchor="middle">ON</text>
+
+  <!-- Zona inferior del switch (OFF) -->
+  <rect x="128" y="86" width="24" height="18" rx="3" fill="#374151"/>
+  <text x="140" y="99" font-family="Arial, sans-serif" font-size="8" fill="#6b7280" text-anchor="middle">OFF</text>
+
+  <!-- ── Zona amperaje (el dato clave) ─────────────────────────── -->
+  <rect x="120" y="114" width="40" height="36" rx="4" fill="#0f172a"/>
+  <!-- Highlight sutil -->
+  <rect x="121" y="115" width="38" height="4" rx="2" fill="#1e3a5f" opacity="0.6"/>
+  <!-- Número -->
+  <text x="140" y="136" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#facc15" text-anchor="middle" letter-spacing="1">40A</text>
+
+  <!-- Marca arriba -->
+  <rect x="122" y="156" width="36" height="16" rx="3" fill="#111827"/>
+  <text x="140" y="168" font-family="Arial, sans-serif" font-size="7" fill="#6b7280" text-anchor="middle" letter-spacing="0.5">MERLIN GERIN</text>
+
+  <!-- ── Flecha y etiqueta ───────────────────────────────────────── -->
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- Línea curva de la flecha -->
+  <path d="M 265 132 C 240 132 210 132 165 132"
+        stroke="#dc2626" stroke-width="2.5" fill="none"
+        marker-end="url(#arr)" stroke-dasharray="5,3"/>
+
+  <!-- Caja de etiqueta -->
+  <rect x="264" y="108" width="100" height="48" rx="8" fill="#fff1f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="314" y="126" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#dc2626" text-anchor="middle">Amperaje</text>
+  <text x="314" y="141" font-family="Arial, sans-serif" font-size="10" fill="#ef4444" text-anchor="middle">de tu empalme</text>
+  <text x="314" y="152" font-family="Arial, sans-serif" font-size="9" fill="#f87171" text-anchor="middle">(ej: 25, 32, 40 A)</text>
+
+  <!-- ── Texto inferior ──────────────────────────────────────────── -->
+  <text x="190" y="200" font-family="Arial, sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">
+    Breaker principal · Tablero eléctrico del hogar
+  </text>
+
+</svg>

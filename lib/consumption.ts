@@ -118,6 +118,7 @@ export function calcFutureConsumption(
   airConditioners: AirConditionerGroup[],
   waterHeater: ElectricWaterHeater | undefined,
   evCharger: EVCharger | undefined,
+  batteryCount: number,
 ): FutureConsumption {
   const totalAdditionalMonthlyKWh =
     airConditioners.reduce((s, ac) => s + ac.estimatedMonthlyKWh, 0) +
@@ -128,6 +129,7 @@ export function calcFutureConsumption(
     airConditioners,
     waterHeater,
     evCharger,
+    batteryCount,
     totalAdditionalMonthlyKWh,
   };
 }

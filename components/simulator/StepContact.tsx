@@ -66,6 +66,7 @@ function RegionSelect({
         id="regionId"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        required
         className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition bg-white"
       >
         <option value="">Selecciona tu región</option>
@@ -109,10 +110,10 @@ function NaturalForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Field label="Nombre completo" id="name" value={form.name} onChange={set('name')} placeholder="Juan Pérez" />
+      <Field label="Nombre completo" id="name" value={form.name} onChange={set('name')} placeholder="Juan Pérez" required />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="juan@ejemplo.cl" />
-        <Field label="Teléfono" id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+56 9 1234 5678" />
+        <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="juan@ejemplo.cl" required />
+        <Field label="Teléfono" id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+56 9 1234 5678" required />
       </div>
       <Field label="Dirección" id="address" value={form.address} onChange={set('address')} placeholder="Calle y número" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -162,11 +163,11 @@ function BusinessForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Field label="Razón social / Nombre empresa" id="companyName" value={form.companyName} onChange={set('companyName')} placeholder="Empresa S.A." />
-      <Field label="Nombre de contacto" id="contactName" value={form.contactName} onChange={set('contactName')} placeholder="María González" />
+      <Field label="Razón social / Nombre empresa" id="companyName" value={form.companyName} onChange={set('companyName')} placeholder="Empresa S.A." required />
+      <Field label="Nombre de contacto" id="contactName" value={form.contactName} onChange={set('contactName')} placeholder="María González" required />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="contacto@empresa.cl" />
-        <Field label="Teléfono" id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+56 2 2345 6789" />
+        <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="contacto@empresa.cl" required />
+        <Field label="Teléfono" id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+56 2 2345 6789" required />
       </div>
       <Field label="Dirección" id="address" value={form.address} onChange={set('address')} placeholder="Calle y número" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

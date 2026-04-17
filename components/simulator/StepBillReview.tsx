@@ -15,44 +15,55 @@ interface StepBillReviewProps {
 function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
   if (profile.bills.length === 0) return null;
 
-  // Ordenar por mes/año ascendente para mostrar cronológicamente
+  // Todos los meses ordenados cronológicamente
   const sorted = [...profile.bills].sort((a, b) =>
     a.year !== b.year ? a.year - b.year : a.month - b.month,
   );
 
-  const peak = profile.peakMonthKWh;
+  const allValues = sorted.map((b) => b.consumptionKWh);
+  const peak = allValues.length > 0 ? Math.max(...allValues) : 0;
 
   return (
-    <div className="flex items-end gap-1 h-32 w-full">
-      {sorted.map((bill) => {
-        const heightPct = peak > 0 ? (bill.consumptionKWh / peak) * 100 : 0;
-        const isMax = bill.consumptionKWh === peak;
-        return (
-          <div
-            key={`${bill.year}-${bill.month}`}
-            className="flex flex-col items-center flex-1 gap-1 h-full justify-end"
-          >
-            <div className="relative flex flex-col items-center justify-end w-full h-full">
-              {/* Valor encima de la barra más alta */}
-              {isMax && (
-                <span className="absolute -top-4 text-[9px] font-semibold text-green-700 whitespace-nowrap">
-                  {bill.consumptionKWh}
-                </span>
-              )}
-              <div
-                style={{ height: `${heightPct}%` }}
-                className={[
-                  'w-full rounded-t-sm transition-all',
-                  isMax ? 'bg-green-500' : 'bg-green-200',
-                ].join(' ')}
-              />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-end gap-1 h-32 w-full">
+        {sorted.map((bill) => {
+          const isInterpolated = bill.source === 'interpolated';
+          const heightPct = peak > 0 ? (bill.consumptionKWh / peak) * 100 : 0;
+          const isMax = !isInterpolated && bill.consumptionKWh === profile.peakMonthKWh;
+          return (
+            <div
+              key={`${bill.year}-${bill.month}`}
+              className="flex flex-col items-center flex-1 gap-1 h-full justify-end"
+            >
+              <div className="relative flex flex-col items-center justify-end w-full h-full">
+                {isMax && (
+                  <span className="absolute -top-4 text-[9px] font-semibold text-green-700 whitespace-nowrap">
+                    {bill.consumptionKWh}
+                  </span>
+                )}
+                <div
+                  style={{ height: `${Math.max(heightPct, 4)}%` }}
+                  className={[
+                    'w-full rounded-t-sm transition-all',
+                    isInterpolated
+                      ? 'bg-gray-200'
+                      : isMax ? 'bg-green-500' : 'bg-green-300',
+                  ].join(' ')}
+                />
+              </div>
+              <span className="text-[9px] text-gray-400 w-full text-center truncate">
+                {MONTH_NAMES[bill.month].slice(0, 3)}
+              </span>
             </div>
-            <span className="text-[9px] text-gray-400 w-full text-center truncate">
-              {MONTH_NAMES[bill.month].slice(0, 3)}
-            </span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {sorted.some((b) => b.source === 'interpolated') && (
+        <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-gray-200" />
+          Meses estimados por interpolación estacional
+        </p>
+      )}
     </div>
   );
 }

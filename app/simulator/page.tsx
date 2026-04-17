@@ -78,6 +78,18 @@ export default function SimulatorPage() {
 
       {/* Contenido del paso activo */}
       <div className="max-w-3xl mx-auto px-4 py-10">
+
+        {/* Botón volver — visible en todos los pasos excepto el primero */}
+        {!isFirstStep && (
+          <button
+            type="button"
+            onClick={goBack}
+            className="mb-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <span className="text-base leading-none">←</span> Volver
+          </button>
+        )}
+
         {state.step === 'customer-type' && (
           <StepCustomerType
             selected={state.customerCategory}
@@ -118,6 +130,9 @@ export default function SimulatorPage() {
               update({ consumptionProfile });
               goNext();
             }}
+            onUpdateSupply={(partial) =>
+              update({ supply: { ...state.supply!, ...partial } })
+            }
           />
         )}
 
@@ -143,18 +158,6 @@ export default function SimulatorPage() {
           <StepResults state={state} />
         )}
 
-        {/* Navegación inferior */}
-        {!isFirstStep && (
-          <div className="mt-6 flex items-center gap-4">
-            <button
-              type="button"
-              onClick={goBack}
-              className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              ← Volver
-            </button>
-          </div>
-        )}
       </div>
     </main>
   );

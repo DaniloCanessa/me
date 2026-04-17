@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type {
   WizardState,
   SimulatorInput,
@@ -34,6 +34,10 @@ function buildBaseInput(state: WizardState, extraMonthlyKWh = 0): SimulatorInput
       ? Math.round(billsWithPrice.reduce((s, b) => s + b.kWhPriceCLP!, 0) / billsWithPrice.length)
       : CHILE_BT1.referenceKWhPriceCLP;
 
+  const empalmeMaxKW = supply.amperajeA != null
+    ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
+    : undefined;
+
   return {
     regionId,
     distribuidora:         supply.distribuidora,
@@ -48,7 +52,8 @@ function buildBaseInput(state: WizardState, extraMonthlyKWh = 0): SimulatorInput
     customerType:     state.customerCategory === 'natural' ? 'residential' : 'business',
     hasExistingSolar: supply.hasExistingSolar,
     existingSystemKWp: supply.existingSystemKWp,
-    includeBattery:   supply.includeBattery,
+    includeBattery:   (state.futureConsumption?.batteryCount ?? 0) > 0,
+    empalmeMaxKW,
   };
 }
 
@@ -307,6 +312,7 @@ export default function StepResults({ state }: StepResultsProps) {
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
   const [activeTab, setActiveTab] = useState<'base' | 'future'>('base');
+  const [ctaState, setCtaState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const contactName = 'name' in contact
     ? (contact as PersonContact).name
@@ -359,6 +365,51 @@ export default function StepResults({ state }: StepResultsProps) {
     if (future?.evCharger)   parts.push('Auto EV');
     return parts.length > 0 ? `Con ${parts.join(', ')}` : 'Con equipos nuevos';
   })();
+
+  const handleCTA = useCallback(async () => {
+    if (ctaState !== 'idle') return;
+    setCtaState('loading');
+
+    const c = contact as PersonContact & BusinessContact;
+    const payload = {
+      customerCategory: state.customerCategory,
+      contact: {
+        name:        c.name,
+        companyName: c.companyName,
+        contactName: c.contactName,
+        email:       c.email,
+        phone:       c.phone,
+        regionId:    c.regionId,
+        city:        c.city,
+        commune:     c.commune,
+      },
+      supply: {
+        tarifa:       supply.tarifa,
+        distribuidora: supply.distribuidora,
+      },
+      averageMonthlyKWh: profile.averageMonthlyKWh,
+      simulation: {
+        regionName:       baseResult.region.name,
+        kitSizeKWp:       baseResult.kitRecommendation.primary.sizekWp,
+        kitPriceCLP:      baseResult.kitRecommendation.primary.priceReferenceCLP,
+        monthlyBenefitCLP: baseResult.financial.monthlyBenefitCLP,
+        annualBenefitCLP:  baseResult.financial.annualBenefitCLP,
+        paybackYears:      baseResult.financial.paybackYears,
+        coveragePercent:   baseResult.energyBalance.coveragePercent,
+      },
+    };
+
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setCtaState(res.ok ? 'success' : 'error');
+    } catch {
+      setCtaState('error');
+    }
+  }, [ctaState, contact, state.customerCategory, supply, profile, baseResult]);
 
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -451,6 +502,24 @@ export default function StepResults({ state }: StepResultsProps) {
       {/* ── Escenario activo ────────────────────────────────────────────────── */}
       <ScenarioBlock result={activeResult} />
 
+      {/* ── Aviso de empalme si el kit fue limitado ────────────────────────── */}
+      {supply.amperajeA != null && (() => {
+        const empalmeMaxKW = Math.round((supply.amperajeA! * 220 / 1000) * 10) / 10;
+        const kitKWp = baseResult.kitRecommendation.primary.sizekWp;
+        if (kitKWp >= empalmeMaxKW) return null;
+        // Verificamos si sin el límite se hubría recomendado un kit mayor
+        const idealKWp = (profile.averageMonthlyKWh * 12 * SOLAR_DEFAULTS.dayConsumptionRatio) / baseResult.region.annualProductionKWhPerKWp;
+        if (idealKWp <= kitKWp) return null;
+        return (
+          <InfoBanner
+            color="amber"
+            icon="⚡"
+            title={`Kit limitado por el empalme (${supply.amperajeA} A = ${empalmeMaxKW} kW)`}
+            body={`Para tu consumo, lo ideal sería un sistema de ${Math.ceil(idealKWp * 2) / 2} kWp, pero tu empalme permite un máximo de ${empalmeMaxKW} kW. Si quieres una planta mayor, considera ampliar el empalme con tu distribuidora.`}
+          />
+        );
+      })()}
+
       {/* ── Recomendación de tarifa ────────────────────────────────────────── */}
       {tarifaRec && (
         <InfoBanner
@@ -524,16 +593,35 @@ export default function StepResults({ state }: StepResultsProps) {
 
       {/* ── CTA ───────────────────────────────────────────────────────────── */}
       <div className="bg-gray-900 text-white rounded-2xl p-5 text-center">
-        <p className="text-lg font-bold mb-1">¿Te interesa avanzar?</p>
-        <p className="text-sm text-gray-400 mb-4">
-          Un especialista revisará tu caso y coordinará una visita técnica sin costo.
-        </p>
-        <button
-          type="button"
-          className="w-full rounded-xl bg-green-500 hover:bg-green-400 text-white font-semibold py-3 text-sm transition-colors"
-        >
-          Quiero que me contacten
-        </button>
+        {ctaState === 'success' ? (
+          <div className="py-2">
+            <p className="text-2xl mb-2">✅</p>
+            <p className="text-base font-bold mb-1">¡Solicitud enviada!</p>
+            <p className="text-sm text-gray-400">
+              Te contactaremos a <span className="text-white font-medium">{(contact as PersonContact).email ?? (contact as BusinessContact).email}</span> en las próximas horas.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-lg font-bold mb-1">¿Te interesa avanzar?</p>
+            <p className="text-sm text-gray-400 mb-4">
+              Un especialista revisará tu caso y coordinará una reunión a la brevedad.
+            </p>
+            {ctaState === 'error' && (
+              <p className="text-red-400 text-xs mb-3">
+                Hubo un error al enviar. Intenta nuevamente o escríbenos directamente.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleCTA}
+              disabled={ctaState === 'loading'}
+              className="w-full rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 text-sm transition-colors"
+            >
+              {ctaState === 'loading' ? 'Enviando...' : ctaState === 'error' ? 'Reintentar' : 'Quiero que me contacten'}
+            </button>
+          </>
+        )}
       </div>
 
       {/* ── Nota metodológica ─────────────────────────────────────────────── */}

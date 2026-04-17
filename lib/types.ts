@@ -42,6 +42,7 @@ export interface SimulatorInput {
   hasExistingSolar?: boolean;
   existingSystemKWp?: number;
   includeBattery?: boolean;
+  empalmeMaxKW?: number;           // límite físico del empalme → cap del inversor/planta
 }
 
 // ─── Kit fotovoltaico ─────────────────────────────────────────────────────────
@@ -166,11 +167,12 @@ export type PropertyType = 'casa' | 'departamento' | 'oficina' | 'colegio' | 'ot
 
 export interface SupplyData {
   propertyType: PropertyType;
-  distribuidora: string;
-  tarifa: TarifaType;
+  distribuidora?: string;           // capturado desde la boleta (OCR) o ingresado manual en paso 4
+  tarifa: TarifaType;               // capturado desde la boleta o manual; default 'unknown'
+  amperajeA?: number;
   hasExistingSolar: boolean;
   existingSystemKWp?: number;
-  includeBattery: boolean;
+  includeBattery: boolean;          // derivado de batteryCount en FutureConsumption
 }
 
 // ─── Datos de contacto ────────────────────────────────────────────────────────
@@ -198,7 +200,7 @@ export interface BusinessContact {
 
 // ─── Boletas y perfil de consumo ──────────────────────────────────────────────
 
-export type BillDataSource = 'file_parsed' | 'manual';
+export type BillDataSource = 'file_parsed' | 'manual' | 'interpolated';
 
 export interface MonthlyBill {
   month: number;                  // 1–12
@@ -258,7 +260,8 @@ export interface FutureConsumption {
   airConditioners: AirConditionerGroup[];
   waterHeater?: ElectricWaterHeater;
   evCharger?: EVCharger;
-  totalAdditionalMonthlyKWh: number;  // suma total de consumos adicionales
+  batteryCount: number;               // cantidad de baterías a incluir (0 = sin batería)
+  totalAdditionalMonthlyKWh: number;
 }
 
 // ─── Estado del wizard ────────────────────────────────────────────────────────
