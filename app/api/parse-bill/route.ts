@@ -128,10 +128,9 @@ function mockExtraction(): ExtractedBill {
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const USE_MOCK = !ANTHROPIC_API_KEY;
-
 export async function POST(request: Request) {
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  const USE_MOCK = !ANTHROPIC_API_KEY;
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -163,14 +162,16 @@ export async function POST(request: Request) {
       ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
       : { type: 'image', source: { type: 'base64', media_type: file.type as string, data: base64 } };
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    };
+    if (isPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'pdfs-2024-09-25',
-      },
+      headers,
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4096,
