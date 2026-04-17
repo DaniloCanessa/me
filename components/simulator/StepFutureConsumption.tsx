@@ -139,11 +139,6 @@ export default function StepFutureConsumption({
     initialData?.evCharger?.carCount ?? 1,
   );
 
-  // ── Estado Batería ────────────────────────────────────────────────────────
-  const [batteryCount, setBatteryCount] = useState(() =>
-    initialData?.batteryCount ?? 0,
-  );
-
   // ── Cálculos en vivo ──────────────────────────────────────────────────────
   const { acGroups, waterHeater, evEstimatedKWh, total } = useMemo(() => {
     const groups = hasAC
@@ -189,7 +184,7 @@ export default function StepFutureConsumption({
         }
       : undefined;
 
-    onSubmit(calcFutureConsumption(acGroups, waterHeater, evCharger, batteryCount));
+    onSubmit(calcFutureConsumption(acGroups, waterHeater, evCharger));
   }
 
   const hasAny = hasAC || hasTermo || hasEV;
@@ -331,25 +326,6 @@ export default function StepFutureConsumption({
                 </span>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Batería de respaldo */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔋</span>
-              <div>
-                <p className="text-sm font-medium text-gray-800">Baterías de respaldo</p>
-                <p className="text-xs text-gray-400">Almacena excedentes solares para usar de noche</p>
-              </div>
-            </div>
-            <Stepper value={batteryCount} min={0} max={3} onChange={setBatteryCount} />
-          </div>
-          {batteryCount > 0 && (
-            <p className="text-xs text-green-700 bg-green-50 rounded-xl px-3 py-2">
-              {batteryCount} batería{batteryCount > 1 ? 's' : ''} — mayor autonomía nocturna y respaldo ante cortes de luz.
-            </p>
           )}
         </div>
 

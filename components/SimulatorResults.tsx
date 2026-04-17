@@ -28,8 +28,7 @@ function StatCard({
 }
 
 export default function SimulatorResults({ result }: SimulatorResultsProps) {
-  const { region, kitRecommendation, energyBalance, financial, environmental } = result;
-  const { primary, primaryWithBattery, alternative, alternativeCoveragePercent } = kitRecommendation;
+  const { region, kit, batteryCapacityKWh, energyBalance, financial, environmental } = result;
 
   return (
     <div className="space-y-6">
@@ -71,78 +70,26 @@ export default function SimulatorResults({ result }: SimulatorResultsProps) {
       {/* Kit recomendado */}
       <div>
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Sistema recomendado</h3>
-        <div className="space-y-3">
-          {/* Kit principal */}
-          <div className="bg-white rounded-xl border-2 border-green-500 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                  Recomendado
-                </span>
-                <p className="font-semibold text-gray-900 mt-1">
-                  Kit {primary.sizekWp} kWp
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {primary.panelCount} paneles · {primary.estimatedAreaM2} m²
-                </p>
-                {primary.installationNotes && (
-                  <p className="text-xs text-gray-400 mt-1">{primary.installationNotes}</p>
-                )}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-lg font-bold text-gray-900">{formatCLP(primary.priceReferenceCLP)}</p>
-                <p className="text-xs text-gray-400">precio referencial</p>
-              </div>
+        <div className="bg-white rounded-xl border-2 border-green-500 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                Recomendado
+              </span>
+              <p className="font-semibold text-gray-900 mt-1">Kit {kit.sizekWp} kWp</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {kit.panelCount} paneles · {kit.estimatedAreaM2} m²
+                {batteryCapacityKWh > 0 && <> · {batteryCapacityKWh} kWh batería</>}
+              </p>
+              {kit.installationNotes && (
+                <p className="text-xs text-gray-400 mt-1">{kit.installationNotes}</p>
+              )}
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-lg font-bold text-gray-900">{formatCLP(financial.systemCostCLP)}</p>
+              <p className="text-xs text-gray-400">precio referencial</p>
             </div>
           </div>
-
-          {/* Kit con batería */}
-          {primaryWithBattery && (
-            <div className="bg-white rounded-xl border border-amber-300 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                    Con batería {primaryWithBattery.batteryCapacityKWh} kWh
-                  </span>
-                  <p className="font-semibold text-gray-900 mt-1">
-                    Kit {primaryWithBattery.sizekWp} kWp + Batería
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {primaryWithBattery.panelCount} paneles · {primaryWithBattery.estimatedAreaM2} m²
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-lg font-bold text-gray-900">
-                    {formatCLP(primaryWithBattery.priceReferenceCLP)}
-                  </p>
-                  <p className="text-xs text-gray-400">precio referencial</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Alternativa */}
-          {alternative && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                    Alternativa · {alternativeCoveragePercent}% cobertura
-                  </span>
-                  <p className="font-semibold text-gray-900 mt-1">
-                    Kit {alternative.sizekWp} kWp
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {alternative.panelCount} paneles · {alternative.estimatedAreaM2} m² · menor inversión
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-lg font-bold text-gray-900">{formatCLP(alternative.priceReferenceCLP)}</p>
-                  <p className="text-xs text-gray-400">precio referencial</p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

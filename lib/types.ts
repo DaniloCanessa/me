@@ -41,8 +41,7 @@ export interface SimulatorInput {
   customerType: CustomerType;
   hasExistingSolar?: boolean;
   existingSystemKWp?: number;
-  includeBattery?: boolean;
-  empalmeMaxKW?: number;           // límite físico del empalme → cap del inversor/planta
+  empalmeMaxKW?: number;
 }
 
 // ─── Kit fotovoltaico ─────────────────────────────────────────────────────────
@@ -58,11 +57,12 @@ export interface SolarKit {
   installationNotes?: string;
 }
 
-export interface KitRecommendation {
-  primary: SolarKit;
-  primaryWithBattery?: SolarKit;
-  alternative?: SolarKit;
-  alternativeCoveragePercent?: number;
+export interface KitScenarios {
+  A: SimulatorResult;
+  B: SimulatorResult | null;
+  C: SimulatorResult;
+  kitA: SolarKit;
+  kitB: SolarKit | null;
 }
 
 // ─── Región y producción solar ────────────────────────────────────────────────
@@ -143,7 +143,8 @@ export interface EnvironmentalSummary {
 export interface SimulatorResult {
   input: SimulatorInput;
   region: RegionProfile;
-  kitRecommendation: KitRecommendation;
+  kit: SolarKit;
+  batteryCapacityKWh: number;
   energyBalance: AnnualEnergyBalance;
   financial: FinancialSummary;
   environmental: EnvironmentalSummary;
@@ -167,12 +168,11 @@ export type PropertyType = 'casa' | 'departamento' | 'oficina' | 'colegio' | 'ot
 
 export interface SupplyData {
   propertyType: PropertyType;
-  distribuidora?: string;           // capturado desde la boleta (OCR) o ingresado manual en paso 4
-  tarifa: TarifaType;               // capturado desde la boleta o manual; default 'unknown'
+  distribuidora?: string;
+  tarifa: TarifaType;
   amperajeA?: number;
   hasExistingSolar: boolean;
   existingSystemKWp?: number;
-  includeBattery: boolean;          // derivado de batteryCount en FutureConsumption
 }
 
 // ─── Datos de contacto ────────────────────────────────────────────────────────
@@ -260,7 +260,6 @@ export interface FutureConsumption {
   airConditioners: AirConditionerGroup[];
   waterHeater?: ElectricWaterHeater;
   evCharger?: EVCharger;
-  batteryCount: number;               // cantidad de baterías a incluir (0 = sin batería)
   totalAdditionalMonthlyKWh: number;
 }
 

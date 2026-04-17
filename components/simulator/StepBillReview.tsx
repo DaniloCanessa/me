@@ -36,20 +36,22 @@ function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
               className="flex flex-col items-center flex-1 gap-1 h-full justify-end"
             >
               <div className="relative flex flex-col items-center justify-end w-full h-full">
-                {isMax && (
-                  <span className="absolute -top-4 text-[9px] font-semibold text-green-700 whitespace-nowrap">
-                    {bill.consumptionKWh}
-                  </span>
-                )}
                 <div
                   style={{ height: `${Math.max(heightPct, 4)}%` }}
                   className={[
-                    'w-full rounded-t-sm transition-all',
+                    'w-full rounded-t-sm transition-all relative',
                     isInterpolated
                       ? 'bg-gray-200'
                       : isMax ? 'bg-green-500' : 'bg-green-300',
                   ].join(' ')}
-                />
+                >
+                  <span className={[
+                    'absolute -top-4 left-0 right-0 text-center text-[9px] whitespace-nowrap',
+                    isInterpolated ? 'text-gray-400' : isMax ? 'font-semibold text-green-700' : 'text-gray-500',
+                  ].join(' ')}>
+                    {bill.consumptionKWh}
+                  </span>
+                </div>
               </div>
               <span className="text-[9px] text-gray-400 w-full text-center truncate">
                 {MONTH_NAMES[bill.month].slice(0, 3)}

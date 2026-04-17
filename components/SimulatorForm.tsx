@@ -20,8 +20,6 @@ export default function SimulatorForm({ onSubmit, isLoading }: SimulatorFormProp
   const [variableAmount, setVariableAmount] = useState('');
   const [measuredKWh, setMeasuredKWh] = useState('');
   const [fixedCharge, setFixedCharge] = useState('');
-  const [includeBattery, setIncludeBattery] = useState(false);
-
   const referencePrice = CHILE_BT1.referenceKWhPriceCLP;
 
   const calculatedPrice =
@@ -57,7 +55,6 @@ export default function SimulatorForm({ onSubmit, isLoading }: SimulatorFormProp
       energyPrice,
       fixedChargeCLP: fixedCharge ? Number(fixedCharge) : undefined,
       customerType: 'residential',
-      includeBattery,
     };
 
     onSubmit(input);
@@ -216,20 +213,6 @@ export default function SimulatorForm({ onSubmit, isLoading }: SimulatorFormProp
           placeholder="Ej: 1200"
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         />
-      </div>
-
-      {/* Batería */}
-      <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100">
-        <input
-          type="checkbox"
-          id="includeBattery"
-          checked={includeBattery}
-          onChange={(e) => setIncludeBattery(e.target.checked)}
-          className="mt-0.5 accent-amber-500 w-4 h-4 shrink-0"
-        />
-        <label htmlFor="includeBattery" className="text-sm text-amber-800 cursor-pointer leading-snug">
-          Incluir opción con batería de almacenamiento ({SOLAR_DEFAULTS.defaultBatteryCapacityKWh} kWh)
-        </label>
       </div>
 
       <button

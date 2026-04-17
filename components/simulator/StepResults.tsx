@@ -9,7 +9,7 @@ import type {
   BusinessContact,
   TarifaType,
 } from '@/lib/types';
-import { runSimulation } from '@/lib/calculations';
+import { calcThreeScenarios, runBusinessSimulation } from '@/lib/calculations';
 import { calcEVCharger } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
@@ -22,14 +22,16 @@ interface StepResultsProps {
 
 // ─── Construcción del SimulatorInput ──────────────────────────────────────────
 
-function buildBaseInput(state: WizardState, extraMonthlyKWh = 0): SimulatorInput {
+function buildBaseInput(state: WizardState): SimulatorInput {
   const contact = state.contact!;
   const supply  = state.supply!;
   const profile = state.consumptionProfile!;
+  const future  = state.futureConsumption;
 
-  const regionId     = (contact as PersonContact | BusinessContact).regionId || 'metropolitana';
+  const regionId = (contact as PersonContact | BusinessContact).regionId || 'metropolitana';
+
   const billsWithPrice = profile.bills.filter((b) => b.kWhPriceCLP != null);
-  const kWhPriceCLP  =
+  const kWhPriceCLP =
     billsWithPrice.length > 0
       ? Math.round(billsWithPrice.reduce((s, b) => s + b.kWhPriceCLP!, 0) / billsWithPrice.length)
       : CHILE_BT1.referenceKWhPriceCLP;
@@ -38,21 +40,23 @@ function buildBaseInput(state: WizardState, extraMonthlyKWh = 0): SimulatorInput
     ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
     : undefined;
 
+  const monthlyConsumptionKWh =
+    profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0);
+
   return {
     regionId,
-    distribuidora:         supply.distribuidora,
-    tarifa:                supply.tarifa === 'unknown' ? 'BT1' : supply.tarifa,
-    monthlyConsumptionKWh: profile.averageMonthlyKWh + extraMonthlyKWh,
+    distribuidora:        supply.distribuidora,
+    tarifa:               supply.tarifa === 'unknown' ? 'BT1' : supply.tarifa,
+    monthlyConsumptionKWh,
     energyPrice: {
-      source:                billsWithPrice.length > 0 ? 'bill_calculated' : 'reference',
+      source:               billsWithPrice.length > 0 ? 'bill_calculated' : 'reference',
       kWhPriceCLP,
-      referenceKWhPriceCLP:  CHILE_BT1.referenceKWhPriceCLP,
+      referenceKWhPriceCLP: CHILE_BT1.referenceKWhPriceCLP,
     },
     fixedChargeCLP:   CHILE_BT1.fixedChargeCLP,
     customerType:     state.customerCategory === 'natural' ? 'residential' : 'business',
     hasExistingSolar: supply.hasExistingSolar,
     existingSystemKWp: supply.existingSystemKWp,
-    includeBattery:   (state.futureConsumption?.batteryCount ?? 0) > 0,
     empalmeMaxKW,
   };
 }
@@ -60,45 +64,33 @@ function buildBaseInput(state: WizardState, extraMonthlyKWh = 0): SimulatorInput
 // ─── Recomendación de tarifa ──────────────────────────────────────────────────
 
 interface TarifaRec {
-  type: 'unknown' | 'empalme' | 'battery-peak';
+  type: 'unknown' | 'battery-peak';
   title: string;
   body: string;
-  color: 'amber' | 'blue' | 'purple';
+  color: 'amber' | 'purple';
 }
 
-function getTarifaRec(
-  tarifa: TarifaType,
-  futureAdditionalKWh: number,
-  baseMonthlyKWh: number,
-): TarifaRec | null {
+function getTarifaRec(tarifa: TarifaType): TarifaRec | null {
   if (tarifa === 'unknown') {
     return {
       type: 'unknown',
       title: 'Confirma tu tarifa',
-      body: 'No tenemos tu tarifa exacta. Revisa tu boleta y actualízala — con ese dato podemos afinar las recomendaciones de cambio de plan o empalme.',
+      body: 'No tenemos tu tarifa exacta. Revisa tu boleta y actualízala para afinar las recomendaciones.',
       color: 'amber',
-    };
-  }
-  if (tarifa === 'BT1' && futureAdditionalKWh > baseMonthlyKWh * 0.25) {
-    return {
-      type: 'empalme',
-      title: 'Considera un segundo empalme BT1',
-      body: 'Con el consumo proyectado, instalar un segundo empalme BT1 puede ser más conveniente que migrar a BT2 o BT3, ya que evitas el cargo por potencia demandada.',
-      color: 'blue',
     };
   }
   if (tarifa.startsWith('BT4') || tarifa.startsWith('AT')) {
     return {
       type: 'battery-peak',
       title: 'Batería para gestión de punta',
-      body: `Con tarifa ${tarifa} pagas un cargo por demanda en horas de punta. Una batería puede cargarse fuera de punta y descargarse en horas caras, reduciendo tu cargo por potencia.`,
+      body: `Con tarifa ${tarifa} pagas cargo por demanda en horas de punta. El Escenario C (con batería) puede reducir ese cargo descargándose en horas caras.`,
       color: 'purple',
     };
   }
   return null;
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
+// ─── Sub-componentes reutilizables ────────────────────────────────────────────
 
 function StatCard({ label, value, sub, accent }: {
   label: string; value: string; sub?: string; accent?: string;
@@ -113,11 +105,10 @@ function StatCard({ label, value, sub, accent }: {
 }
 
 function InfoBanner({ color, icon, title, body }: {
-  color: 'amber' | 'blue' | 'purple'; icon: string; title: string; body: string;
+  color: 'amber' | 'purple'; icon: string; title: string; body: string;
 }) {
   const s = {
     amber:  { wrap: 'bg-amber-50 border-amber-200',   title: 'text-amber-800',  body: 'text-amber-700'  },
-    blue:   { wrap: 'bg-blue-50 border-blue-200',     title: 'text-blue-800',   body: 'text-blue-700'   },
     purple: { wrap: 'bg-purple-50 border-purple-200', title: 'text-purple-800', body: 'text-purple-700' },
   }[color];
   return (
@@ -131,106 +122,150 @@ function InfoBanner({ color, icon, title, body }: {
   );
 }
 
-function KitCard({ kit, badge, borderClass }: {
-  kit: SimulatorResult['kitRecommendation']['primary'];
-  badge: React.ReactNode;
-  borderClass: string;
+// ─── CTA ──────────────────────────────────────────────────────────────────────
+
+type CtaState = 'idle' | 'loading' | 'success' | 'error';
+
+function CTABlock({
+  result,
+  contactEmail,
+  ctaState,
+  onCTA,
+}: {
+  result: SimulatorResult;
+  contactEmail: string;
+  ctaState: CtaState;
+  onCTA: () => void;
 }) {
+  const totalSaving = result.financial.annualBenefitCLP * SOLAR_DEFAULTS.systemLifeYears;
+
+  if (ctaState === 'success') {
+    return (
+      <div className="bg-gray-900 text-white rounded-2xl p-6 text-center">
+        <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+          ✓
+        </div>
+        <p className="text-base font-bold mb-2">¡Solicitud recibida!</p>
+        <p className="text-sm text-gray-400">
+          Un especialista te contactará a{' '}
+          <span className="text-white font-medium">{contactEmail}</span>{' '}
+          en las próximas 24 horas para coordinar una visita técnica gratuita.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-4 ${borderClass}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          {badge}
-          <p className="font-semibold text-gray-900 mt-1.5">Kit {kit.sizekWp} kWp</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {kit.panelCount} paneles · {kit.estimatedAreaM2} m²
-          </p>
-          {kit.installationNotes && (
-            <p className="text-xs text-gray-400 mt-1">{kit.installationNotes}</p>
-          )}
+    <div className="bg-gray-900 text-white rounded-2xl p-5">
+      <p className="text-base font-bold mb-1">Instala tu sistema solar</p>
+      <p className="text-sm text-gray-400 mb-4">
+        Visita técnica gratuita y presupuesto definitivo sin costo ni compromiso.
+      </p>
+      <div className="bg-gray-800 rounded-xl p-3 mb-4 flex flex-col gap-1.5 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-400">Inversión estimada</span>
+          <span className="font-semibold">{formatCLP(result.financial.systemCostCLP)}</span>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-lg font-bold text-gray-900">{formatCLP(kit.priceReferenceCLP)}</p>
-          <p className="text-xs text-gray-400">precio referencial</p>
+        <div className="flex justify-between">
+          <span className="text-gray-400">Ahorro en {SOLAR_DEFAULTS.systemLifeYears} años</span>
+          <span className="font-semibold text-green-400">{formatCLP(totalSaving)}</span>
         </div>
+      </div>
+      {ctaState === 'error' && (
+        <p className="text-red-400 text-xs mb-3">
+          Hubo un error al enviar. Intenta nuevamente o escríbenos directamente.
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onCTA}
+        disabled={ctaState === 'loading'}
+        className="w-full rounded-xl bg-green-500 hover:bg-green-400 active:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 text-sm transition-colors"
+      >
+        {ctaState === 'loading'
+          ? 'Enviando...'
+          : ctaState === 'error'
+            ? 'Reintentar'
+            : 'Coordina una reunión con nuestro equipo técnico'}
+      </button>
+      <p className="text-xs text-gray-500 mt-2.5 text-center">
+        Sin compromiso · Instaladores certificados · Respuesta en 24 hrs
+      </p>
+    </div>
+  );
+}
+
+// ─── Gráfico de líneas mensual ────────────────────────────────────────────────
+
+function MonthlyLineChart({ monthly }: { monthly: SimulatorResult['energyBalance']['monthly'] }) {
+  const W = 560;
+  const H = 150;
+  const PAD = { top: 20, right: 10, bottom: 24, left: 38 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const allValues = monthly.flatMap((m) => [
+    m.productionKWh, m.selfConsumptionKWh, m.injectedToGridKWh, m.consumedFromGridKWh,
+  ]);
+  const maxVal = Math.max(...allValues, 1);
+
+  const xAt = (i: number) => PAD.left + (i / (monthly.length - 1)) * chartW;
+  const yAt = (v: number) => PAD.top + chartH - (v / maxVal) * chartH;
+
+  function path(vals: number[]) {
+    return vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ');
+  }
+
+  const series = [
+    { key: 'prod',  values: monthly.map((m) => m.productionKWh),        color: '#f59e0b', label: 'Producción' },
+    { key: 'self',  values: monthly.map((m) => m.selfConsumptionKWh),    color: '#16a34a', label: 'Autoconsumo' },
+    { key: 'inj',   values: monthly.map((m) => m.injectedToGridKWh),     color: '#2563eb', label: 'Inyección' },
+    { key: 'grid',  values: monthly.map((m) => m.consumedFromGridKWh),   color: '#9ca3af', label: 'Red' },
+  ];
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <div className="mt-4">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+        {yTicks.map((t) => {
+          const yy = (PAD.top + chartH * (1 - t)).toFixed(1);
+          return (
+            <g key={t}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
+              <text x={PAD.left - 4} y={+yy + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
+                {Math.round(maxVal * t)}
+              </text>
+            </g>
+          );
+        })}
+        {monthly.map((m, i) => (
+          <text key={m.month} x={xAt(i).toFixed(1)} y={H - 4} textAnchor="middle" fontSize={8} fill="#9ca3af">
+            {m.monthName.slice(0, 3)}
+          </text>
+        ))}
+        {series.map((s) => (
+          <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+      </svg>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+        {series.map((s) => (
+          <div key={s.key} className="flex items-center gap-1.5">
+            <span className="inline-block w-5 rounded" style={{ height: 2, backgroundColor: s.color }} />
+            <span className="text-[10px] text-gray-500">{s.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Bloque de escenario (KPIs + kits + balance) ──────────────────────────────
+// ─── Bloque financiero (detalle) ──────────────────────────────────────────────
 
-function ScenarioBlock({ result }: { result: SimulatorResult }) {
-  const { kitRecommendation, energyBalance, financial } = result;
-  const { primary, primaryWithBattery, alternative, alternativeCoveragePercent } = kitRecommendation;
-
+function FinancialDetail({ result }: { result: SimulatorResult }) {
+  const { energyBalance, financial } = result;
   return (
-    <div className="flex flex-col gap-4">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard
-          label="Ahorro mensual"
-          value={formatCLP(financial.monthlyBenefitCLP)}
-          sub="autoconsumo + inyección"
-          accent="text-green-600"
-        />
-        <StatCard
-          label="Ahorro anual"
-          value={formatCLP(financial.annualBenefitCLP)}
-          accent="text-green-600"
-        />
-        <StatCard
-          label="Período de retorno"
-          value={formatPayback(financial.paybackYears)}
-          sub="payback simple"
-        />
-        <StatCard
-          label="Cobertura solar"
-          value={formatPercent(energyBalance.coveragePercent)}
-          sub="de tu consumo cubierto"
-        />
-      </div>
-
-      {/* Kits */}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">Sistema recomendado</h2>
-
-        <KitCard
-          kit={primary}
-          borderClass="border-2 border-green-500"
-          badge={
-            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-              Recomendado
-            </span>
-          }
-        />
-
-        {primaryWithBattery && (
-          <KitCard
-            kit={primaryWithBattery}
-            borderClass="border border-amber-300"
-            badge={
-              <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                Con batería {primaryWithBattery.batteryCapacityKWh} kWh
-              </span>
-            }
-          />
-        )}
-
-        {alternative && (
-          <KitCard
-            kit={alternative}
-            borderClass="border border-gray-200"
-            badge={
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                Alternativa · {alternativeCoveragePercent}% cobertura
-              </span>
-            }
-          />
-        )}
-      </div>
-
-      {/* Financiero */}
+    <>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Desglose financiero anual</h2>
         <div className="flex flex-col gap-2 text-sm">
@@ -259,7 +294,6 @@ function ScenarioBlock({ result }: { result: SimulatorResult }) {
         </div>
       </div>
 
-      {/* Balance mensual */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 overflow-x-auto">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Balance energético mensual</h2>
         <table className="w-full text-xs min-w-[560px]">
@@ -297,8 +331,9 @@ function ScenarioBlock({ result }: { result: SimulatorResult }) {
           </tbody>
         </table>
         <p className="text-xs text-gray-400 mt-2">Valores en kWh</p>
+        <MonthlyLineChart monthly={energyBalance.monthly} />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -309,62 +344,71 @@ export default function StepResults({ state }: StepResultsProps) {
   const supply  = state.supply!;
   const profile = state.consumptionProfile!;
   const future  = state.futureConsumption;
+  const isResidential = state.customerCategory === 'natural';
 
-  const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
-  const [activeTab, setActiveTab] = useState<'base' | 'future'>('base');
-  const [ctaState, setCtaState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [activeScenario, setActiveScenario]   = useState<'A' | 'B' | 'C'>('A');
+  const [batteryCount, setBatteryCount]       = useState(1);
+  const [ctaState, setCtaState]               = useState<CtaState>('idle');
+  const [consumptionMode, setConsumptionMode] = useState<'base' | 'future'>('future');
 
   const contactName = 'name' in contact
     ? (contact as PersonContact).name
     : (contact as BusinessContact).companyName;
+  const contactEmail = (contact as PersonContact).email ?? (contact as BusinessContact).email;
 
   // ── Simulaciones ────────────────────────────────────────────────────────────
-  const { baseResult, futureResult, evCharger } = useMemo(() => {
-    const baseInput   = buildBaseInput(state, 0);
-    const base        = runSimulation(baseInput);
+  const { baseInput, scenarios, futureScenarios, businessResult } = useMemo(() => {
+    const inp = buildBaseInput(state); // includes future consumption
 
-    const futureInput = hasAdditions
-      ? buildBaseInput(state, future!.totalAdditionalMonthlyKWh)
-      : null;
-    const fut = futureInput ? runSimulation(futureInput) : null;
+    if (!isResidential) {
+      return { baseInput: inp, scenarios: null, futureScenarios: null, businessResult: runBusinessSimulation(inp) };
+    }
 
-    // EVCharger con balance real del escenario activo
+    const addKWh = state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0;
+    const hasAdd = addKWh > 0;
+    const inpBase = hasAdd
+      ? { ...inp, monthlyConsumptionKWh: state.consumptionProfile!.averageMonthlyKWh }
+      : inp;
+
+    return {
+      baseInput: inp,
+      scenarios: calcThreeScenarios(inpBase, batteryCount),
+      futureScenarios: hasAdd ? calcThreeScenarios(inp, batteryCount) : null,
+      businessResult: null,
+    };
+  }, [state, isResidential, batteryCount]);
+
+  const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
+
+  const activeScenarios = (hasAdditions && consumptionMode === 'future' && futureScenarios)
+    ? futureScenarios
+    : scenarios;
+
+  const activeResult: SimulatorResult = isResidential
+    ? (activeScenarios![activeScenario] ?? activeScenarios!.A)
+    : businessResult!;
+
+  const tarifaRec = getTarifaRec(supply.tarifa);
+
+  // EV analysis uses Scenario A balance (or business result)
+  const evCharger = useMemo(() => {
     const evRaw = future?.evCharger;
-    const realEV = evRaw
-      ? calcEVCharger(
-          evRaw.carCount,
-          profile.averageMonthlyKWh,
-          (fut ?? base).energyBalance,
-          baseInput.energyPrice.kWhPriceCLP,
-          baseInput.energyPrice.kWhPriceCLP * SOLAR_DEFAULTS.injectionValueFactor,
-        )
-      : null;
-
-    return { baseResult: base, futureResult: fut, evCharger: realEV };
-  }, [state, hasAdditions, future, profile.averageMonthlyKWh]);
-
-  const activeResult = activeTab === 'future' && futureResult ? futureResult : baseResult;
-
-  const tarifaRec = getTarifaRec(
-    supply.tarifa,
-    future?.totalAdditionalMonthlyKWh ?? 0,
-    profile.averageMonthlyKWh,
-  );
+    if (!evRaw) return null;
+    const balanceForEV = isResidential ? scenarios!.A.energyBalance : businessResult!.energyBalance;
+    return calcEVCharger(
+      evRaw.carCount,
+      profile.averageMonthlyKWh,
+      balanceForEV,
+      baseInput.energyPrice.kWhPriceCLP,
+      baseInput.energyPrice.kWhPriceCLP * SOLAR_DEFAULTS.injectionValueFactor,
+    );
+  }, [future, isResidential, scenarios, businessResult, profile.averageMonthlyKWh, baseInput]);
 
   const EVChargingLabel: Record<string, string> = {
     day:   'Carga diurna — usa tus excedentes solares',
     night: 'Carga nocturna — desde la red en horario bajo',
     mixed: 'Carga mixta — parte solar, parte red',
   };
-
-  // Label del tab de equipos nuevos
-  const futureTabLabel = (() => {
-    const parts: string[] = [];
-    if ((future?.airConditioners?.length ?? 0) > 0) parts.push('AA');
-    if (future?.waterHeater) parts.push('Termo');
-    if (future?.evCharger)   parts.push('Auto EV');
-    return parts.length > 0 ? `Con ${parts.join(', ')}` : 'Con equipos nuevos';
-  })();
 
   const handleCTA = useCallback(async () => {
     if (ctaState !== 'idle') return;
@@ -383,19 +427,17 @@ export default function StepResults({ state }: StepResultsProps) {
         city:        c.city,
         commune:     c.commune,
       },
-      supply: {
-        tarifa:       supply.tarifa,
-        distribuidora: supply.distribuidora,
-      },
+      supply: { tarifa: supply.tarifa, distribuidora: supply.distribuidora },
       averageMonthlyKWh: profile.averageMonthlyKWh,
       simulation: {
-        regionName:       baseResult.region.name,
-        kitSizeKWp:       baseResult.kitRecommendation.primary.sizekWp,
-        kitPriceCLP:      baseResult.kitRecommendation.primary.priceReferenceCLP,
-        monthlyBenefitCLP: baseResult.financial.monthlyBenefitCLP,
-        annualBenefitCLP:  baseResult.financial.annualBenefitCLP,
-        paybackYears:      baseResult.financial.paybackYears,
-        coveragePercent:   baseResult.energyBalance.coveragePercent,
+        regionName:        activeResult.region.name,
+        kitSizeKWp:        activeResult.kit.sizekWp,
+        kitPriceCLP:       activeResult.financial.systemCostCLP,
+        batteryCapacityKWh: activeResult.batteryCapacityKWh,
+        monthlyBenefitCLP: activeResult.financial.monthlyBenefitCLP,
+        annualBenefitCLP:  activeResult.financial.annualBenefitCLP,
+        paybackYears:      activeResult.financial.paybackYears,
+        coveragePercent:   activeResult.energyBalance.coveragePercent,
       },
     };
 
@@ -409,7 +451,7 @@ export default function StepResults({ state }: StepResultsProps) {
     } catch {
       setCtaState('error');
     }
-  }, [ctaState, contact, state.customerCategory, supply, profile, baseResult]);
+  }, [ctaState, contact, state.customerCategory, supply, profile, activeResult]);
 
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -417,120 +459,206 @@ export default function StepResults({ state }: StepResultsProps) {
       className="flex flex-col gap-5 select-none"
       onCopy={(e) => e.preventDefault()}
     >
-      {/* ── Encabezado ─────────────────────────────────────────────────────── */}
-      <div className="bg-green-600 text-white rounded-2xl p-5">
-        <p className="text-sm opacity-75 mb-0.5">{contactName}</p>
-        <h1 className="text-xl font-bold">Simulación solar personalizada</h1>
-        <p className="text-sm opacity-80 mt-1">
-          {baseResult.region.name} · {supply.distribuidora} ·{' '}
-          Tarifa {supply.tarifa === 'unknown' ? 'BT1 (referencia)' : supply.tarifa}
+      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      <div className="bg-gradient-to-br from-green-600 to-green-700 text-white rounded-2xl p-5">
+        <p className="text-sm opacity-70 mb-1">{contactName}</p>
+        <p className="text-3xl font-bold leading-tight">
+          {formatCLP(activeResult.financial.monthlyBenefitCLP)}
+          <span className="text-lg font-normal opacity-75">/mes</span>
         </p>
-        <p className="text-xs opacity-60 mt-1">
-          Consumo base: {formatKWh(profile.averageMonthlyKWh)}/mes ·{' '}
-          ${baseResult.input.energyPrice.kWhPriceCLP}/kWh
-          {baseResult.input.energyPrice.source === 'reference' && ' (precio referencial)'}
+        <p className="text-sm opacity-90 font-medium mt-0.5 mb-4">de ahorro estimado en energía</p>
+        <div className="grid grid-cols-3 gap-3 text-sm border-t border-white/20 pt-4">
+          <div>
+            <p className="text-xs opacity-60">Retorno</p>
+            <p className="font-semibold">{formatPayback(activeResult.financial.paybackYears)}</p>
+          </div>
+          <div>
+            <p className="text-xs opacity-60">Cobertura</p>
+            <p className="font-semibold">{formatPercent(activeResult.energyBalance.coveragePercent)}</p>
+          </div>
+          <div>
+            <p className="text-xs opacity-60">Consumo</p>
+            <p className="font-semibold">{formatKWh(baseInput.monthlyConsumptionKWh)}/mes</p>
+          </div>
+        </div>
+        <p className="text-xs opacity-50 mt-3">
+          {activeResult.region.name} · {supply.distribuidora ?? 'distribuidora no especificada'} ·
+          Tarifa {supply.tarifa === 'unknown' ? 'BT1 (referencia)' : supply.tarifa}
+          {baseInput.energyPrice.source === 'reference'
+            ? ` · ${baseInput.energyPrice.kWhPriceCLP} CLP/kWh (ref.)`
+            : ` · ${baseInput.energyPrice.kWhPriceCLP} CLP/kWh`}
         </p>
       </div>
 
-      {/* ── Tabs de escenario (solo si hay equipos adicionales) ─────────────── */}
-      {hasAdditions && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-1.5 flex gap-1.5">
+      {/* ── Toggle consumo base / futuro ───────────────────────────────────── */}
+      {hasAdditions && futureScenarios && (
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           <button
             type="button"
-            onClick={() => setActiveTab('base')}
+            onClick={() => setConsumptionMode('base')}
             className={[
-              'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
-              activeTab === 'base'
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-500 hover:text-gray-700',
+              'flex-1 rounded-lg py-2.5 text-xs font-medium transition-colors',
+              consumptionMode === 'base' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700',
             ].join(' ')}
           >
             Consumo actual
-            <span className="block text-xs font-normal opacity-70">
+            <span className="block text-[10px] font-normal opacity-60 mt-0.5">
               {profile.averageMonthlyKWh} kWh/mes
             </span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('future')}
+            onClick={() => setConsumptionMode('future')}
             className={[
-              'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
-              activeTab === 'future'
-                ? 'bg-green-600 text-white'
-                : 'text-gray-500 hover:text-gray-700',
+              'flex-1 rounded-lg py-2.5 text-xs font-medium transition-colors',
+              consumptionMode === 'future' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700',
             ].join(' ')}
           >
-            {futureTabLabel}
-            <span className="block text-xs font-normal opacity-70">
+            Con equipos nuevos
+            <span className="block text-[10px] font-normal opacity-60 mt-0.5">
               {profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0)} kWh/mes
             </span>
           </button>
         </div>
       )}
 
-      {/* ── Detalle de equipos adicionales (solo tab futuro) ────────────────── */}
-      {hasAdditions && activeTab === 'future' && future && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Equipos adicionales incluidos</h2>
-          <div className="flex flex-col gap-2 text-sm">
-            {future.airConditioners.map((ac) => (
-              <div key={ac.btu} className="flex justify-between">
-                <span className="text-gray-500">❄️ AA {ac.btu.toLocaleString('es-CL')} BTU × {ac.count}</span>
-                <span className="font-medium text-gray-700">+{ac.estimatedMonthlyKWh} kWh/mes</span>
-              </div>
+      {/* ── Tabs de escenario (solo residencial) ───────────────────────────── */}
+      {isResidential && activeScenarios && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-1.5 flex gap-1.5">
+          {(['A', 'B', 'C'] as const)
+            .filter((s) => s !== 'B' || activeScenarios.kitB !== null)
+            .map((s) => {
+              const labels = {
+                A: { title: `Kit ${activeScenarios.kitA.sizekWp} kWp`, sub: 'sin batería' },
+                B: { title: `Kit ${activeScenarios.kitB?.sizekWp} kWp`, sub: 'sin batería' },
+                C: { title: `Kit ${activeScenarios.kitA.sizekWp} kWp`, sub: 'con baterías' },
+              }[s];
+              const isActive = activeScenario === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setActiveScenario(s)}
+                  className={[
+                    'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? s === 'C' ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
+                      : 'text-gray-500 hover:text-gray-700',
+                  ].join(' ')}
+                >
+                  {labels.title}
+                  <span className="block text-xs font-normal opacity-70">{labels.sub}</span>
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {/* ── Selector de baterías (Escenario C) ─────────────────────────────── */}
+      {isResidential && activeScenario === 'C' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <p className="text-sm font-semibold text-amber-800 mb-3">Módulos de batería</p>
+          <div className="flex gap-2 flex-wrap mb-3">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setBatteryCount(n)}
+                className={[
+                  'w-10 h-10 rounded-xl text-sm font-bold border-2 transition-all',
+                  batteryCount === n
+                    ? 'border-amber-500 bg-amber-500 text-white'
+                    : 'border-amber-200 text-amber-700 hover:border-amber-400',
+                ].join(' ')}
+              >
+                {n}
+              </button>
             ))}
-            {future.waterHeater && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">🚿 Termo {future.waterHeater.recommendedCapacityLiters} L</span>
-                <span className="font-medium text-gray-700">+{future.waterHeater.estimatedMonthlyKWh} kWh/mes</span>
-              </div>
-            )}
-            {future.evCharger && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">🚗 Auto eléctrico × {future.evCharger.carCount}</span>
-                <span className="font-medium text-gray-700">+{future.evCharger.estimatedMonthlyKWh} kWh/mes</span>
-              </div>
-            )}
-            <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold">
-              <span className="text-gray-700">Total adicional</span>
-              <span className="text-gray-900">+{future.totalAdditionalMonthlyKWh} kWh/mes</span>
-            </div>
+          </div>
+          <div className="flex gap-4 text-xs text-amber-700">
+            <span>Capacidad total: <strong>{batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh</strong></span>
+            <span>Reserva (30%): <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * 0.3).toFixed(1)} kWh</strong></span>
+            <span>Uso nocturno: <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * 0.7).toFixed(1)} kWh</strong></span>
           </div>
         </div>
       )}
 
-      {/* ── Escenario activo ────────────────────────────────────────────────── */}
-      <ScenarioBlock result={activeResult} />
+      {/* ── KPIs ───────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard
+          label="Ahorro mensual"
+          value={formatCLP(activeResult.financial.monthlyBenefitCLP)}
+          sub="autoconsumo + inyección"
+          accent="text-green-600"
+        />
+        <StatCard
+          label="Ahorro anual"
+          value={formatCLP(activeResult.financial.annualBenefitCLP)}
+          accent="text-green-600"
+        />
+        <StatCard
+          label="Período de retorno"
+          value={formatPayback(activeResult.financial.paybackYears)}
+          sub="payback simple"
+        />
+        <StatCard
+          label="Cobertura solar"
+          value={formatPercent(activeResult.energyBalance.coveragePercent)}
+          sub="de tu consumo cubierto"
+        />
+      </div>
 
-      {/* ── Aviso de empalme si el kit fue limitado ────────────────────────── */}
-      {supply.amperajeA != null && (() => {
-        const empalmeMaxKW = Math.round((supply.amperajeA! * 220 / 1000) * 10) / 10;
-        const kitKWp = baseResult.kitRecommendation.primary.sizekWp;
-        if (kitKWp >= empalmeMaxKW) return null;
-        // Verificamos si sin el límite se hubría recomendado un kit mayor
-        const idealKWp = (profile.averageMonthlyKWh * 12 * SOLAR_DEFAULTS.dayConsumptionRatio) / baseResult.region.annualProductionKWhPerKWp;
-        if (idealKWp <= kitKWp) return null;
-        return (
-          <InfoBanner
-            color="amber"
-            icon="⚡"
-            title={`Kit limitado por el empalme (${supply.amperajeA} A = ${empalmeMaxKW} kW)`}
-            body={`Para tu consumo, lo ideal sería un sistema de ${Math.ceil(idealKWp * 2) / 2} kWp, pero tu empalme permite un máximo de ${empalmeMaxKW} kW. Si quieres una planta mayor, considera ampliar el empalme con tu distribuidora.`}
-          />
-        );
-      })()}
+      {/* ── Kit del escenario activo ────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border-2 border-green-500 shadow-sm p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+              {activeScenario === 'C'
+                ? `Con ${batteryCount} batería${batteryCount > 1 ? 's' : ''} · ${batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh`
+                : activeScenario === 'B' ? 'Opción económica' : 'Recomendado'}
+            </span>
+            <p className="font-semibold text-gray-900 mt-1.5">Kit {activeResult.kit.sizekWp} kWp</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {activeResult.kit.panelCount} paneles · {activeResult.kit.estimatedAreaM2} m²
+              {activeResult.batteryCapacityKWh > 0 && (
+                <> · {activeResult.batteryCapacityKWh} kWh batería</>
+              )}
+            </p>
+            {activeResult.kit.installationNotes && (
+              <p className="text-xs text-gray-400 mt-1">{activeResult.kit.installationNotes}</p>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-lg font-bold text-gray-900">
+              {formatCLP(activeResult.financial.systemCostCLP)}
+            </p>
+            <p className="text-xs text-gray-400">precio referencial</p>
+          </div>
+        </div>
+      </div>
 
-      {/* ── Recomendación de tarifa ────────────────────────────────────────── */}
+      {/* ── CTA ────────────────────────────────────────────────────────────── */}
+      <CTABlock
+        result={activeResult}
+        contactEmail={contactEmail}
+        ctaState={ctaState}
+        onCTA={handleCTA}
+      />
+
+      {/* ── Desglose financiero + balance ───────────────────────────────────── */}
+      <FinancialDetail result={activeResult} />
+
+      {/* ── Banners ─────────────────────────────────────────────────────────── */}
       {tarifaRec && (
         <InfoBanner
           color={tarifaRec.color}
-          icon={tarifaRec.type === 'unknown' ? '❓' : tarifaRec.type === 'empalme' ? '⚡' : '🔋'}
+          icon={tarifaRec.type === 'unknown' ? '❓' : '🔋'}
           title={tarifaRec.title}
           body={tarifaRec.body}
         />
       )}
 
-      {/* ── Auto eléctrico ─────────────────────────────────────────────────── */}
+      {/* ── Auto eléctrico ──────────────────────────────────────────────────── */}
       {evCharger && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
@@ -565,14 +693,13 @@ export default function StepResults({ state }: StepResultsProps) {
           {evCharger.dayChargingSavingsCLP > 0 && (
             <p className="text-xs text-green-700 mt-3 bg-green-50 rounded-xl px-3 py-2">
               Ahorro adicional por carga solar:{' '}
-              <span className="font-semibold">{formatCLP(evCharger.dayChargingSavingsCLP)}/año</span>{' '}
-              vs. comprar esa energía a la red.
+              <span className="font-semibold">{formatCLP(evCharger.dayChargingSavingsCLP)}/año</span>
             </p>
           )}
         </div>
       )}
 
-      {/* ── Impacto ambiental ──────────────────────────────────────────────── */}
+      {/* ── Impacto ambiental ────────────────────────────────────────────────── */}
       <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-emerald-800 mb-3">Impacto ambiental estimado</h2>
         <div className="flex gap-8">
@@ -591,42 +718,9 @@ export default function StepResults({ state }: StepResultsProps) {
         </div>
       </div>
 
-      {/* ── CTA ───────────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 text-white rounded-2xl p-5 text-center">
-        {ctaState === 'success' ? (
-          <div className="py-2">
-            <p className="text-2xl mb-2">✅</p>
-            <p className="text-base font-bold mb-1">¡Solicitud enviada!</p>
-            <p className="text-sm text-gray-400">
-              Te contactaremos a <span className="text-white font-medium">{(contact as PersonContact).email ?? (contact as BusinessContact).email}</span> en las próximas horas.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p className="text-lg font-bold mb-1">¿Te interesa avanzar?</p>
-            <p className="text-sm text-gray-400 mb-4">
-              Un especialista revisará tu caso y coordinará una reunión a la brevedad.
-            </p>
-            {ctaState === 'error' && (
-              <p className="text-red-400 text-xs mb-3">
-                Hubo un error al enviar. Intenta nuevamente o escríbenos directamente.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleCTA}
-              disabled={ctaState === 'loading'}
-              className="w-full rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 text-sm transition-colors"
-            >
-              {ctaState === 'loading' ? 'Enviando...' : ctaState === 'error' ? 'Reintentar' : 'Quiero que me contacten'}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* ── Nota metodológica ─────────────────────────────────────────────── */}
+      {/* ── Nota metodológica ────────────────────────────────────────────────── */}
       <p className="text-xs text-gray-400 leading-relaxed pb-4">
-        Simulación estimativa basada en irradiación histórica de {baseResult.region.name}.
+        Simulación estimativa basada en irradiación histórica de {activeResult.region.name}.
         Precio de inyección = {SOLAR_DEFAULTS.injectionValueFactor * 100}% del kWh de compra (net billing).
         Perfil: {SOLAR_DEFAULTS.dayConsumptionRatio * 100}% diurno / {SOLAR_DEFAULTS.nightConsumptionRatio * 100}% nocturno.
         Los valores reales dependen de la instalación específica.

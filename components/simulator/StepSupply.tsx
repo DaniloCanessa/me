@@ -58,7 +58,6 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
       existingSystemKWp: hasExistingSolar && existingSystemKWp
         ? parseFloat(existingSystemKWp)
         : undefined,
-      includeBattery: false, // derivado de batteryCount en FutureConsumption
     });
   }
 

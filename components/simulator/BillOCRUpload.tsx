@@ -16,7 +16,7 @@ interface BillOCRUploadProps {
 
 type UploadState =
   | { stage: 'idle' }
-  | { stage: 'loading'; fileName: string }
+  | { stage: 'loading'; fileName: string; current: number; total: number }
   | { stage: 'review'; data: ExtractedBill; edited: ExtractedPeriod[]; matchCount: number; isMock: boolean }
   | { stage: 'error'; reason: string };
 
@@ -39,37 +39,61 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFiles = useCallback(async (files: File[]) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowed.includes(file.type)) {
+    const valid = files.filter((f) => allowed.includes(f.type));
+    if (valid.length === 0) {
       setState({ stage: 'error', reason: 'Formato no soportado. Usa JPG, PNG o PDF.' });
       return;
     }
 
-    setState({ stage: 'loading', fileName: file.name });
-    const formData = new FormData();
-    formData.append('file', file);
+    const allPeriods: Map<string, ExtractedPeriod> = new Map();
+    let lastBillData: ExtractedBill | null = null;
+    let anyMock = false;
 
-    try {
-      const res = await fetch('/api/parse-bill', { method: 'POST', body: formData });
-      const json = await res.json() as
-        | { ok: true; data: ExtractedBill; mock?: boolean }
-        | { ok: false; message: string };
+    for (let i = 0; i < valid.length; i++) {
+      const file = valid[i];
+      setState({ stage: 'loading', fileName: file.name, current: i + 1, total: valid.length });
+      const formData = new FormData();
+      formData.append('file', file);
 
-      if (!json.ok) {
-        setState({ stage: 'error', reason: json.message });
+      try {
+        const res = await fetch('/api/parse-bill', { method: 'POST', body: formData });
+        const json = await res.json() as
+          | { ok: true; data: ExtractedBill; mock?: boolean }
+          | { ok: false; message: string };
+
+        if (!json.ok) {
+          setState({ stage: 'error', reason: json.message });
+          return;
+        }
+
+        if (json.mock) anyMock = true;
+        lastBillData = json.data;
+
+        for (const p of json.data.periods) {
+          const key = slotKey(p.month, p.year);
+          const existing = allPeriods.get(key);
+          // Prefer the entry with more data (has variableAmountCLP)
+          if (!existing || (!existing.variableAmountCLP && p.variableAmountCLP)) {
+            allPeriods.set(key, { ...p });
+          }
+        }
+      } catch {
+        setState({ stage: 'error', reason: 'Error de conexión. Intenta nuevamente.' });
         return;
       }
-
-      const edited = json.data.periods.map((p) => ({ ...p }));
-      const matchCount = edited.filter((p) =>
-        availableSlotKeys.includes(slotKey(p.month, p.year))
-      ).length;
-
-      setState({ stage: 'review', data: json.data, edited, matchCount, isMock: json.mock ?? false });
-    } catch {
-      setState({ stage: 'error', reason: 'Error de conexión. Intenta nuevamente.' });
     }
+
+    if (!lastBillData) return;
+
+    const edited = Array.from(allPeriods.values()).sort(
+      (a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month,
+    );
+    const matchCount = edited.filter((p) => availableSlotKeys.includes(slotKey(p.month, p.year))).length;
+    const mergedBill: ExtractedBill = { ...lastBillData, periods: edited };
+
+    setState({ stage: 'review', data: mergedBill, edited, matchCount, isMock: anyMock });
   }, [availableSlotKeys]);
 
   function handleChange(idx: number, field: keyof ExtractedPeriod, value: string) {
@@ -95,7 +119,8 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
         onDragLeave={() => setIsDragging(false)}
         onDrop={(e) => {
           e.preventDefault(); setIsDragging(false);
-          const f = e.dataTransfer.files[0]; if (f) handleFile(f);
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) handleFiles(files);
         }}
         onClick={() => inputRef.current?.click()}
         className={[
@@ -107,12 +132,16 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
           ref={inputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,application/pdf"
+          multiple
           className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) handleFiles(files);
+          }}
         />
         <p className="text-2xl mb-2">📄</p>
-        <p className="text-sm font-semibold text-gray-700">Arrastra tu boleta o haz clic para subir</p>
-        <p className="text-xs text-gray-400 mt-1">JPG · PNG · PDF — Claude leerá los datos automáticamente</p>
+        <p className="text-sm font-semibold text-gray-700">Arrastra tus boletas o haz clic para subir</p>
+        <p className="text-xs text-gray-400 mt-1">JPG · PNG · PDF · Puedes subir varias a la vez</p>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onCancel(); }}
@@ -130,7 +159,9 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
     return (
       <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
         <div className="inline-block w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-3" />
-        <p className="text-sm font-semibold text-gray-700">Analizando boleta...</p>
+        <p className="text-sm font-semibold text-gray-700">
+          Analizando boleta{state.total > 1 ? ` ${state.current} de ${state.total}` : ''}...
+        </p>
         <p className="text-xs text-gray-400 mt-1">{state.fileName}</p>
       </div>
     );
