@@ -186,8 +186,13 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      console.error('[parse-bill] Anthropic error:', response.status, await response.text());
-      return Response.json({ ok: false, reason: 'error', message: 'Error al contactar el servicio de análisis' }, { status: 502 });
+      const errBody = await response.text();
+      console.error('[parse-bill] Anthropic error:', response.status, errBody);
+      return Response.json({
+        ok: false,
+        reason: 'error',
+        message: `Error Anthropic ${response.status}: ${errBody.slice(0, 200)}`,
+      }, { status: 502 });
     }
 
     const result = await response.json() as { content: Array<{ type: string; text: string }> };
