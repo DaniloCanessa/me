@@ -127,10 +127,10 @@ function buildEmailHtml(lead: LeadPayload): string {
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const recipient = process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com';
-
 export async function POST(request: Request) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const recipient = process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com';
+
   let body: LeadPayload;
 
   try {
