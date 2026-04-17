@@ -357,24 +357,30 @@ export default function StepResults({ state }: StepResultsProps) {
   const contactEmail = (contact as PersonContact).email ?? (contact as BusinessContact).email;
 
   // ── Simulaciones ────────────────────────────────────────────────────────────
-  const { baseInput, scenarios, futureScenarios, businessResult } = useMemo(() => {
+  const { baseInput, scenarios, futureScenarios, businessResult, businessBaseResult } = useMemo(() => {
     const inp = buildBaseInput(state); // includes future consumption
-
-    if (!isResidential) {
-      return { baseInput: inp, scenarios: null, futureScenarios: null, businessResult: runBusinessSimulation(inp) };
-    }
-
     const addKWh = state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0;
     const hasAdd = addKWh > 0;
     const inpBase = hasAdd
       ? { ...inp, monthlyConsumptionKWh: state.consumptionProfile!.averageMonthlyKWh }
       : inp;
 
+    if (!isResidential) {
+      return {
+        baseInput: inp,
+        scenarios: null,
+        futureScenarios: null,
+        businessResult: runBusinessSimulation(inp),
+        businessBaseResult: hasAdd ? runBusinessSimulation(inpBase) : null,
+      };
+    }
+
     return {
       baseInput: inp,
       scenarios: calcThreeScenarios(inpBase, batteryCount),
       futureScenarios: hasAdd ? calcThreeScenarios(inp, batteryCount) : null,
       businessResult: null,
+      businessBaseResult: null,
     };
   }, [state, isResidential, batteryCount]);
 
@@ -386,7 +392,9 @@ export default function StepResults({ state }: StepResultsProps) {
 
   const activeResult: SimulatorResult = isResidential
     ? (activeScenarios![activeScenario] ?? activeScenarios!.A)
-    : businessResult!;
+    : (hasAdditions && consumptionMode === 'base' && businessBaseResult)
+      ? businessBaseResult
+      : businessResult!;
 
   const tarifaRec = getTarifaRec(supply.tarifa);
 
@@ -394,7 +402,7 @@ export default function StepResults({ state }: StepResultsProps) {
   const evCharger = useMemo(() => {
     const evRaw = future?.evCharger;
     if (!evRaw) return null;
-    const balanceForEV = isResidential ? scenarios!.A.energyBalance : businessResult!.energyBalance;
+    const balanceForEV = isResidential ? scenarios!.A.energyBalance : (businessResult ?? businessBaseResult)!.energyBalance;
     return calcEVCharger(
       evRaw.carCount,
       profile.averageMonthlyKWh,
@@ -491,7 +499,7 @@ export default function StepResults({ state }: StepResultsProps) {
       </div>
 
       {/* ── Toggle consumo base / futuro ───────────────────────────────────── */}
-      {hasAdditions && futureScenarios && (
+      {hasAdditions && (futureScenarios ?? businessBaseResult) && (
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           <button
             type="button"
