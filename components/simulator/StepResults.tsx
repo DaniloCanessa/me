@@ -13,6 +13,9 @@ import { calcThreeScenarios, runBusinessSimulation } from '@/lib/calculations';
 import { calcEVCharger } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
+import dynamic from 'next/dynamic';
+
+const PDFDownloadButton = dynamic(() => import('./PDFDownloadButton'), { ssr: false });
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -651,6 +654,13 @@ export default function StepResults({ state }: StepResultsProps) {
         contactEmail={contactEmail}
         ctaState={ctaState}
         onCTA={handleCTA}
+      />
+
+      {/* ── Descargar PDF ───────────────────────────────────────────────────── */}
+      <PDFDownloadButton
+        result={activeResult}
+        clientName={contactName}
+        scenario={isResidential ? activeScenario : undefined}
       />
 
       {/* ── Desglose financiero + balance ───────────────────────────────────── */}
