@@ -418,11 +418,10 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                 Si no los tienes a mano, omítelos — la simulación sigue funcionando.
               </p>
             </div>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <label htmlFor="avgTotalBill" className="text-xs font-medium text-gray-600">
                   Monto total promedio mensual (CLP)
-                  <span className="text-gray-400 font-normal ml-1">— suma de todos los cargos de la boleta</span>
                 </label>
                 <input
                   id="avgTotalBill"
@@ -434,11 +433,13 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   placeholder="Ej: 185000"
                   className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
                 />
+                <p className="text-xs text-purple-500 leading-relaxed mt-0.5">
+                  Es el <strong>total a pagar</strong> que aparece al final de tu boleta, incluyendo todos los ítems (energía + potencia + cargo fijo + IVA). Suma los últimos meses disponibles y divide por la cantidad de meses.
+                </p>
               </div>
               <div className="flex flex-col gap-1">
                 <label htmlFor="avgPowerCharge" className="text-xs font-medium text-gray-600">
                   Cargo por potencia promedio mensual (CLP)
-                  <span className="text-gray-400 font-normal ml-1">— ítem &quot;cargo por potencia&quot; en la boleta</span>
                 </label>
                 <input
                   id="avgPowerCharge"
@@ -450,6 +451,12 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   placeholder="Ej: 45000"
                   className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
                 />
+                <p className="text-xs text-purple-500 leading-relaxed mt-0.5">
+                  Busca en tu boleta la línea <strong>&quot;Cargo por demanda máxima&quot;</strong> (BT3) o <strong>&quot;Cargo por potencia contratada&quot;</strong> (BT2). Suele representar el 20–35% del total. Si tienes varias boletas, promedia ese ítem.
+                  {supply.tarifa === 'BT3' && (
+                    <> En BT3 se calcula como: <em>demanda máxima medida (kW) × precio unitario ($/kW)</em>.</>
+                  )}
+                </p>
               </div>
             </div>
           </div>
