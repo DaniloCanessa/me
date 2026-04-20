@@ -15,6 +15,7 @@ import { SOLAR_DEFAULTS } from '@/lib/constants';
 interface StepFutureConsumptionProps {
   initialData: FutureConsumption | null;
   averageMonthlyKWh: number;
+  isBusinessCustomer?: boolean;
   onSubmit: (data: FutureConsumption) => void;
 }
 
@@ -114,6 +115,7 @@ function Stepper({
 export default function StepFutureConsumption({
   initialData,
   averageMonthlyKWh,
+  isBusinessCustomer,
   onSubmit,
 }: StepFutureConsumptionProps) {
 
@@ -137,6 +139,11 @@ export default function StepFutureConsumption({
   const [hasEV, setHasEV] = useState(() => !!initialData?.evCharger);
   const [carCount, setCarCount] = useState(() =>
     initialData?.evCharger?.carCount ?? 1,
+  );
+
+  // ── Estado Equipos flexibles (solo empresa) ───────────────────────────────
+  const [flexibleEquipment, setFlexibleEquipment] = useState(
+    initialData?.flexibleEquipment ?? false,
   );
 
   // ── Cálculos en vivo ──────────────────────────────────────────────────────
@@ -184,7 +191,10 @@ export default function StepFutureConsumption({
         }
       : undefined;
 
-    onSubmit(calcFutureConsumption(acGroups, waterHeater, evCharger));
+    onSubmit({
+      ...calcFutureConsumption(acGroups, waterHeater, evCharger),
+      flexibleEquipment: isBusinessCustomer ? flexibleEquipment : undefined,
+    });
   }
 
   const hasAny = hasAC || hasTermo || hasEV;
@@ -328,6 +338,24 @@ export default function StepFutureConsumption({
             </div>
           )}
         </div>
+
+        {/* Equipos de horario flexible (solo empresa) */}
+        {isBusinessCustomer && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <Toggle
+              icon="⚙️"
+              label="Equipos con horario flexible"
+              sublabel="Bombas, hornos, compresores u otros que pueden programarse en cualquier hora"
+              enabled={flexibleEquipment}
+              onChange={setFlexibleEquipment}
+            />
+            {flexibleEquipment && (
+              <p className="text-xs text-purple-700 bg-purple-50 rounded-xl px-4 py-2 mt-3">
+                En los resultados verás cuánto puedes ahorrar operando estos equipos entre las 10:00 y las 16:00, durante la ventana de máxima generación solar.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Resumen total */}
         {hasAny && total > 0 && (

@@ -55,6 +55,7 @@ export interface SolarKit {
   estimatedAreaM2: number;
   priceReferenceCLP: number;
   installationNotes?: string;
+  exceedsNetBillingLimit?: boolean; // true si el sistema óptimo supera los 300 kW del Art. 149 bis
 }
 
 export interface KitScenarios {
@@ -127,6 +128,8 @@ export interface FinancialSummary {
   annualBenefitCLP: number;
   monthlyBenefitCLP: number;
   paybackYears: number;
+  discountedPaybackYears: number; // payback descontado a tasa 10% real (DFL4 Art. 165d)
+  vanCLP: number;                 // valor actual neto a 25 años con tasa 10% real
   roi25YearsPercent: number;
   injectionValuePerKWhCLP: number;
 }
@@ -162,7 +165,7 @@ export interface SavedSimulation {
 
 export type CustomerCategory = 'natural' | 'business';
 
-export type PropertyType = 'casa' | 'departamento' | 'oficina' | 'colegio' | 'otro';
+export type PropertyType = 'casa' | 'departamento' | 'oficina' | 'colegio' | 'industria' | 'condominio' | 'otro';
 
 // ─── Datos de suministro ──────────────────────────────────────────────────────
 
@@ -170,7 +173,10 @@ export interface SupplyData {
   propertyType: PropertyType;
   distribuidora?: string;
   tarifa: TarifaType;
-  amperajeA?: number;
+  amperajeA?: number;              // residencial: amperaje del breaker principal
+  potenciaContratadaKW?: number;   // empresa: potencia contratada en kW
+  tensionSuministro?: 'BT' | 'AT'; // empresa: baja tensión o alta tensión
+  operatingHours?: 'peak' | 'offpeak' | 'mixed'; // solo para BT4.x/AT4.x
   hasExistingSolar: boolean;
   existingSystemKWp?: number;
 }
@@ -220,6 +226,8 @@ export interface ConsumptionProfile {
   peakMonthKWh: number;
   minMonthKWh: number;
   isComplete: boolean;            // true si tiene los 12 meses
+  avgTotalBillCLP?: number;       // promedio monto total boleta (todos los cargos)
+  avgPowerChargeCLP?: number;     // promedio cargo por potencia mensual
 }
 
 // ─── Consumos futuros ─────────────────────────────────────────────────────────
@@ -261,6 +269,7 @@ export interface FutureConsumption {
   waterHeater?: ElectricWaterHeater;
   evCharger?: EVCharger;
   totalAdditionalMonthlyKWh: number;
+  flexibleEquipment?: boolean;   // empresa: equipos con horario de uso flexible
 }
 
 // ─── Estado del wizard ────────────────────────────────────────────────────────

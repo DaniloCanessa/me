@@ -76,7 +76,7 @@ export default function SimulatorResults({ result }: SimulatorResultsProps) {
               <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                 Recomendado
               </span>
-              <p className="font-semibold text-gray-900 mt-1">Kit {kit.sizekWp} kWp</p>
+              <p className="font-semibold text-gray-900 mt-1">PFV {kit.sizekWp} kW</p>
               <p className="text-xs text-gray-500 mt-0.5">
                 {kit.panelCount} paneles · {kit.estimatedAreaM2} m²
                 {batteryCapacityKWh > 0 && <> · {batteryCapacityKWh} kWh batería</>}

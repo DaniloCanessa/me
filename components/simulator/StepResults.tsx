@@ -10,8 +10,9 @@ import type {
   TarifaType,
 } from '@/lib/types';
 import { calcThreeScenarios, runBusinessSimulation } from '@/lib/calculations';
+import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger } from '@/lib/consumption';
-import { CHILE_BT1, SOLAR_DEFAULTS } from '@/lib/constants';
+import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
 import dynamic from 'next/dynamic';
 
@@ -39,9 +40,11 @@ function buildBaseInput(state: WizardState): SimulatorInput {
       ? Math.round(billsWithPrice.reduce((s, b) => s + b.kWhPriceCLP!, 0) / billsWithPrice.length)
       : CHILE_BT1.referenceKWhPriceCLP;
 
-  const empalmeMaxKW = supply.amperajeA != null
-    ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
-    : undefined;
+  const empalmeMaxKW = state.customerCategory === 'business'
+    ? supply.potenciaContratadaKW
+    : supply.amperajeA != null
+      ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
+      : undefined;
 
   const monthlyConsumptionKWh =
     profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0);
@@ -64,33 +67,98 @@ function buildBaseInput(state: WizardState): SimulatorInput {
   };
 }
 
-// ─── Recomendación de tarifa ──────────────────────────────────────────────────
+// ─── Panel de análisis y recomendaciones ─────────────────────────────────────
 
-interface TarifaRec {
-  type: 'unknown' | 'battery-peak';
-  title: string;
-  body: string;
-  color: 'amber' | 'purple';
-}
+function AnalysisPanel({ analysis, tarifa }: { analysis: TariffAnalysisResult; tarifa: TarifaType }) {
+  const clpFmt = (n: number) =>
+    new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 
-function getTarifaRec(tarifa: TarifaType): TarifaRec | null {
-  if (tarifa === 'unknown') {
-    return {
-      type: 'unknown',
-      title: 'Confirma tu tarifa',
-      body: 'No tenemos tu tarifa exacta. Revisa tu boleta y actualízala para afinar las recomendaciones.',
-      color: 'amber',
-    };
-  }
-  if (tarifa.startsWith('BT4') || tarifa.startsWith('AT')) {
-    return {
-      type: 'battery-peak',
-      title: 'Batería para gestión de punta',
-      body: `Con tarifa ${tarifa} pagas cargo por demanda en horas de punta. El Escenario C (con batería) puede reducir ese cargo descargándose en horas caras.`,
-      color: 'purple',
-    };
-  }
-  return null;
+  const statusColors = {
+    'optimal':          { bg: 'bg-green-50',  border: 'border-green-200',  icon: '✅', title: 'text-green-800',  body: 'text-green-700'  },
+    'consider-change':  { bg: 'bg-amber-50',  border: 'border-amber-200',  icon: '💡', title: 'text-amber-800',  body: 'text-amber-700'  },
+    'informative-only': { bg: 'bg-gray-50',   border: 'border-gray-200',   icon: 'ℹ️', title: 'text-gray-700',   body: 'text-gray-600'   },
+  };
+  const sc = statusColors[analysis.tariffStatus];
+
+  const showAnyBlock =
+    tarifa === 'unknown' ||
+    analysis.tariffStatus !== 'optimal' ||
+    analysis.hasPeakCharges ||
+    analysis.hasFlexibleEquipment;
+
+  if (!showAnyBlock) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
+      <h2 className="text-sm font-semibold text-gray-700">Análisis y recomendaciones</h2>
+
+      {/* Tarifa desconocida */}
+      {tarifa === 'unknown' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
+          <span className="text-xl shrink-0">❓</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Confirma tu tarifa</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              No tenemos tu tarifa exacta. Revisa tu boleta eléctrica y vuelve al paso 3 para seleccionarla —
+              el análisis tarifario y las recomendaciones de batería serán más precisos.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Optimización tarifaria */}
+      {tarifa !== 'unknown' && (
+        <div className={`rounded-xl border ${sc.bg} ${sc.border} p-4 flex flex-col gap-2`}>
+          <div className="flex gap-2 items-center">
+            <span className="text-base shrink-0">{sc.icon}</span>
+            <p className={`text-sm font-semibold ${sc.title}`}>Optimización tarifaria</p>
+          </div>
+          <p className={`text-xs leading-relaxed ${sc.body}`}>{analysis.tariffMessage}</p>
+
+          {analysis.bestAlternative && analysis.tariffStatus === 'consider-change' && (
+            <div className="mt-2 pt-2 border-t border-amber-200">
+              <p className="text-xs font-semibold text-amber-800 mb-1">Alternativa recomendada:</p>
+              <div className="flex items-center justify-between text-xs text-amber-700">
+                <span>Tarifa {analysis.bestAlternative.tarifa} — {analysis.bestAlternative.typicalUse}</span>
+                <span className="font-semibold">{clpFmt(analysis.bestAlternative.monthlySavingsCLP)}/mes</span>
+              </div>
+            </div>
+          )}
+
+          {!analysis.hasRealBillData && tarifa !== 'BT1' && (
+            <p className="text-[10px] text-gray-400 mt-1">
+              * Estimación basada en precios CNE referenciales — verifica con tu distribuidora.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Gestión de horas de punta */}
+      {analysis.hasPeakCharges && (
+        <div className="rounded-xl border border-purple-200 bg-purple-50 p-4 flex gap-3">
+          <span className="text-xl shrink-0">🔋</span>
+          <div>
+            <p className="text-sm font-semibold text-purple-800">Gestión de horas de punta</p>
+            <p className="text-xs text-purple-700 mt-1 leading-relaxed">{analysis.peakManagementMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Desplazamiento de cargas */}
+      {analysis.hasFlexibleEquipment && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 flex gap-3">
+          <span className="text-xl shrink-0">⚙️</span>
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Desplazamiento de cargas</p>
+            <p className="text-xs text-blue-700 mt-1 leading-relaxed">{analysis.loadShiftingMessage}</p>
+            <p className="text-xs text-blue-600 mt-1 font-medium">
+              Autoconsumo adicional estimado: +{analysis.loadShiftingKWhPerMonth} kWh/mes
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Sub-componentes reutilizables ────────────────────────────────────────────
@@ -290,9 +358,21 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
             <span className="text-gray-700">Beneficio total anual</span>
             <span className="text-green-600">{formatCLP(financial.annualBenefitCLP)}</span>
           </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>ROI a {SOLAR_DEFAULTS.systemLifeYears} años</span>
-            <span>{financial.roi25YearsPercent}%</span>
+          <div className="border-t border-gray-100 pt-2 flex flex-col gap-1.5 text-xs text-gray-500">
+            <div className="flex justify-between">
+              <span>ROI a {SOLAR_DEFAULTS.systemLifeYears} años (simple)</span>
+              <span className="font-medium">{financial.roi25YearsPercent}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span>VAN a {SOLAR_DEFAULTS.systemLifeYears} años (tasa {DFL4.discountRateReal * 100}%)</span>
+              <span className={`font-medium ${financial.vanCLP >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {formatCLP(financial.vanCLP)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Retorno descontado ({DFL4.discountRateReal * 100}% real anual)</span>
+              <span className="font-medium">{formatPayback(financial.discountedPaybackYears)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -350,6 +430,8 @@ export default function StepResults({ state }: StepResultsProps) {
   const isResidential = state.customerCategory === 'natural';
 
   const [activeScenario, setActiveScenario]   = useState<'A' | 'B' | 'C'>('A');
+  // Escenario recomendado — siempre A por ahora; aquí se aplicarán las reglas 1 y 2 cuando se implementen
+  const recommendedScenario: 'A' | 'B' | 'C' = 'A';
   const [batteryCount, setBatteryCount]       = useState(1);
   const [ctaState, setCtaState]               = useState<CtaState>('idle');
   const [consumptionMode, setConsumptionMode] = useState<'base' | 'future'>('future');
@@ -399,7 +481,17 @@ export default function StepResults({ state }: StepResultsProps) {
       ? businessBaseResult
       : businessResult!;
 
-  const tarifaRec = getTarifaRec(supply.tarifa);
+  const tariffAnalysis = useMemo(() => runTariffAnalysis({
+    tarifa:              supply.tarifa,
+    avgMonthlyKWh:       profile.averageMonthlyKWh,
+    potenciaContratadaKW: supply.potenciaContratadaKW,
+    avgPowerChargeCLP:   profile.avgPowerChargeCLP,
+    avgTotalBillCLP:     profile.avgTotalBillCLP,
+    kWhPriceCLP:         baseInput.energyPrice.kWhPriceCLP,
+    isResidential,
+    operatingHours:      supply.operatingHours,
+    flexibleEquipment:   state.futureConsumption?.flexibleEquipment,
+  }), [supply, profile, baseInput, isResidential, state.futureConsumption]);
 
   // EV analysis uses Scenario A balance (or business result)
   const evCharger = useMemo(() => {
@@ -426,6 +518,18 @@ export default function StepResults({ state }: StepResultsProps) {
     setCtaState('loading');
 
     const c = contact as PersonContact & BusinessContact;
+    const scenarioSummary = (r: typeof activeResult) => ({
+      kitSizeKWp:        r.kit.sizekWp,
+      kitPriceCLP:       r.financial.systemCostCLP,
+      monthlyBenefitCLP: r.financial.monthlyBenefitCLP,
+      annualBenefitCLP:  r.financial.annualBenefitCLP,
+      paybackYears:      r.financial.paybackYears,
+      coveragePercent:   r.energyBalance.coveragePercent,
+      panelCount:        r.kit.panelCount,
+      areaM2:            r.kit.estimatedAreaM2,
+      batteryKWh:        r.batteryCapacityKWh > 0 ? r.batteryCapacityKWh : undefined,
+    });
+
     const payload = {
       customerCategory: state.customerCategory,
       contact: {
@@ -449,6 +553,35 @@ export default function StepResults({ state }: StepResultsProps) {
         annualBenefitCLP:  activeResult.financial.annualBenefitCLP,
         paybackYears:      activeResult.financial.paybackYears,
         coveragePercent:   activeResult.energyBalance.coveragePercent,
+      },
+      consumption_profile: {
+        bills: profile.bills.map((b) => ({
+          month: b.month, year: b.year,
+          consumptionKWh: b.consumptionKWh,
+          variableAmountCLP: b.variableAmountCLP,
+        })),
+        averageMonthlyKWh: profile.averageMonthlyKWh,
+      },
+      scenarios_json: activeScenarios ? {
+        A: scenarioSummary(activeScenarios.A),
+        B: activeScenarios.B ? scenarioSummary(activeScenarios.B) : null,
+        C: scenarioSummary(activeScenarios.C),
+      } : null,
+      future_consumption: future && future.totalAdditionalMonthlyKWh > 0 ? {
+        totalAdditionalMonthlyKWh: future.totalAdditionalMonthlyKWh,
+        evCharger: future.evCharger ? { carCount: future.evCharger.carCount, estimatedMonthlyKWh: future.evCharger.estimatedMonthlyKWh } : undefined,
+        airConditioners: future.airConditioners?.length ? future.airConditioners.map((a) => ({ count: a.count, btu: a.btu, estimatedMonthlyKWh: a.estimatedMonthlyKWh })) : undefined,
+        waterHeater: future.waterHeater ? { occupants: future.waterHeater.occupants, estimatedMonthlyKWh: future.waterHeater.estimatedMonthlyKWh } : undefined,
+      } : null,
+      supply_details: {
+        tarifa:                supply.tarifa,
+        distribuidora:         supply.distribuidora,
+        amperajeA:             supply.amperajeA,
+        potenciaContratadaKW:  supply.potenciaContratadaKW,
+        tensionSuministro:     supply.tensionSuministro,
+        hasExistingSolar:      supply.hasExistingSolar,
+        existingSystemKWp:     supply.existingSystemKWp,
+        propertyType:          supply.propertyType,
       },
     };
 
@@ -540,9 +673,9 @@ export default function StepResults({ state }: StepResultsProps) {
             .filter((s) => s !== 'B' || activeScenarios.kitB !== null)
             .map((s) => {
               const labels = {
-                A: { title: `Kit ${activeScenarios.kitA.sizekWp} kWp`, sub: 'sin batería' },
-                B: { title: `Kit ${activeScenarios.kitB?.sizekWp} kWp`, sub: 'sin batería' },
-                C: { title: `Kit ${activeScenarios.kitA.sizekWp} kWp`, sub: 'con baterías' },
+                A: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'sin batería' },
+                B: { title: `PFV ${activeScenarios.kitB?.sizekWp} kW`, sub: 'sin batería' },
+                C: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'con baterías' },
               }[s];
               const isActive = activeScenario === s;
               return (
@@ -628,7 +761,7 @@ export default function StepResults({ state }: StepResultsProps) {
                 ? `Con ${batteryCount} batería${batteryCount > 1 ? 's' : ''} · ${batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh`
                 : activeScenario === 'B' ? 'Opción económica' : 'Recomendado'}
             </span>
-            <p className="font-semibold text-gray-900 mt-1.5">Kit {activeResult.kit.sizekWp} kWp</p>
+            <p className="font-semibold text-gray-900 mt-1.5">PFV {activeResult.kit.sizekWp} kW</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {activeResult.kit.panelCount} paneles · {activeResult.kit.estimatedAreaM2} m²
               {activeResult.batteryCapacityKWh > 0 && (
@@ -648,33 +781,29 @@ export default function StepResults({ state }: StepResultsProps) {
         </div>
       </div>
 
-      {/* ── CTA ────────────────────────────────────────────────────────────── */}
-      <CTABlock
-        result={activeResult}
-        contactEmail={contactEmail}
-        ctaState={ctaState}
-        onCTA={handleCTA}
-      />
+      {/* ── Avisos regulatorios (empresas) ─────────────────────────────────── */}
+      {!isResidential && activeResult.kit.exceedsNetBillingLimit && (
+        <InfoBanner
+          color="amber"
+          icon="⚡"
+          title="Sistema supera el límite de net billing (300 kW)"
+          body={`Tu consumo requiere un sistema de ~${Math.round(activeResult.kit.sizekWp / DFL4.netBillingMaxKWp * activeResult.kit.sizekWp)} kWp para cobertura óptima, pero el Art. 149 bis del DFL 4 limita el net billing a 300 kW por inmueble. La simulación usa 300 kWp. Para instalaciones mayores se requiere otro marco regulatorio (PMGD/PMG). Consulta con nuestro equipo.`}
+        />
+      )}
+      {!isResidential && (
+        <InfoBanner
+          color="purple"
+          icon="📋"
+          title="Tratamiento tributario para empresas"
+          body="El ahorro por autoconsumo reduce tus costos operacionales y es libre de IVA (Art. 149 quinquies DFL 4). Sin embargo, si tributas en Primera Categoría con contabilidad completa, los pagos que recibas por excedentes inyectados a la red sí constituyen renta gravable. Consulta con tu contador."
+        />
+      )}
 
-      {/* ── Descargar PDF ───────────────────────────────────────────────────── */}
-      <PDFDownloadButton
-        result={activeResult}
-        clientName={contactName}
-        scenario={isResidential ? activeScenario : undefined}
-      />
+      {/* ── Panel de análisis y recomendaciones ────────────────────────────── */}
+      <AnalysisPanel analysis={tariffAnalysis} tarifa={supply.tarifa} />
 
       {/* ── Desglose financiero + balance ───────────────────────────────────── */}
       <FinancialDetail result={activeResult} />
-
-      {/* ── Banners ─────────────────────────────────────────────────────────── */}
-      {tarifaRec && (
-        <InfoBanner
-          color={tarifaRec.color}
-          icon={tarifaRec.type === 'unknown' ? '❓' : '🔋'}
-          title={tarifaRec.title}
-          body={tarifaRec.body}
-        />
-      )}
 
       {/* ── Auto eléctrico ──────────────────────────────────────────────────── */}
       {evCharger && (
@@ -737,12 +866,40 @@ export default function StepResults({ state }: StepResultsProps) {
       </div>
 
       {/* ── Nota metodológica ────────────────────────────────────────────────── */}
-      <p className="text-xs text-gray-400 leading-relaxed pb-4">
+      <p className="text-xs text-gray-400 leading-relaxed">
         Simulación estimativa basada en irradiación histórica de {activeResult.region.name}.
-        Precio de inyección = {SOLAR_DEFAULTS.injectionValueFactor * 100}% del kWh de compra (net billing).
+        Precio de inyección = {SOLAR_DEFAULTS.injectionValueFactor * 100}% del kWh de compra (net billing, Art. 149 bis DFL 4).
         Perfil: {SOLAR_DEFAULTS.dayConsumptionRatio * 100}% diurno / {SOLAR_DEFAULTS.nightConsumptionRatio * 100}% nocturno.
+        VAN calculado con tasa {DFL4.discountRateReal * 100}% real anual (Arts. 165d y 182 bis DFL 4).
         Los valores reales dependen de la instalación específica.
       </p>
+
+      {/* ── CTA ────────────────────────────────────────────────────────────── */}
+      <CTABlock
+        result={activeResult}
+        contactEmail={contactEmail}
+        ctaState={ctaState}
+        onCTA={handleCTA}
+      />
+
+      {/* ── Mostrar informe ─────────────────────────────────────────────────── */}
+      {isResidential && activeScenarios && (
+        <PDFDownloadButton
+          state={state}
+          scenarios={activeScenarios}
+          recommendedScenario={recommendedScenario}
+          clientName={contactName}
+          clientEmail={contactEmail}
+        />
+      )}
+      {!isResidential && businessResult && (
+        <PDFDownloadButton
+          state={state}
+          businessResult={businessResult}
+          clientName={contactName}
+          clientEmail={contactEmail}
+        />
+      )}
     </div>
   );
 }

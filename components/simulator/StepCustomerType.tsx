@@ -14,17 +14,17 @@ const OPTIONS: {
 }[] = [
   {
     value: 'natural',
-    title: 'Persona natural',
+    title: 'Residencial',
     description: 'Quiero instalar paneles solares en mi hogar.',
     icon: '🏠',
     examples: 'Casa, departamento, segunda vivienda',
   },
   {
     value: 'business',
-    title: 'Empresa',
+    title: 'Empresa y grandes consumidores',
     description: 'Quiero instalar un sistema solar en mis instalaciones.',
     icon: '🏢',
-    examples: 'Oficina, colegio, comercio, industria',
+    examples: 'Oficina, colegio, industria, condominio',
   },
 ];
 

@@ -147,6 +147,7 @@ export default function SimulatorPage() {
           <StepFutureConsumption
             initialData={state.futureConsumption}
             averageMonthlyKWh={state.consumptionProfile!.averageMonthlyKWh}
+            isBusinessCustomer={state.customerCategory === 'business'}
             onSubmit={(futureConsumption) => {
               update({ futureConsumption });
               goNext();

@@ -13,6 +13,7 @@ import {
   KIT_CATALOG,
   SOLAR_DEFAULTS,
   BUSINESS_DEFAULTS,
+  DFL4,
   MONTH_NAMES,
   DAYS_IN_MONTH,
   CHILE_BT1,
@@ -51,7 +52,10 @@ export function buildBusinessKit(
   const annualConsumption = monthlyConsumptionKWh * 12;
   const rawKWp = (annualConsumption * SOLAR_DEFAULTS.businessCoverageTarget) / annualProductionPerKWp;
   const uncappedKWp = Math.ceil(rawKWp * 2) / 2;
-  const sizekWp = empalmeMaxKW != null ? Math.min(uncappedKWp, empalmeMaxKW) : uncappedKWp;
+  const cappedByEmpalme = empalmeMaxKW != null ? Math.min(uncappedKWp, empalmeMaxKW) : uncappedKWp;
+  // Art. 149 bis DFL4: máximo 300 kW por inmueble para net billing
+  const sizekWp = Math.min(cappedByEmpalme, DFL4.netBillingMaxKWp);
+  const exceedsNetBillingLimit = uncappedKWp > DFL4.netBillingMaxKWp;
   const panelCount = Math.ceil((sizekWp * 1000) / SOLAR_DEFAULTS.panelWattage);
   return {
     id: `business-${sizekWp}kwp`,
@@ -60,6 +64,7 @@ export function buildBusinessKit(
     panelCount,
     estimatedAreaM2: Math.round(panelCount * SOLAR_DEFAULTS.panelAreaM2),
     priceReferenceCLP: Math.round(sizekWp * BUSINESS_DEFAULTS.costPerKWpCLP),
+    exceedsNetBillingLimit,
   };
 }
 
@@ -199,16 +204,31 @@ export function runSimulation(
   };
 
   const systemCostCLP = systemCostOverrideCLP ?? kit.priceReferenceCLP;
+  const annualBenefit = energyBalance.totalAnnualBenefitCLP;
+  const r = DFL4.discountRateReal;
+  const n = SOLAR_DEFAULTS.systemLifeYears;
+
+  // Factor de anualidad: (1 - (1+r)^-n) / r
+  const annuityFactor = (1 - Math.pow(1 + r, -n)) / r;
+  const vanCLP = Math.round(annualBenefit * annuityFactor - systemCostCLP);
+
+  // Payback descontado: meses donde el VAN acumulado cubre la inversión
+  // t = -ln(1 - r × Cost/AnnualBenefit) / ln(1+r)
+  const ratio = systemCostCLP / annualBenefit;
+  const arg = 1 - r * ratio;
+  const discountedPaybackYears = arg > 0
+    ? Math.round((-Math.log(arg) / Math.log(1 + r)) * 10) / 10
+    : Infinity; // la inversión no se recupera dentro de la vida útil a esta tasa
 
   const financial: FinancialSummary = {
     systemCostCLP,
-    annualBenefitCLP:   energyBalance.totalAnnualBenefitCLP,
-    monthlyBenefitCLP:  Math.round(energyBalance.totalAnnualBenefitCLP / 12),
-    paybackYears:
-      Math.round((systemCostCLP / energyBalance.totalAnnualBenefitCLP) * 10) / 10,
+    annualBenefitCLP:   annualBenefit,
+    monthlyBenefitCLP:  Math.round(annualBenefit / 12),
+    paybackYears:       Math.round((systemCostCLP / annualBenefit) * 10) / 10,
+    discountedPaybackYears,
+    vanCLP,
     roi25YearsPercent: Math.round(
-      ((energyBalance.totalAnnualBenefitCLP * SOLAR_DEFAULTS.systemLifeYears - systemCostCLP) /
-        systemCostCLP) * 100,
+      ((annualBenefit * n - systemCostCLP) / systemCostCLP) * 100,
     ),
     injectionValuePerKWhCLP: Math.round(injectionValueCLP),
   };

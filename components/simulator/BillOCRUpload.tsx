@@ -90,7 +90,10 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
     const edited = Array.from(allPeriods.values()).sort(
       (a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month,
     );
-    const matchCount = edited.filter((p) => availableSlotKeys.includes(slotKey(p.month, p.year))).length;
+    // Solo cuentan los períodos que tienen kWh válido Y están dentro del rango
+    const matchCount = edited.filter(
+      (p) => p.consumptionKWh != null && availableSlotKeys.includes(slotKey(p.month, p.year)),
+    ).length;
     const mergedBill: ExtractedBill = { ...lastBillData, periods: edited };
 
     setState({ stage: 'review', data: mergedBill, edited, matchCount, isMock: anyMock });
@@ -266,7 +269,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
                   <input
                     type="number"
                     min="1"
-                    value={p.consumptionKWh}
+                    value={p.consumptionKWh ?? ''}
                     onChange={(e) => handleChange(idx, 'consumptionKWh', e.target.value)}
                     className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
                   />

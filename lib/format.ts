@@ -19,6 +19,7 @@ export function formatPercent(value: number): string {
 }
 
 export function formatPayback(years: number): string {
+  if (!isFinite(years)) return 'No recupera';
   const full = Math.floor(years);
   const months = Math.round((years - full) * 12);
   if (months === 0) return `${full} años`;

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import type { ConsumptionProfile, MonthlyBill, SupplyData, TarifaType } from '@/lib/types';
 import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route';
-import { MONTH_NAMES } from '@/lib/constants';
+import { MONTH_NAMES, DISTRIBUTORS } from '@/lib/constants';
 import BillOCRUpload from './BillOCRUpload';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -75,6 +75,8 @@ function buildProfile(
   supply: SupplyData,
   manualDistribuidora: string,
   manualTarifa: TarifaType,
+  avgTotalBill?: number,
+  avgPowerCharge?: number,
 ): ConsumptionProfile {
   const distribuidora = supply.distribuidora || manualDistribuidora || undefined;
   const tarifa = supply.tarifa !== 'unknown' ? supply.tarifa : manualTarifa;
@@ -141,6 +143,8 @@ function buildProfile(
     peakMonthKWh: realValues.length > 0 ? Math.max(...realValues) : 0,
     minMonthKWh:  realValues.length > 0 ? Math.min(...realValues) : 0,
     isComplete: realBills.length === 12,
+    avgTotalBillCLP:   avgTotalBill,
+    avgPowerChargeCLP: avgPowerCharge,
   };
 }
 
@@ -168,9 +172,26 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
   const [ocrMatchCount, setOcrMatchCount] = useState<number | null>(null);
   const [ocrUsed, setOcrUsed] = useState(false);
 
-  const [manualDistribuidora, setManualDistribuidora] = useState(supply.distribuidora ?? '');
+  const [distribuidoraSelect, setDistribuidoraSelect] = useState<string>(() => {
+    const d = supply.distribuidora ?? '';
+    if (!d) return '';
+    return DISTRIBUTORS.includes(d) ? d : 'Otra';
+  });
+  const [distribuidoraCustom, setDistribuidoraCustom] = useState<string>(() => {
+    const d = supply.distribuidora ?? '';
+    return d && !DISTRIBUTORS.includes(d) ? d : '';
+  });
+  const manualDistribuidora = distribuidoraSelect === 'Otra' ? distribuidoraCustom : distribuidoraSelect;
+
   const [manualTarifa, setManualTarifa] = useState<TarifaType>(
     supply.tarifa !== 'unknown' ? supply.tarifa : 'unknown',
+  );
+
+  const [avgTotalBill, setAvgTotalBill] = useState(
+    initialData?.avgTotalBillCLP?.toString() ?? '',
+  );
+  const [avgPowerCharge, setAvgPowerCharge] = useState(
+    initialData?.avgPowerChargeCLP?.toString() ?? '',
   );
 
   function setRow(key: string, field: keyof RowValues, value: string) {
@@ -181,12 +202,11 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
     const updated = { ...rows };
     periods.forEach((p) => {
       const key = `${p.year}-${String(p.month).padStart(2, '0')}`;
-      if (updated[key] !== undefined) {
-        updated[key] = {
-          kWh: p.consumptionKWh.toString(),
-          clp: p.variableAmountCLP?.toString() ?? '',
-        };
-      }
+      if (updated[key] === undefined || p.consumptionKWh == null) return;
+      updated[key] = {
+        kWh: String(p.consumptionKWh),
+        clp: p.variableAmountCLP != null ? String(p.variableAmountCLP) : '',
+      };
     });
     setRows(updated);
     setOcrMatchCount(matchCount);
@@ -213,6 +233,9 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
     };
   }, [rows]);
 
+  const showTariffAnalysisFields =
+    supply.tarifa !== 'BT1' && supply.tarifa !== 'unknown' && filledCount >= 1;
+
   const canSubmit = filledCount >= 1;
   const showManualFields = !ocrUsed && (!supply.distribuidora || supply.tarifa === 'unknown');
 
@@ -225,7 +248,11 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
         tarifa: manualTarifa,
       });
     }
-    onSubmit(buildProfile(SLOTS, rows, supply, manualDistribuidora, manualTarifa));
+    onSubmit(buildProfile(
+      SLOTS, rows, supply, manualDistribuidora, manualTarifa,
+      avgTotalBill ? parseFloat(avgTotalBill) : undefined,
+      avgPowerCharge ? parseFloat(avgPowerCharge) : undefined,
+    ));
   }
 
   return (
@@ -335,14 +362,29 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   <label htmlFor="manualDistribuidora" className="text-xs font-medium text-gray-600">
                     Empresa distribuidora
                   </label>
-                  <input
+                  <select
                     id="manualDistribuidora"
-                    type="text"
-                    value={manualDistribuidora}
-                    onChange={(e) => setManualDistribuidora(e.target.value)}
-                    placeholder="Ej: Enel, CGE, Chilquinta…"
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
-                  />
+                    value={distribuidoraSelect}
+                    onChange={(e) => {
+                      setDistribuidoraSelect(e.target.value);
+                      if (e.target.value !== 'Otra') setDistribuidoraCustom('');
+                    }}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  >
+                    <option value="">Selecciona la distribuidora…</option>
+                    {DISTRIBUTORS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  {distribuidoraSelect === 'Otra' && (
+                    <input
+                      type="text"
+                      value={distribuidoraCustom}
+                      onChange={(e) => setDistribuidoraCustom(e.target.value)}
+                      placeholder="Nombre de la distribuidora"
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                    />
+                  )}
                 </div>
               )}
               {supply.tarifa === 'unknown' && (
@@ -362,6 +404,53 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   </select>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Campos opcionales para análisis tarifario (BT2/BT3/BT4.x/AT*) */}
+        {showTariffAnalysisFields && (
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex flex-col gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-purple-800">Para análisis tarifario (opcional)</h2>
+              <p className="text-xs text-purple-600 mt-0.5">
+                Con esta información podemos comparar si tu tarifa {supply.tarifa} es la más conveniente.
+                Si no los tienes a mano, omítelos — la simulación sigue funcionando.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="avgTotalBill" className="text-xs font-medium text-gray-600">
+                  Monto total promedio mensual (CLP)
+                  <span className="text-gray-400 font-normal ml-1">— suma de todos los cargos de la boleta</span>
+                </label>
+                <input
+                  id="avgTotalBill"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={avgTotalBill}
+                  onChange={(e) => setAvgTotalBill(e.target.value)}
+                  placeholder="Ej: 185000"
+                  className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="avgPowerCharge" className="text-xs font-medium text-gray-600">
+                  Cargo por potencia promedio mensual (CLP)
+                  <span className="text-gray-400 font-normal ml-1">— ítem &quot;cargo por potencia&quot; en la boleta</span>
+                </label>
+                <input
+                  id="avgPowerCharge"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={avgPowerCharge}
+                  onChange={(e) => setAvgPowerCharge(e.target.value)}
+                  placeholder="Ej: 45000"
+                  className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
+                />
+              </div>
             </div>
           </div>
         )}
