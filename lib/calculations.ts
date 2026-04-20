@@ -272,3 +272,12 @@ export function runBusinessSimulation(input: SimulatorInput): SimulatorResult {
   const kit = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW);
   return runSimulation(input, kit, 0);
 }
+
+export function runBusinessSimulationWithBattery(input: SimulatorInput, batteryCount: number): SimulatorResult {
+  const region = getRegionById(input.regionId);
+  if (!region) throw new Error(`Región no encontrada: ${input.regionId}`);
+  const kit = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW);
+  const batteryKWh = batteryCount * SOLAR_DEFAULTS.batteryModuleKWh;
+  const totalCost  = kit.priceReferenceCLP + batteryCount * SOLAR_DEFAULTS.batteryModulePriceCLP;
+  return runSimulation(input, kit, batteryKWh, totalCost);
+}

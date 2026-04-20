@@ -9,7 +9,7 @@ import type {
   BusinessContact,
   TarifaType,
 } from '@/lib/types';
-import { calcThreeScenarios, runBusinessSimulation } from '@/lib/calculations';
+import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBattery } from '@/lib/calculations';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
@@ -433,6 +433,7 @@ export default function StepResults({ state }: StepResultsProps) {
   // Escenario recomendado — siempre A por ahora; aquí se aplicarán las reglas 1 y 2 cuando se implementen
   const recommendedScenario: 'A' | 'B' | 'C' = 'A';
   const [batteryCount, setBatteryCount]       = useState(1);
+  const [businessBattery, setBusinessBattery] = useState(false);
   const [ctaState, setCtaState]               = useState<CtaState>('idle');
   const [consumptionMode, setConsumptionMode] = useState<'base' | 'future'>('future');
 
@@ -455,8 +456,8 @@ export default function StepResults({ state }: StepResultsProps) {
         baseInput: inp,
         scenarios: null,
         futureScenarios: null,
-        businessResult: runBusinessSimulation(inp),
-        businessBaseResult: hasAdd ? runBusinessSimulation(inpBase) : null,
+        businessResult:         businessBattery ? runBusinessSimulationWithBattery(inp, batteryCount)     : runBusinessSimulation(inp),
+        businessBaseResult:     hasAdd ? (businessBattery ? runBusinessSimulationWithBattery(inpBase, batteryCount) : runBusinessSimulation(inpBase)) : null,
       };
     }
 
@@ -467,7 +468,7 @@ export default function StepResults({ state }: StepResultsProps) {
       businessResult: null,
       businessBaseResult: null,
     };
-  }, [state, isResidential, batteryCount]);
+  }, [state, isResidential, batteryCount, businessBattery]);
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
 
@@ -663,6 +664,59 @@ export default function StepResults({ state }: StepResultsProps) {
               {profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0)} kWh/mes
             </span>
           </button>
+        </div>
+      )}
+
+      {/* ── Toggle batería (empresa) ───────────────────────────────────────── */}
+      {!isResidential && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-1.5 flex gap-1.5">
+          {([false, true] as const).map((withBattery) => (
+            <button
+              key={String(withBattery)}
+              type="button"
+              onClick={() => setBusinessBattery(withBattery)}
+              className={[
+                'flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors',
+                businessBattery === withBattery
+                  ? withBattery ? 'bg-amber-500 text-white' : 'bg-gray-900 text-white'
+                  : 'text-gray-500 hover:text-gray-700',
+              ].join(' ')}
+            >
+              {withBattery ? 'Con baterías' : 'Sin batería'}
+              <span className="block text-xs font-normal opacity-70">
+                {withBattery ? 'mayor autoconsumo nocturno' : 'solo generación solar'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Selector de baterías (empresa con batería) ─────────────────────── */}
+      {!isResidential && businessBattery && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <p className="text-sm font-semibold text-amber-800 mb-3">Módulos de batería</p>
+          <div className="flex gap-2 flex-wrap mb-3">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setBatteryCount(n)}
+                className={[
+                  'w-10 h-10 rounded-xl text-sm font-bold border-2 transition-all',
+                  batteryCount === n
+                    ? 'border-amber-500 bg-amber-500 text-white'
+                    : 'border-amber-200 text-amber-700 hover:border-amber-400',
+                ].join(' ')}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-4 text-xs text-amber-700">
+            <span>Capacidad total: <strong>{batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh</strong></span>
+            <span>Reserva (30%): <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * 0.3).toFixed(1)} kWh</strong></span>
+            <span>Uso nocturno: <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * 0.7).toFixed(1)} kWh</strong></span>
+          </div>
         </div>
       )}
 
