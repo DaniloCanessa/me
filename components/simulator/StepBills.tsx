@@ -213,6 +213,18 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
     setOcrUsed(true);
     setShowOCR(false);
 
+    // Auto-rellenar monto total y cargo por potencia si el OCR los detectó
+    const totals = periods.map((p) => p.totalAmountCLP).filter((v): v is number => v != null);
+    const powers = periods.map((p) => p.powerChargeCLP).filter((v): v is number => v != null);
+    if (totals.length > 0) {
+      const avg = Math.round(totals.reduce((a, b) => a + b, 0) / totals.length);
+      setAvgTotalBill(String(avg));
+    }
+    if (powers.length > 0) {
+      const avg = Math.round(powers.reduce((a, b) => a + b, 0) / powers.length);
+      setAvgPowerCharge(String(avg));
+    }
+
     if (onUpdateSupply && (billData.distribuidora || billData.tarifa)) {
       onUpdateSupply({
         distribuidora: billData.distribuidora ?? supply.distribuidora,

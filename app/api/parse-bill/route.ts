@@ -5,6 +5,8 @@ export interface ExtractedPeriod {
   year: number;
   consumptionKWh: number;            // consumo neto (puede ser negativo si inyecta más de lo que consume)
   variableAmountCLP?: number;        // monto variable en CLP
+  totalAmountCLP?: number;           // monto total a pagar (todos los cargos + IVA)
+  powerChargeCLP?: number;           // cargo por potencia/demanda en CLP
   kWhPriceCLP?: number;              // precio promedio $/kWh
 
   // Tarifas por bloque horario (BT4.x / AT)
@@ -62,6 +64,8 @@ Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el s
       "year": año con 4 dígitos,
       "consumptionKWh": consumo neto en kWh — si el cliente inyecta más de lo que consume puede ser negativo,
       "variableAmountCLP": monto variable en pesos CLP como entero o null,
+      "totalAmountCLP": monto total a pagar de la boleta en CLP (incluye todos los cargos + IVA) como entero o null — busca 'Total a pagar', 'Monto a pagar', 'Total facturado',
+      "powerChargeCLP": cargo por potencia o demanda en CLP como entero o null — busca 'Cargo por potencia', 'Cargo por demanda máxima', 'Cargo por demanda', 'Cargo por potencia contratada',
       "kWhPriceCLP": precio promedio por kWh como entero o null,
 
       "tarifaPuntaCLPPerKWh": precio en horas punta como entero o null — solo en BT4.x/AT,
