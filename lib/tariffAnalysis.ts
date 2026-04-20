@@ -87,12 +87,13 @@ export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisRes
     : calcMonthlyCost(tarifa);
 
   // ── Tarifas comparables (no cruzar BT↔AT sin cambio de infraestructura) ───
+  // BT1 es exclusivamente residencial (< 10 kW monofásico) — nunca comparable para empresa
   const isAT = tarifa.startsWith('AT');
   const comparableTariffs: string[] = isAT
     ? ['AT2', 'AT3', 'AT4.1', 'AT4.2', 'AT4.3']
     : isResidential
       ? ['BT1', 'BT2', 'BT3']
-      : ['BT1', 'BT2', 'BT3', 'BT4.1', 'BT4.2', 'BT4.3'];
+      : ['BT2', 'BT3', 'BT4.1', 'BT4.2', 'BT4.3'];
 
   const alternatives: TariffAlternative[] = comparableTariffs
     .filter((t) => t !== tarifa)
@@ -129,7 +130,9 @@ export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisRes
       'Ingresa el monto total de tu boleta o la potencia contratada para comparar tarifas con precisión.';
   } else if (tarifa === 'BT1' || tarifa === 'unknown') {
     tariffStatus = 'optimal';
-    tariffMessage = 'La tarifa BT1 es la estándar para tu perfil de consumo residencial.';
+    tariffMessage = isResidential
+      ? 'La tarifa BT1 es la estándar para consumo residencial.'
+      : 'La tarifa BT1 es residencial (< 10 kW monofásico). Si tu instalación es comercial o industrial, verifica con tu distribuidora que corresponde a esta tarifa.';
   } else if (bestAlternative && savingsPct > 10) {
     tariffStatus = 'consider-change';
     tariffMessage = `La tarifa ${bestAlternative.tarifa} podría reducir tu costo eléctrico en ~${clpFmt.format(bestAlternative.monthlySavingsCLP)}/mes (${Math.round(savingsPct)}% menos). Es una estimación referencial — confirma con tu distribuidora antes de gestionar el cambio.`;
