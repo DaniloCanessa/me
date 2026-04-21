@@ -9,6 +9,13 @@ const PROJECTS = [
     tags: ['Gobierno', 'Off-grid', 'Baterías'],
   },
   {
+    image: '/images/panaderia-san-bernardo.jpg',
+    location: 'San Bernardo, Región Metropolitana',
+    title: 'Sistema fotovoltaico trifásico para panadería',
+    description: 'Instalación de 10 kW trifásico para cubrir el consumo energético de una panadería comercial, reduciendo costos operativos.',
+    tags: ['Comercial', 'Trifásico'],
+  },
+  {
     image: '/images/proyecto-coscaya.jpg',
     location: 'Coscaya, Huara — Tarapacá',
     title: 'Sistema híbrido + baterías + alumbrado',
