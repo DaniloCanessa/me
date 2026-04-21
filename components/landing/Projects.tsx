@@ -2,7 +2,7 @@ import Image from 'next/image';
 
 const PROJECTS = [
   {
-    image: '/images/poroma-img.JPG',
+    image: '/images/poroma-img.jpg',
     location: 'Poroma, Tarapacá',
     title: 'Sistema híbrido para zona rural sin red eléctrica',
     description: '3 inversores Victron 15 kVA, 32 baterías (160 kWh), 32 paneles 645 W y respaldo con generador JCB 90 kVA. Desarrollado para el Gobierno de Chile y la Municipalidad de Huara junto a ERNC Chile.',
