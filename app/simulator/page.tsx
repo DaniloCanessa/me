@@ -64,7 +64,7 @@ export default function SimulatorPage() {
   return (
     <main className="min-h-screen bg-[#f4f8fb]">
       {/* Barra de navegación */}
-      <nav className="bg-[#dde3e9] px-4 py-3">
+      <nav className="bg-[#b0cedd] px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/">
             <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
