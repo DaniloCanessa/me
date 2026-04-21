@@ -290,12 +290,12 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
             <button
               type="button"
               onClick={() => { setShowOCR(true); setOcrMatchCount(null); }}
-              className="w-full rounded-2xl border-2 border-dashed border-green-300 bg-green-50 hover:bg-green-100 text-green-700 font-medium py-3 text-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full rounded-2xl border-2 border-dashed border-[#b0cedd] bg-[#dde3e9]/50 hover:bg-[#b0cedd]/20 text-[#1d65c5] font-medium py-3 text-sm transition-colors flex items-center justify-center gap-2"
             >
               <span>📄</span> Subir boleta para autocompletar
             </button>
             {ocrMatchCount !== null && (
-              <p className="text-xs text-green-700 bg-green-50 rounded-xl px-3 py-2 text-center">
+              <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-xl px-3 py-2 text-center">
                 ✓ Se pre-rellenaron <strong>{ocrMatchCount} mes{ocrMatchCount !== 1 ? 'es' : ''}</strong> desde la boleta. Puedes editar los valores si es necesario.
               </p>
             )}
@@ -305,7 +305,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
         {/* Resumen en vivo */}
         <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className={['text-2xl font-bold tabular-nums', filledCount === 12 ? 'text-green-600' : 'text-gray-800'].join(' ')}>
+            <span className={['text-2xl font-bold tabular-nums', filledCount === 12 ? 'text-[#389fe0]' : 'text-gray-800'].join(' ')}>
               {filledCount}
             </span>
             <span className="text-sm text-gray-500">de 12 meses ingresados</span>
@@ -334,7 +334,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                 className={[
                   'grid grid-cols-[1fr_120px_120px] gap-3 items-center px-5 py-2.5',
                   idx < SLOTS.length - 1 ? 'border-b border-gray-50' : '',
-                  isFilled ? 'bg-green-50/40' : '',
+                  isFilled ? 'bg-[#dde3e9]/50/40' : '',
                 ].join(' ')}
               >
                 <span className={['text-sm', isFilled ? 'text-gray-800 font-medium' : 'text-gray-500'].join(' ')}>
@@ -346,7 +346,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   onChange={(e) => setRow(slot.key, 'kWh', e.target.value)}
                   placeholder="—"
                   aria-label={`kWh ${slot.label}`}
-                  className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                 />
                 <input
                   type="number" min="1" step="1"
@@ -354,7 +354,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   onChange={(e) => setRow(slot.key, 'clp', e.target.value)}
                   placeholder="opcional"
                   aria-label={`Monto CLP ${slot.label}`}
-                  className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                  className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                 />
               </div>
             );
@@ -381,7 +381,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                       setDistribuidoraSelect(e.target.value);
                       if (e.target.value !== 'Otra') setDistribuidoraCustom('');
                     }}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                   >
                     <option value="">Selecciona la distribuidora…</option>
                     {DISTRIBUTORS.map((d) => (
@@ -394,7 +394,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                       value={distribuidoraCustom}
                       onChange={(e) => setDistribuidoraCustom(e.target.value)}
                       placeholder="Nombre de la distribuidora"
-                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                     />
                   )}
                 </div>
@@ -408,7 +408,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                     id="manualTarifa"
                     value={manualTarifa}
                     onChange={(e) => setManualTarifa(e.target.value as TarifaType)}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                   >
                     {TARIFA_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -485,7 +485,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
           className={[
             'w-full rounded-xl font-semibold py-3 text-sm transition-colors',
             canSubmit
-              ? 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed',
           ].join(' ')}
         >

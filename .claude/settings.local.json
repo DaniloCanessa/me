@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(curl *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx vercel *)",
+      "Bash(gh run *)",
+      "WebFetch(domain:me-ebec53gj9-danilo-canessas-projects.vercel.app)",
+      "WebFetch(domain:me-fawn-eight.vercel.app)",
+      "Bash(git commit -m 'fix: usar logotipo.png como logo principal en hero y footer *)"
+    ]
+  }
+}

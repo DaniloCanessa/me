@@ -28,7 +28,6 @@ export default function HeroSection() {
         <video
           autoPlay
           muted
-          loop
           playsInline
           className="absolute inset-0 w-full h-full object-cover opacity-50"
         >

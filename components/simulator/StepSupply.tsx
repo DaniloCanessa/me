@@ -135,9 +135,9 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   type="button"
                   onClick={() => setPropertyType(opt.value)}
                   className={[
-                    'flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all hover:border-green-400',
+                    'flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all hover:border-[#389fe0]',
                     isSelected
-                      ? 'border-green-500 bg-green-50 text-green-800'
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
                       : 'border-gray-200 text-gray-600 bg-white',
                   ].join(' ')}
                 >
@@ -183,8 +183,8 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   className={[
                     'px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
                     amperajeA === amp
-                      ? 'border-green-500 bg-green-50 text-green-800'
-                      : 'border-gray-200 text-gray-600 hover:border-green-300',
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
+                      : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
                   ].join(' ')}
                 >
                   {amp} A
@@ -193,7 +193,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
             </div>
 
             {amperajeA !== '' && (
-              <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-lg px-3 py-2">
                 Empalme de <strong>{amperajeA} A</strong> →{' '}
                 potencia máxima: <strong>{((amperajeA as number) * 220 / 1000).toFixed(1)} kW</strong>.
                 La PFV no superará este límite.
@@ -226,8 +226,8 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   className={[
                     'px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
                     potenciaContratadaKW === kw
-                      ? 'border-green-500 bg-green-50 text-green-800'
-                      : 'border-gray-200 text-gray-600 hover:border-green-300',
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
+                      : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
                   ].join(' ')}
                 >
                   {kw} kW
@@ -250,12 +250,12 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   else if (e.target.value === '') setPotenciaContratadaKW('');
                 }}
                 placeholder="kW"
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition w-28"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition w-28"
               />
             </div>
 
             {potenciaContratadaKW !== '' && (
-              <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-lg px-3 py-2">
                 Potencia contratada: <strong>{potenciaContratadaKW} kW</strong>.
                 {(potenciaContratadaKW as number) >= 300 && (
                   <> Sistema limitado a 300 kW por net billing.</>
@@ -280,7 +280,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
             <select
               value={tarifa}
               onChange={(e) => setTarifa(e.target.value as TarifaType)}
-              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
             >
               <option value="unknown" disabled>Selecciona la tarifa de tu boleta…</option>
               <optgroup label="Baja Tensión (BT) — menor a 1 kV">
@@ -296,7 +296,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
             </select>
 
             {tarifa !== 'unknown' && (
-              <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-lg px-3 py-2">
                 Tarifa seleccionada: <strong>{tarifa}</strong>
                 {tarifa.startsWith('AT') && ' — Alta Tensión (≥ 1 kV, requiere transformador propio)'}
                 {tarifa.startsWith('BT') && ' — Baja Tensión (< 1 kV)'}
@@ -360,7 +360,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
             <select
               value={tarifa}
               onChange={(e) => setTarifa(e.target.value as TarifaType)}
-              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
             >
               {TARIFA_BT.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -383,8 +383,8 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                 if (hasExistingSolar) setExistingSystemKWp('');
               }}
               className={[
-                'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 mt-0.5',
-                hasExistingSolar ? 'bg-green-500' : 'bg-gray-200',
+                'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 mt-0.5',
+                hasExistingSolar ? 'bg-[#389fe0]' : 'bg-gray-200',
               ].join(' ')}
             >
               <span className={[
@@ -412,7 +412,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                 value={existingSystemKWp}
                 onChange={(e) => setExistingSystemKWp(e.target.value)}
                 placeholder="Ej: 3"
-                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition max-w-xs"
+                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition max-w-xs"
               />
             </div>
           )}
@@ -424,7 +424,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
           className={[
             'w-full rounded-xl font-semibold py-3 text-sm transition-colors',
             canSubmit
-              ? 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed',
           ].join(' ')}
         >

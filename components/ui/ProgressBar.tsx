@@ -42,8 +42,8 @@ export default function ProgressBar({ currentStep }: ProgressBarProps) {
                   <div
                     className={[
                       'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors',
-                      isDone    ? 'bg-green-500 text-white'                       : '',
-                      isCurrent ? 'bg-green-600 text-white ring-2 ring-green-200' : '',
+                      isDone    ? 'bg-[#389fe0] text-white'                       : '',
+                      isCurrent ? 'bg-[#389fe0] text-white ring-2 ring-[#389fe0]/30' : '',
                       !isDone && !isCurrent ? 'bg-gray-100 text-gray-400'         : '',
                     ].join(' ')}
                   >
@@ -52,7 +52,7 @@ export default function ProgressBar({ currentStep }: ProgressBarProps) {
                   <span
                     className={[
                       'text-[10px] mt-1 hidden sm:block',
-                      isCurrent ? 'text-green-700 font-semibold' : 'text-gray-400',
+                      isCurrent ? 'text-[#1d65c5] font-semibold' : 'text-gray-400',
                     ].join(' ')}
                   >
                     {STEP_LABELS[step]}
@@ -64,7 +64,7 @@ export default function ProgressBar({ currentStep }: ProgressBarProps) {
                   <div
                     className={[
                       'flex-1 h-0.5 mx-1 mb-4 sm:mb-3 rounded transition-colors',
-                      index < currentIndex ? 'bg-green-400' : 'bg-gray-200',
+                      index < currentIndex ? 'bg-[#389fe0]/80' : 'bg-gray-200',
                     ].join(' ')}
                   />
                 )}

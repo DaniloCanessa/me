@@ -44,7 +44,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition"
+        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
       />
     </div>
   );
@@ -67,7 +67,7 @@ function RegionSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required
-        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition bg-white"
+        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition bg-white"
       >
         <option value="">Selecciona tu región</option>
         {REGIONS.map((r) => (
@@ -124,7 +124,7 @@ function NaturalForm({
 
       <button
         type="submit"
-        className="mt-2 w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-sm transition-colors"
+        className="mt-2 w-full rounded-xl bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-3 text-sm transition-colors"
       >
         Continuar →
       </button>
@@ -178,7 +178,7 @@ function BusinessForm({
 
       <button
         type="submit"
-        className="mt-2 w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-sm transition-colors"
+        className="mt-2 w-full rounded-xl bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-3 text-sm transition-colors"
       >
         Continuar →
       </button>

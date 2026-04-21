@@ -74,7 +74,7 @@ function AnalysisPanel({ analysis, tarifa }: { analysis: TariffAnalysisResult; t
     new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 
   const statusColors = {
-    'optimal':          { bg: 'bg-green-50',  border: 'border-green-200',  icon: '✅', title: 'text-green-800',  body: 'text-green-700'  },
+    'optimal':          { bg: 'bg-[#dde3e9]/50',  border: 'border-[#b0cedd]/40',  icon: '✅', title: 'text-green-800',  body: 'text-[#1d65c5]'  },
     'consider-change':  { bg: 'bg-amber-50',  border: 'border-amber-200',  icon: '💡', title: 'text-amber-800',  body: 'text-amber-700'  },
     'informative-only': { bg: 'bg-gray-50',   border: 'border-gray-200',   icon: 'ℹ️', title: 'text-gray-700',   body: 'text-gray-600'   },
   };
@@ -213,7 +213,7 @@ function CTABlock({
   if (ctaState === 'success') {
     return (
       <div className="bg-gray-900 text-white rounded-2xl p-6 text-center">
-        <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+        <div className="w-12 h-12 bg-[#389fe0] rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
           ✓
         </div>
         <p className="text-base font-bold mb-2">¡Solicitud recibida!</p>
@@ -239,7 +239,7 @@ function CTABlock({
         </div>
         <div className="flex justify-between">
           <span className="text-gray-400">Ahorro en {SOLAR_DEFAULTS.systemLifeYears} años</span>
-          <span className="font-semibold text-green-400">{formatCLP(totalSaving)}</span>
+          <span className="font-semibold text-[#389fe0]/80">{formatCLP(totalSaving)}</span>
         </div>
       </div>
       {ctaState === 'error' && (
@@ -251,7 +251,7 @@ function CTABlock({
         type="button"
         onClick={onCTA}
         disabled={ctaState === 'loading'}
-        className="w-full rounded-xl bg-green-500 hover:bg-green-400 active:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 text-sm transition-colors"
+        className="w-full rounded-xl bg-[#389fe0] hover:bg-[#389fe0]/80 active:bg-[#389fe0] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 text-sm transition-colors"
       >
         {ctaState === 'loading'
           ? 'Enviando...'
@@ -342,7 +342,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-500">Ahorro por autoconsumo</span>
-            <span className="font-medium text-green-700">
+            <span className="font-medium text-[#1d65c5]">
               {formatCLP(energyBalance.totalSelfConsumptionSavingsCLP)}
             </span>
           </div>
@@ -350,13 +350,13 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
             <span className="text-gray-500">
               Ingreso por inyección ({financial.injectionValuePerKWhCLP} CLP/kWh)
             </span>
-            <span className="font-medium text-green-700">
+            <span className="font-medium text-[#1d65c5]">
               {formatCLP(energyBalance.totalInjectionIncomeCLP)}
             </span>
           </div>
           <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold">
             <span className="text-gray-700">Beneficio total anual</span>
-            <span className="text-green-600">{formatCLP(financial.annualBenefitCLP)}</span>
+            <span className="text-[#389fe0]">{formatCLP(financial.annualBenefitCLP)}</span>
           </div>
           <div className="border-t border-gray-100 pt-2 flex flex-col gap-1.5 text-xs text-gray-500">
             <div className="flex justify-between">
@@ -365,7 +365,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
             </div>
             <div className="flex justify-between">
               <span>VAN a {SOLAR_DEFAULTS.systemLifeYears} años (tasa {DFL4.discountRateReal * 100}%)</span>
-              <span className={`font-medium ${financial.vanCLP >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <span className={`font-medium ${financial.vanCLP >= 0 ? 'text-[#389fe0]' : 'text-red-500'}`}>
                 {formatCLP(financial.vanCLP)}
               </span>
             </div>
@@ -395,10 +395,10 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
               <tr key={m.month} className="border-b border-gray-50">
                 <td className="py-1.5 text-gray-700">{m.monthName}</td>
                 <td className="py-1.5 text-right text-gray-600">{m.productionKWh}</td>
-                <td className="py-1.5 text-right text-green-600">{m.selfConsumptionKWh}</td>
+                <td className="py-1.5 text-right text-[#389fe0]">{m.selfConsumptionKWh}</td>
                 <td className="py-1.5 text-right text-blue-600">{m.injectedToGridKWh}</td>
                 <td className="py-1.5 text-right text-gray-500">{m.consumedFromGridKWh}</td>
-                <td className="py-1.5 text-right font-medium text-green-700">
+                <td className="py-1.5 text-right font-medium text-[#1d65c5]">
                   {formatCLP(m.totalMonthlyBenefitCLP)}
                 </td>
               </tr>
@@ -406,10 +406,10 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
             <tr className="font-semibold text-gray-700 bg-gray-50">
               <td className="py-2">Total anual</td>
               <td className="py-2 text-right">{energyBalance.totalProductionKWh}</td>
-              <td className="py-2 text-right text-green-600">{energyBalance.totalSelfConsumptionKWh}</td>
+              <td className="py-2 text-right text-[#389fe0]">{energyBalance.totalSelfConsumptionKWh}</td>
               <td className="py-2 text-right text-blue-600">{energyBalance.totalInjectedKWh}</td>
               <td className="py-2 text-right">{energyBalance.totalConsumedFromGridKWh}</td>
-              <td className="py-2 text-right text-green-600">{formatCLP(financial.annualBenefitCLP)}</td>
+              <td className="py-2 text-right text-[#389fe0]">{formatCLP(financial.annualBenefitCLP)}</td>
             </tr>
           </tbody>
         </table>
@@ -609,7 +609,7 @@ export default function StepResults({ state }: StepResultsProps) {
       onCopy={(e) => e.preventDefault()}
     >
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-green-600 to-green-700 text-white rounded-2xl p-5">
+      <div className="bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white rounded-2xl p-5">
         <p className="text-sm opacity-70 mb-1">{contactName}</p>
         <p className="text-3xl font-bold leading-tight">
           {formatCLP(activeResult.financial.monthlyBenefitCLP)}
@@ -779,12 +779,12 @@ export default function StepResults({ state }: StepResultsProps) {
           label="Ahorro mensual"
           value={formatCLP(activeResult.financial.monthlyBenefitCLP)}
           sub="autoconsumo + inyección"
-          accent="text-green-600"
+          accent="text-[#389fe0]"
         />
         <StatCard
           label="Ahorro anual"
           value={formatCLP(activeResult.financial.annualBenefitCLP)}
-          accent="text-green-600"
+          accent="text-[#389fe0]"
         />
         <StatCard
           label="Período de retorno"
@@ -799,10 +799,10 @@ export default function StepResults({ state }: StepResultsProps) {
       </div>
 
       {/* ── Kit del escenario activo ────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border-2 border-green-500 shadow-sm p-4">
+      <div className="bg-white rounded-2xl border-2 border-[#389fe0] shadow-sm p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-medium text-[#1d65c5] bg-[#dde3e9]/50 px-2 py-0.5 rounded-full">
               {activeScenario === 'C'
                 ? `Con ${batteryCount} batería${batteryCount > 1 ? 's' : ''} · ${batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh`
                 : activeScenario === 'B' ? 'Opción económica' : 'Recomendado'}
@@ -901,7 +901,7 @@ export default function StepResults({ state }: StepResultsProps) {
             </div>
           </div>
           {evCharger.dayChargingSavingsCLP > 0 && (
-            <p className="text-xs text-green-700 mt-3 bg-green-50 rounded-xl px-3 py-2">
+            <p className="text-xs text-[#1d65c5] mt-3 bg-[#dde3e9]/50 rounded-xl px-3 py-2">
               Ahorro adicional por carga solar:{' '}
               <span className="font-semibold">{formatCLP(evCharger.dayChargingSavingsCLP)}/año</span>
             </p>

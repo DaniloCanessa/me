@@ -59,8 +59,8 @@ function Toggle({
         aria-checked={enabled}
         onClick={() => onChange(!enabled)}
         className={[
-          'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-green-400',
-          enabled ? 'bg-green-500' : 'bg-gray-200',
+          'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50',
+          enabled ? 'bg-[#389fe0]' : 'bg-gray-200',
         ].join(' ')}
       >
         <span
@@ -244,9 +244,9 @@ export default function StepFutureConsumption({
               })}
 
               {acHasUnits && (
-                <div className="flex justify-between items-center bg-green-50 rounded-xl px-4 py-2 mt-1">
-                  <span className="text-xs text-green-700 font-medium">Consumo estimado AA</span>
-                  <span className="text-sm font-bold text-green-700">
+                <div className="flex justify-between items-center bg-[#dde3e9]/50 rounded-xl px-4 py-2 mt-1">
+                  <span className="text-xs text-[#1d65c5] font-medium">Consumo estimado AA</span>
+                  <span className="text-sm font-bold text-[#1d65c5]">
                     +{acGroups.reduce((s, g) => s + g.estimatedMonthlyKWh, 0)} kWh/mes
                   </span>
                 </div>
@@ -283,12 +283,12 @@ export default function StepFutureConsumption({
               </div>
 
               {waterHeater && (
-                <div className="flex justify-between items-center bg-green-50 rounded-xl px-4 py-2">
+                <div className="flex justify-between items-center bg-[#dde3e9]/50 rounded-xl px-4 py-2">
                   <div>
-                    <p className="text-xs text-green-700 font-medium">Termo recomendado</p>
+                    <p className="text-xs text-[#1d65c5] font-medium">Termo recomendado</p>
                     <p className="text-xs text-gray-500">{waterHeater.recommendedCapacityLiters} litros</p>
                   </div>
-                  <span className="text-sm font-bold text-green-700">
+                  <span className="text-sm font-bold text-[#1d65c5]">
                     +{waterHeater.estimatedMonthlyKWh} kWh/mes
                   </span>
                 </div>
@@ -324,14 +324,14 @@ export default function StepFutureConsumption({
                 />
               </div>
 
-              <div className="flex justify-between items-center bg-green-50 rounded-xl px-4 py-2">
+              <div className="flex justify-between items-center bg-[#dde3e9]/50 rounded-xl px-4 py-2">
                 <div>
-                  <p className="text-xs text-green-700 font-medium">Consumo estimado EV</p>
+                  <p className="text-xs text-[#1d65c5] font-medium">Consumo estimado EV</p>
                   <p className="text-xs text-gray-500">
                     Análisis de horario de carga en los resultados
                   </p>
                 </div>
-                <span className="text-sm font-bold text-green-700">
+                <span className="text-sm font-bold text-[#1d65c5]">
                   +{evEstimatedKWh} kWh/mes
                 </span>
               </div>
@@ -373,7 +373,7 @@ export default function StepFutureConsumption({
 
         <button
           type="submit"
-          className="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-sm transition-colors"
+          className="w-full rounded-xl bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-3 text-sm transition-colors"
         >
           {total > 0 ? 'Simular con equipos adicionales →' : 'Continuar sin equipos adicionales →'}
         </button>

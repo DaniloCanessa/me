@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import type { WizardState, WizardStep, CustomerCategory, SupplyData } from '@/lib/types';
 import ProgressBar from '@/components/ui/ProgressBar';
 import StepCustomerType from '@/components/simulator/StepCustomerType';
@@ -61,15 +62,14 @@ export default function SimulatorPage() {
   const isFirstStep = state.step === STEP_ORDER[0];
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-[#f4f8fb]">
       {/* Barra de navegación */}
-      <nav className="bg-white border-b border-gray-100 px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
-          <Link href="/" className="text-green-600 hover:text-green-700 text-sm font-medium">
-            ← Inicio
+      <nav className="bg-[#010101] px-4 py-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <Link href="/">
+            <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
           </Link>
-          <span className="text-gray-300">/</span>
-          <span className="text-sm text-gray-500">Simulador Solar</span>
+          <span className="text-sm text-white/50">Simulador Solar</span>
         </div>
       </nav>
 

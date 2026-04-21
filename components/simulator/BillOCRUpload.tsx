@@ -130,7 +130,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
         onClick={() => inputRef.current?.click()}
         className={[
           'border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors',
-          isDragging ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-green-300 hover:bg-gray-50',
+          isDragging ? 'border-[#389fe0] bg-[#dde3e9]/50' : 'border-gray-200 hover:border-[#b0cedd] hover:bg-gray-50',
         ].join(' ')}
       >
         <input
@@ -163,7 +163,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
   if (state.stage === 'loading') {
     return (
       <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
-        <div className="inline-block w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-3" />
+        <div className="inline-block w-8 h-8 border-4 border-[#b0cedd]/40 border-t-green-600 rounded-full animate-spin mb-3" />
         <p className="text-sm font-semibold text-gray-700">
           Analizando boleta{state.total > 1 ? ` ${state.current} de ${state.total}` : ''}...
         </p>
@@ -212,7 +212,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
           <p className="text-sm font-bold text-gray-900">Datos extraídos</p>
           <span className={[
             'text-xs font-medium px-2 py-0.5 rounded-full',
-            data.confidence === 'high' ? 'bg-green-100 text-green-700' :
+            data.confidence === 'high' ? 'bg-[#b0cedd]/20 text-[#1d65c5]' :
             data.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
             'bg-red-100 text-red-600',
           ].join(' ')}>
@@ -229,7 +229,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
         {/* Resumen de coincidencias */}
         <div className={[
           'mt-3 rounded-xl px-3 py-2 text-xs font-medium',
-          matchCount > 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700',
+          matchCount > 0 ? 'bg-[#dde3e9]/50 text-[#1d65c5]' : 'bg-amber-50 text-amber-700',
         ].join(' ')}>
           {matchCount > 0
             ? `${matchCount} mes${matchCount !== 1 ? 'es' : ''} coinciden con tu período de simulación y se pre-rellenarán.`
@@ -262,18 +262,18 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
               const idx = edited.indexOf(p);
               return (
                 <div key={slotKey(p.month, p.year)}
-                  className={['grid grid-cols-[90px_1fr_1fr] gap-2 items-center px-4 py-2 border-b border-gray-50 last:border-0', p.isCurrent ? 'bg-green-50/30' : ''].join(' ')}
+                  className={['grid grid-cols-[90px_1fr_1fr] gap-2 items-center px-4 py-2 border-b border-gray-50 last:border-0', p.isCurrent ? 'bg-[#dde3e9]/50/30' : ''].join(' ')}
                 >
                   <span className="text-xs text-gray-700 font-medium">
                     {MONTH_NAMES[p.month]} {p.year}
-                    {p.isCurrent && <span className="ml-1 text-green-500">·</span>}
+                    {p.isCurrent && <span className="ml-1 text-[#389fe0]">·</span>}
                   </span>
                   <input
                     type="number"
                     min="1"
                     value={p.consumptionKWh ?? ''}
                     onChange={(e) => handleChange(idx, 'consumptionKWh', e.target.value)}
-                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 transition"
                   />
                   <input
                     type="number"
@@ -281,7 +281,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
                     value={p.variableAmountCLP ?? ''}
                     onChange={(e) => handleChange(idx, 'variableAmountCLP', e.target.value)}
                     placeholder="opcional"
-                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 transition"
                   />
                 </div>
               );
@@ -298,7 +298,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
           className={[
             'flex-1 rounded-xl font-semibold py-2.5 text-sm transition-colors',
             matchCount > 0
-              ? 'bg-green-600 hover:bg-green-700 text-white'
+              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed',
           ].join(' ')}
         >

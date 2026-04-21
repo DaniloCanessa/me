@@ -48,9 +48,9 @@ export default function StepCustomerType({ selected, onSelect }: StepCustomerTyp
               onClick={() => onSelect(opt.value)}
               className={[
                 'text-left p-6 rounded-2xl border-2 transition-all',
-                'hover:border-green-400 hover:shadow-sm',
+                'hover:border-[#389fe0] hover:shadow-sm',
                 isSelected
-                  ? 'border-green-500 bg-green-50 shadow-sm'
+                  ? 'border-[#389fe0] bg-[#dde3e9]/50 shadow-sm'
                   : 'border-gray-200 bg-white',
               ].join(' ')}
             >

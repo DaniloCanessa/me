@@ -42,12 +42,12 @@ function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
                     'w-full rounded-t-sm transition-all relative',
                     isInterpolated
                       ? 'bg-gray-200'
-                      : isMax ? 'bg-green-500' : 'bg-green-300',
+                      : isMax ? 'bg-[#389fe0]' : 'bg-green-300',
                   ].join(' ')}
                 >
                   <span className={[
                     'absolute -top-4 left-0 right-0 text-center text-[9px] whitespace-nowrap',
-                    isInterpolated ? 'text-gray-400' : isMax ? 'font-semibold text-green-700' : 'text-gray-500',
+                    isInterpolated ? 'text-gray-400' : isMax ? 'font-semibold text-[#1d65c5]' : 'text-gray-500',
                   ].join(' ')}>
                     {bill.consumptionKWh}
                   </span>
@@ -204,7 +204,7 @@ export default function StepBillReview({ profile, onConfirm }: StepBillReviewPro
         <button
           type="button"
           onClick={onConfirm}
-          className="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-sm transition-colors"
+          className="w-full rounded-xl bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-3 text-sm transition-colors"
         >
           Confirmar y continuar →
         </button>
