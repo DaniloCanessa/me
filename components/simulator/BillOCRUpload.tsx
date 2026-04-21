@@ -40,10 +40,12 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFiles = useCallback(async (files: File[]) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    const valid = files.filter((f) => allowed.includes(f.type));
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'];
+    const valid = files.filter((f) => allowed.includes(f.type) || f.name.match(/\.xlsx?$/i) != null);
     if (valid.length === 0) {
-      setState({ stage: 'error', reason: 'Formato no soportado. Usa JPG, PNG o PDF.' });
+      setState({ stage: 'error', reason: 'Formato no soportado. Usa JPG, PNG, PDF o Excel.' });
       return;
     }
 
@@ -134,7 +136,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
+          accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.xls"
           multiple
           className="hidden"
           onChange={(e) => {
@@ -144,7 +146,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
         />
         <p className="text-2xl mb-2">📄</p>
         <p className="text-sm font-semibold text-gray-700">Arrastra tus boletas o haz clic para subir</p>
-        <p className="text-xs text-gray-400 mt-1">JPG · PNG · PDF · Puedes subir varias a la vez</p>
+        <p className="text-xs text-gray-400 mt-1">JPG · PNG · PDF · Excel · Puedes subir varias a la vez</p>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onCancel(); }}

@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface ExtractedPeriod {
@@ -130,6 +132,19 @@ function mockExtraction(): ExtractedBill {
   };
 }
 
+// ─── Excel → texto plano ─────────────────────────────────────────────────────
+
+function excelToText(buffer: ArrayBuffer): string {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const parts: string[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    if (csv.trim()) parts.push(`=== Hoja: ${sheetName} ===\n${csv}`);
+  }
+  return parts.join('\n\n');
+}
+
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -147,9 +162,15 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, reason: 'error', message: 'No se recibió ningún archivo' }, { status: 400 });
   }
 
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-  if (!allowedTypes.includes(file.type)) {
-    return Response.json({ ok: false, reason: 'error', message: 'Formato no soportado. Usa JPG, PNG o PDF.' }, { status: 400 });
+  const EXCEL_TYPES = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'application/vnd.ms-excel',                                           // .xls
+  ];
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', ...EXCEL_TYPES];
+  const isExcel = EXCEL_TYPES.includes(file.type) || file.name.match(/\.xlsx?$/i) != null;
+
+  if (!allowedTypes.includes(file.type) && !isExcel) {
+    return Response.json({ ok: false, reason: 'error', message: 'Formato no soportado. Usa JPG, PNG, PDF o Excel.' }, { status: 400 });
   }
 
   if (USE_MOCK) {
@@ -159,19 +180,33 @@ export async function POST(request: Request) {
 
   try {
     const bytes = await file.arrayBuffer();
-    const base64 = Buffer.from(bytes).toString('base64');
-    const isPdf = file.type === 'application/pdf';
 
-    const contentBlock = isPdf
-      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-      : { type: 'image', source: { type: 'base64', media_type: file.type as string, data: base64 } };
-
+    // ── Excel: convertir a texto y enviar como mensaje de texto ──────────────
+    let messages: object[];
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-api-key': ANTHROPIC_API_KEY!,
       'anthropic-version': '2023-06-01',
     };
-    if (isPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
+
+    if (isExcel) {
+      const excelText = excelToText(bytes);
+      if (!excelText.trim()) {
+        return Response.json({ ok: false, reason: 'unreadable', message: 'El archivo Excel está vacío o no se pudo leer' });
+      }
+      messages = [{
+        role: 'user',
+        content: `El siguiente contenido proviene de un archivo Excel con datos de boletas eléctricas chilenas. Analízalo y extrae la información solicitada.\n\n${excelText}\n\n${buildPrompt()}`,
+      }];
+    } else {
+      const base64 = Buffer.from(bytes).toString('base64');
+      const isPdf = file.type === 'application/pdf';
+      const contentBlock = isPdf
+        ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+        : { type: 'image', source: { type: 'base64', media_type: file.type as string, data: base64 } };
+      if (isPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
+      messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt() }] }];
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -179,13 +214,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4096,
-        messages: [{
-          role: 'user',
-          content: [
-            contentBlock,
-            { type: 'text', text: buildPrompt() },
-          ],
-        }],
+        messages,
       }),
     });
 
