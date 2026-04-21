@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 
 interface ContactPayload {
   name: string;
+  contactName?: string;
   email: string;
   phone?: string;
   type: 'natural' | 'business';
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
         <tr><td style="padding:24px 32px">
           <table cellpadding="0" cellspacing="0" width="100%">
             <tr><td style="padding:4px 0;color:#6b7280;font-size:13px;width:120px">Email</td><td style="padding:4px 0;font-size:13px"><a href="mailto:${body.email}" style="color:#1d65c5">${body.email}</a></td></tr>
+            ${body.contactName ? `<tr><td style="padding:4px 0;color:#6b7280;font-size:13px">Contacto</td><td style="padding:4px 0;color:#111827;font-size:13px">${body.contactName}</td></tr>` : ''}
             ${body.phone ? `<tr><td style="padding:4px 0;color:#6b7280;font-size:13px">Teléfono</td><td style="padding:4px 0;color:#111827;font-size:13px"><a href="tel:${body.phone}" style="color:#1d65c5">${body.phone}</a></td></tr>` : ''}
           </table>
           <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:8px;border-left:3px solid #1d65c5">

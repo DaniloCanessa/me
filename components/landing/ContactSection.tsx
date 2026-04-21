@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export default function ContactSection() {
   const [type, setType] = useState<'natural' | 'business'>('natural');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [form, setForm] = useState({ name: '', contactName: '', email: '', phone: '', message: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   async function handleSubmit(e: React.FormEvent) {
@@ -18,7 +18,7 @@ export default function ContactSection() {
       });
       if (!res.ok) throw new Error();
       setStatus('success');
-      setForm({ name: '', email: '', phone: '', message: '' });
+      setForm({ name: '', contactName: '', email: '', phone: '', message: '' });
     } catch {
       setStatus('error');
     }
@@ -113,6 +113,32 @@ export default function ContactSection() {
                     />
                   </div>
                   <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      {type === 'business' ? 'Nombre de contacto *' : 'Teléfono'}
+                    </label>
+                    {type === 'business' ? (
+                      <input
+                        type="text"
+                        required
+                        value={form.contactName}
+                        onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                        className="w-full border border-[#b0cedd]/50 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/30 bg-white"
+                        placeholder="Juan Pérez"
+                      />
+                    ) : (
+                      <input
+                        type="tel"
+                        value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                        className="w-full border border-[#b0cedd]/50 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/30 bg-white"
+                        placeholder="+56 9 1234 5678"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {type === 'business' && (
+                  <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">Teléfono</label>
                     <input
                       type="tel"
@@ -122,7 +148,7 @@ export default function ContactSection() {
                       placeholder="+56 9 1234 5678"
                     />
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">Email *</label>
