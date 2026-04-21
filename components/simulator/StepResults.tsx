@@ -472,6 +472,10 @@ export default function StepResults({ state }: StepResultsProps) {
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
 
+  // Regla 2: sobredimensionamiento — kit genera >130% del consumo anual
+  const isOversized = (result: SimulatorResult) =>
+    result.energyBalance.totalProductionKWh > result.energyBalance.totalConsumptionKWh * 1.3;
+
   const activeScenarios = (hasAdditions && consumptionMode === 'future' && futureScenarios)
     ? futureScenarios
     : scenarios;
@@ -822,6 +826,23 @@ export default function StepResults({ state }: StepResultsProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Aviso sobredimensionamiento (Regla 2) ──────────────────────────── */}
+      {isOversized(activeResult) && activeScenario !== 'B' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
+          <span className="text-xl shrink-0">⚠️</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Sistema sobredimensionado</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              Este sistema generará ~<strong>{Math.round(activeResult.energyBalance.totalProductionKWh / activeResult.energyBalance.totalConsumptionKWh * 100)}%</strong> de tu consumo anual.
+              El excedente se inyecta a la red al 50% del valor de compra, lo que alarga el retorno de inversión.
+              {isResidential && activeScenarios?.kitB
+                ? ` Considera el kit B de ${activeScenarios.kitB.sizekWp} kW, que cubre mejor tu consumo real con mejor retorno.`
+                : ' Si no planeas agregar equipos eléctricos próximamente, considera un sistema de menor tamaño.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Avisos regulatorios (empresas) ─────────────────────────────────── */}
       {!isResidential && activeResult.kit.exceedsNetBillingLimit && (
