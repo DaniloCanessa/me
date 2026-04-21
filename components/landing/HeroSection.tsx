@@ -7,7 +7,7 @@ export default function HeroSection() {
       {/* Nav */}
       <nav className="absolute top-0 left-0 right-0 z-20 px-6 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Image src="/images/logotipo-2.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+          <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white">
             <a href="#soluciones" className="hover:text-[#ade1ed] transition-colors">Soluciones</a>
             <a href="#proyectos" className="hover:text-[#ade1ed] transition-colors">Proyectos</a>

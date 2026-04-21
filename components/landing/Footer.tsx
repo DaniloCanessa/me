@@ -9,7 +9,7 @@ export default function Footer() {
 
           {/* Logo + descripción */}
           <div className="md:col-span-2">
-            <Image src="/images/logotipo-2.png" alt="Mercado Energy" width={140} height={42} className="h-9 w-auto mb-4" />
+            <Image src="/images/logotipo.png" alt="Mercado Energy" width={140} height={42} className="h-9 w-auto mb-4" />
             <p className="text-white/50 text-sm leading-relaxed max-w-sm">
               Soluciones energéticas fotovoltaicas para hogares y empresas en Chile.
               Biznexus Group SPA · RUT 77.958.683-9
