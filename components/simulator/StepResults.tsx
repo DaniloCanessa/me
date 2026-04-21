@@ -694,23 +694,17 @@ export default function StepResults({ state }: StepResultsProps) {
       {/* ── Selector de baterías (empresa con batería) ─────────────────────── */}
       {!isResidential && businessBattery && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-          <p className="text-sm font-semibold text-amber-800 mb-3">Módulos de batería</p>
-          <div className="flex gap-2 flex-wrap mb-3">
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setBatteryCount(n)}
-                className={[
-                  'w-10 h-10 rounded-xl text-sm font-bold border-2 transition-all',
-                  batteryCount === n
-                    ? 'border-amber-500 bg-amber-500 text-white'
-                    : 'border-amber-200 text-amber-700 hover:border-amber-400',
-                ].join(' ')}
-              >
-                {n}
-              </button>
-            ))}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-amber-800">Módulos de batería</p>
+            <select
+              value={batteryCount}
+              onChange={(e) => setBatteryCount(Number(e.target.value))}
+              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            >
+              {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>{n} módulo{n > 1 ? 's' : ''}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-4 text-xs text-amber-700">
             <span>Capacidad total: <strong>{batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh</strong></span>
@@ -762,7 +756,7 @@ export default function StepResults({ state }: StepResultsProps) {
               onChange={(e) => setBatteryCount(Number(e.target.value))}
               className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
-              {Array.from({ length: 200 }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>{n} módulo{n > 1 ? 's' : ''}</option>
               ))}
             </select>
