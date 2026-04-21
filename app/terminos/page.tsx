@@ -45,7 +45,92 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">4. Proceso de contratación</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">4. Condiciones de uso del simulador solar</h2>
+        <p className="text-gray-600 mb-4">
+          El simulador solar de Mercado Energy es una herramienta de orientación. El usuario debe conocer
+          las siguientes limitaciones antes de interpretar sus resultados:
+        </p>
+
+        <div className="space-y-4">
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Radiación solar y producción estimada</p>
+            <p className="text-xs text-gray-600">
+              El simulador utiliza valores promedio históricos de radiación solar (kWh/m²/día) por región,
+              obtenidos de bases de datos de referencia. Estos promedios no reflejan variaciones año a año,
+              condiciones climáticas atípicas, ni la irradiación específica del inmueble según su orientación,
+              inclinación real del techo o sombreado por edificios, árboles u otras obstrucciones.
+              La producción real puede ser hasta un ±20% diferente del estimado.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Precio de la energía eléctrica</p>
+            <p className="text-xs text-gray-600">
+              Los cálculos de ahorro se basan en tarifas eléctricas de referencia vigentes al momento de la
+              simulación. El precio del kWh varía según la distribuidora, tarifa contratada, cargo de potencia,
+              impuestos y ajustes regulatorios semestrales de la CNE. Mercado Energy no garantiza que la tarifa
+              utilizada en la simulación corresponda exactamente a la que el usuario paga o pagará en el futuro.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Dimensionamiento del sistema</p>
+            <p className="text-xs text-gray-600">
+              El tamaño del kit (kWp) sugerido por el simulador se calcula en base al consumo promedio mensual
+              ingresado y a factores de diseño estándar. El dimensionamiento definitivo requiere una ingeniería
+              de detalle que considere la capacidad real del empalme eléctrico, la superficie disponible,
+              la orientación e inclinación del techo y los requerimientos técnicos de la distribuidora local.
+              El kit real instalado puede diferir en capacidad o tecnología del sugerido por el simulador.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Ahorros y período de retorno proyectados</p>
+            <p className="text-xs text-gray-600">
+              Los ahorros estimados asumen un perfil de consumo constante equivalente al promedio ingresado,
+              sin considerar variaciones estacionales del consumo del usuario, cambios de hábitos, incorporación
+              de nuevos equipos (vehículos eléctricos, climatización, etc.) ni alzas o bajas futuras de tarifas.
+              El período de retorno (payback) es una proyección basada en los supuestos anteriores y no
+              constituye una garantía de rentabilidad.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Lectura de boletas por inteligencia artificial</p>
+            <p className="text-xs text-gray-600">
+              El simulador permite cargar boletas eléctricas (PDF, imagen o Excel) para extraer automáticamente
+              datos de consumo mediante un sistema de inteligencia artificial. Este proceso puede contener
+              errores de lectura derivados de la calidad de la imagen, formatos no estándar o variaciones entre
+              distribuidoras. El usuario es responsable de verificar que los datos extraídos sean correctos
+              antes de continuar con la simulación. Los datos de boletas son procesados de forma confidencial
+              y no se almacenan más allá del tiempo necesario para la sesión, conforme a la{' '}
+              <a href="/privacidad" className="text-[#389fe0] hover:underline">Política de Privacidad</a>.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f4f8fb] rounded-xl border border-[#b0cedd]/30">
+            <p className="text-sm font-semibold text-[#010101] mb-1">Variables no consideradas por el simulador</p>
+            <p className="text-xs text-gray-600">
+              El simulador no evalúa: estado estructural del techo, permisos municipales o de la distribuidora,
+              restricciones de zonas patrimoniales o condominios, disponibilidad de red para inyección
+              (net metering), costos de adecuación del empalme ni financiamiento. Estos factores pueden
+              afectar la viabilidad, costo final y plazos del proyecto.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <p className="text-xs text-amber-800">
+            <strong>Aviso importante:</strong> Los resultados del simulador son estimativos y de carácter
+            exclusivamente orientativo. No reemplazan una visita técnica ni una propuesta formal de ingeniería.
+            Mercado Energy no asume responsabilidad por decisiones de inversión tomadas exclusivamente en base
+            a los resultados del simulador, sin haber recibido una propuesta técnica definitiva.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">5. Proceso de contratación</h2>
         <p className="text-gray-600 mb-2">
           La contratación de servicios sigue el siguiente proceso:
         </p>
@@ -62,7 +147,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">5. Precios e impuestos</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">6. Precios e impuestos</h2>
         <p className="text-gray-600">
           Todos los precios publicados o cotizados incluyen IVA (19%) salvo indicación expresa en contrario.
           Los precios de equipos están sujetos a variaciones del tipo de cambio y disponibilidad de stock.
@@ -71,7 +156,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">6. Formas de pago</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">7. Formas de pago</h2>
         <p className="text-gray-600">
           Aceptamos transferencia bancaria, Webpay Plus (tarjetas VISA y Mastercard) y otros medios
           indicados en la propuesta formal. El pago del saldo se realiza contra entrega y puesta en marcha
@@ -81,7 +166,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">7. Garantías legales y comerciales</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">8. Garantías legales y comerciales</h2>
         <p className="text-gray-600 mb-2">
           Sin perjuicio de los derechos irrenunciables del consumidor establecidos en el artículo 21 de la
           Ley N° 19.496 (garantía legal de 3 meses para bienes o servicios con defectos ocultos), ofrecemos:
@@ -96,7 +181,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">8. Propiedad intelectual</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">9. Propiedad intelectual</h2>
         <p className="text-gray-600">
           Todos los contenidos de este sitio (textos, imágenes, logotipos, código fuente, diseño y simulador)
           son propiedad de Mercado Energy o de sus respectivos titulares y están protegidos por la
@@ -106,7 +191,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">9. Limitación de responsabilidad</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">10. Limitación de responsabilidad</h2>
         <p className="text-gray-600">
           Mercado Energy no será responsable por daños indirectos, lucro cesante ni perjuicios derivados
           del uso de la información del simulador. La responsabilidad máxima frente al cliente no excederá
@@ -116,7 +201,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">10. Tratamiento de datos personales</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">11. Tratamiento de datos personales</h2>
         <p className="text-gray-600">
           El uso de nuestros servicios implica el tratamiento de datos personales conforme a nuestra{' '}
           <a href="/privacidad" className="text-[#389fe0] hover:underline">Política de Privacidad</a>,
@@ -126,7 +211,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">11. Ley aplicable y jurisdicción</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">12. Ley aplicable y jurisdicción</h2>
         <p className="text-gray-600">
           Los presentes términos se rigen por las leyes de la República de Chile. Sin perjuicio del derecho
           del consumidor a recurrir a SERNAC o a los Juzgados de Policía Local, cualquier controversia
@@ -136,7 +221,7 @@ export default function TerminosPage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-bold text-[#010101] mb-2">12. Modificaciones</h2>
+        <h2 className="text-lg font-bold text-[#010101] mb-2">13. Modificaciones</h2>
         <p className="text-gray-600">
           Mercado Energy puede modificar estos términos en cualquier momento. Los cambios serán publicados
           en este sitio con la nueva fecha de actualización y serán aplicables a las relaciones contractuales
