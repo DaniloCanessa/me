@@ -9,6 +9,13 @@ const PROJECTS = [
     tags: ['Gobierno', 'Off-grid', 'Baterías'],
   },
   {
+    image: '/images/casa-carlos-alvarado.jpg',
+    location: 'Las Condes, Región Metropolitana',
+    title: 'Solución integral residencial premium',
+    description: '10 kW con 16 paneles, cargador de auto eléctrico y termo eléctrico de 330 litros. Una solución energética completa para el hogar.',
+    tags: ['Residencial', 'Cargador EV', 'Termo eléctrico'],
+  },
+  {
     image: '/images/panaderia-san-bernardo.jpg',
     location: 'San Bernardo, Región Metropolitana',
     title: 'Sistema fotovoltaico trifásico para panadería',
