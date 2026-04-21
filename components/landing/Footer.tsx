@@ -28,7 +28,7 @@ export default function Footer() {
               <li><a href="#soluciones" className="hover:text-[#389fe0] transition-colors">Soluciones</a></li>
               <li><a href="#proyectos" className="hover:text-[#389fe0] transition-colors">Proyectos</a></li>
               <li><a href="#nosotros" className="hover:text-[#389fe0] transition-colors">Quiénes somos</a></li>
-              <li><a href="mailto:contacto@mercadoenergy.cl" className="hover:text-[#389fe0] transition-colors">Contacto</a></li>
+              <li><a href="#contacto-form" className="hover:text-[#389fe0] transition-colors">Contacto</a></li>
             </ul>
           </div>
 

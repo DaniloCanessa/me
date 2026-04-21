@@ -7,6 +7,7 @@ import Solutions from '@/components/landing/Solutions';
 import Brands from '@/components/landing/Brands';
 import Projects from '@/components/landing/Projects';
 import FinalCTA from '@/components/landing/FinalCTA';
+import ContactSection from '@/components/landing/ContactSection';
 import Footer from '@/components/landing/Footer';
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
       <Brands />
       <Projects />
       <FinalCTA />
+      <ContactSection />
       <Footer />
     </main>
   );

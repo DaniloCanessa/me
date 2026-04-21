@@ -12,7 +12,7 @@ export default function HeroSection() {
             <a href="#soluciones" className="hover:text-[#ade1ed] transition-colors">Soluciones</a>
             <a href="#proyectos" className="hover:text-[#ade1ed] transition-colors">Proyectos</a>
             <a href="#nosotros" className="hover:text-[#ade1ed] transition-colors">Nosotros</a>
-            <a href="#contacto" className="hover:text-[#ade1ed] transition-colors">Contacto</a>
+            <a href="#contacto-form" className="hover:text-[#ade1ed] transition-colors">Contacto</a>
             <Link
               href="/simulator"
               className="bg-[#389fe0] hover:bg-[#1d65c5] text-white px-5 py-2 rounded-xl transition-colors"
