@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 20 de abril 2026
+> Última actualización: 21 de abril 2026
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://me-fawn-eight.vercel.app
 
@@ -16,9 +16,11 @@ El flujo termina con una solicitud de contacto que deriva el lead a un especiali
 
 ## Estado actual
 
-**Fase 3 en progreso.**
+**Fase 3 completada. Landing page y contenido público en producción.**
 
-El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de boletas (múltiples archivos), captura de leads por email, lógica de 3 escenarios de PFV (residencial) + dimensionamiento continuo (empresa), baterías modulares, toggle base/futuro en resultados, gráfico de líneas mensual, exportación de informe PDF (residencial y empresa) e interpolación estacional de meses faltantes.
+El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de boletas (múltiples archivos + Excel), captura de leads por email, lógica de 3 escenarios de PFV (residencial) + dimensionamiento continuo (empresa), baterías modulares (dropdowns 1–10 residencial, 1–100 empresa), toggle base/futuro en resultados, gráfico de líneas mensual, exportación de informe PDF (residencial y empresa), interpolación estacional de meses faltantes, aviso de sobredimensionamiento (Regla 2).
+
+La landing page está completamente construida con identidad visual de marca. El simulador usa la paleta de colores de Mercado Energy (azules) en lugar de verdes.
 
 ---
 
@@ -47,35 +49,56 @@ El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de bole
 mercado-energy/
 ├── app/
 │   ├── layout.tsx                  # Metadata global, font Geist, lang="es"
-│   ├── page.tsx                    # Landing page con hero y CTA a /simulator
+│   ├── page.tsx                    # Landing page (10 secciones)
+│   ├── icon.png                    # Favicon (logotipo-2.png — Next.js lo detecta automáticamente)
 │   ├── simulator/
 │   │   └── page.tsx                # Contenedor del wizard (WizardState, navegación)
+│   ├── net-billing/
+│   │   ├── page.tsx                # Página explicativa Net Billing
+│   │   └── NetBillingClient.tsx    # Diagrama animado SVG con toggle día/noche
+│   ├── terminos/page.tsx           # Términos y condiciones (Ley 19.496, 19.799, 21.719)
+│   ├── privacidad/page.tsx         # Política de privacidad (Ley 21.719 completa, 7 derechos)
+│   ├── devoluciones/page.tsx       # Política de devoluciones (Ley 19.496, 21.398, SERNAC)
 │   ├── admin/
 │   │   └── leads/                  # Panel de administración de leads (Supabase)
 │   ├── lab/
-│   │   └── bill-parser/page.tsx    # Laboratorio experimental de OCR (ruta /lab/bill-parser)
+│   │   └── bill-parser/page.tsx    # Laboratorio experimental de OCR
 │   └── api/
 │       ├── leads/route.ts          # POST: recibe lead, envía email via Resend
-│       ├── parse-bill/route.ts     # POST: recibe imagen/PDF, devuelve JSON via Claude Haiku
+│       ├── contact/route.ts        # POST: formulario de contacto landing (Resend)
+│       ├── parse-bill/route.ts     # POST: recibe imagen/PDF/Excel, devuelve JSON via Claude Haiku
 │       └── send-report/route.ts    # POST: envía informe PDF por email al lead
 │
 ├── components/
+│   ├── landing/
+│   │   ├── HeroSection.tsx         # Nav + video de fondo (video-poroma.mp4) + stats bar
+│   │   ├── HowItWorks.tsx          # Cómo funciona el proceso
+│   │   ├── ValueProposition.tsx    # Propuesta de valor
+│   │   ├── SimulatorCTA.tsx        # CTA intermedio al simulador
+│   │   ├── AboutUs.tsx             # Quiénes somos + equipo
+│   │   ├── Solutions.tsx           # Soluciones residencial/empresa
+│   │   ├── Brands.tsx              # Marcas de equipos
+│   │   ├── Projects.tsx            # Grilla de proyectos ejecutados (9 proyectos)
+│   │   ├── FinalCTA.tsx            # CTA final
+│   │   ├── ContactSection.tsx      # Formulario de contacto (Persona natural / Empresa)
+│   │   ├── Footer.tsx              # Footer con logotipo-2, mapa, pagos, legal
+│   │   └── LegalLayout.tsx         # Layout compartido para páginas legales
 │   ├── lab/
 │   │   └── BillParser.tsx          # UI standalone del lab OCR
 │   └── simulator/
-│       ├── StepCustomerType.tsx    # Paso 1: Residencial / Empresa
+│       ├── StepCustomerType.tsx    # Paso 1: Residencial / Empresa y grandes consumidores
 │       ├── StepContact.tsx         # Paso 2: datos de contacto (región obligatoria)
 │       ├── StepSupply.tsx          # Paso 3: propiedad, empalme (residencial) o potencia/tensión (empresa)
 │       ├── StepBills.tsx           # Paso 4: ingreso de boletas + OCR + distribuidora/tarifa manual
-│       ├── BillOCRUpload.tsx       # Sub-componente: upload múltiple, revisión y confirmación de boleta
-│       ├── StepBillReview.tsx      # Paso 5: revisión visual (gráfico 12 meses, kWh sobre cada barra)
+│       ├── BillOCRUpload.tsx       # Sub-componente: upload múltiple (JPG/PNG/PDF/Excel)
+│       ├── StepBillReview.tsx      # Paso 5: revisión visual (gráfico 12 meses)
 │       ├── StepFutureConsumption.tsx # Paso 6: AA, termo, auto eléctrico
-│       ├── StepResults.tsx         # Paso 7: escenarios, toggle base/futuro, CTA, PDF
-│       ├── PDFDownloadButton.tsx   # Botón + modal de informe (html2canvas + jsPDF); soporta residencial y empresa
-│       ├── SimulationReportHtml.tsx # HTML del informe para captura con html2canvas
-│       └── SimulatorResults.tsx    # Componente legacy de resultados (sin wizard)
+│       ├── StepResults.tsx         # Paso 7: escenarios, baterías, CTA, PDF
+│       ├── PDFDownloadButton.tsx   # Botón + modal de informe (html2canvas + jsPDF)
+│       ├── SimulationReportHtml.tsx # HTML del informe para captura
+│       └── SimulatorResults.tsx    # Componente legacy
 │   └── ui/
-│       └── ProgressBar.tsx         # Barra de progreso de 7 pasos
+│       └── ProgressBar.tsx         # Barra de progreso de 7 pasos (colores de marca)
 │
 └── lib/
     ├── types.ts                    # Todas las interfaces TypeScript
@@ -490,16 +513,83 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 
 ---
 
+## Landing page
+
+### Estructura (10 secciones en `app/page.tsx`)
+1. `HeroSection` — nav, video de fondo (`/videos/video-poroma.mp4`), headline, CTA, stats bar
+2. `HowItWorks` — proceso en 3 pasos
+3. `ValueProposition` — beneficios clave
+4. `SimulatorCTA` — CTA intermedio
+5. `AboutUs` — equipo e historia
+6. `Solutions` — residencial vs empresa
+7. `Brands` — marcas de equipos
+8. `Projects` — 9 proyectos ejecutados con imagen y tags
+9. `FinalCTA` — CTA final
+10. `ContactSection` — formulario (Persona natural / Empresa + nombre de contacto)
+11. `Footer` — logotipo-2, mapa Google, pagos, navegación, legal
+
+### Proyectos en la grilla
+| Proyecto | Imagen |
+|---|---|
+| Poroma, Tarapacá | `/images/poroma-img.jpg` |
+| Panadería San Bernardo | `/images/panaderia-san-bernardo.jpg` |
+| Casa Carlos Alvarado, Las Condes | `/images/casa-carlos-alvarado.jpg` |
+| Coscaya, Huara | `/images/proyecto-coscaya.jpg` |
+| Caleta Los Bronces, Atacama | `/images/proyecto-caleta-los-bronces.jpg` |
+| Universidad de Talca | `/images/proyecto-talca.jpg` |
+| Río Ibáñez, Aysén | `/images/proyecto-rio-ibanez.jpg` |
+| Lonquimay, Araucanía | `/images/proyecto-lonquimay.jpg` |
+| Puerto Carmen, Quellón | `/images/proyecto-quellon.jpg` |
+
+### Formulario de contacto (`/api/contact`)
+- Campos Persona natural: nombre, email, teléfono, mensaje
+- Campos Empresa: empresa/razón social, nombre de contacto, teléfono, email, mensaje
+- Envío via Resend al operador
+
+### Paleta de colores de marca
+```
+#389fe0  — azul primario (CTAs, acentos, barras de progreso)
+#1d65c5  — azul oscuro (hover, fondos de sección)
+#ade1ed  — azul claro (badges, textos secundarios en oscuro)
+#70caca  — teal (decorativo)
+#b0cedd  — gris azulado (bordes, fondos suaves)
+#dde3e9  — gris claro (fondos, backgrounds)
+#010101  — casi negro (nav, footer, textos principales)
+#ffffff  — blanco
+```
+
+### Identidad visual del simulador
+- Nav con fondo `#b0cedd` y logo `logotipo.png`
+- Fondo general `#f4f8fb`
+- Todos los colores verdes reemplazados por azules de marca
+- ProgressBar en `#389fe0` / `#1d65c5`
+- Favicon: `app/icon.png` (logotipo-2.png)
+
+---
+
+## Páginas públicas adicionales
+
+| Ruta | Descripción |
+|---|---|
+| `/net-billing` | Explicación del Net Billing con diagrama SVG animado (toggle día/noche) y marco regulatorio |
+| `/terminos` | Términos y condiciones (Ley 19.496, 19.799, 21.719, 17.336) — incluye sección de condiciones del simulador |
+| `/privacidad` | Política de privacidad (Ley 21.719 completa: 7 derechos, bases legales, Agencia de Datos) |
+| `/devoluciones` | Política de devoluciones (Ley 19.496, 21.398, 21.521, SERNAC, plazos legales) |
+
+---
+
+## Advertencias conocidas
+
+- **Middleware deprecado:** `middleware.ts` usa la convención antigua. Next.js 16 lo llama "proxy". No afecta funcionalidad pero genera warning en build. Pendiente renombrar a `proxy.ts`.
+
+---
+
 ## Pendientes y próximos pasos
 
 ### Alta prioridad
 
 - [ ] **Regla 1: escenario óptimo automático**
   - Si el payback de A es > 12 años Y el de B es < 10 años → recomendar B como default
-  - Detectar sobredimensionamiento
-
-- [ ] **Regla 2: validación de sobre-dimensionamiento**
-  - Avisar si el kit es demasiado grande para el consumo real
 
 - [ ] **PDF empresa completo**
   - Agregar datos de potencia contratada y tensión al informe empresa
@@ -510,11 +600,8 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
   - Hoy usa $220 fijo cuando no hay monto en la boleta
   - Tabla de precios referenciales por distribuidora y tarifa
 
-- [ ] **Envío de resultados por email al lead**
-  - Al capturar el lead, enviar también al cliente un resumen con KPIs y PFV recomendada
-
-- [ ] **Mejora de la landing page**
-  - Testimonios, casos de uso, beneficios clave antes del CTA al simulador
+- [ ] **Corregir advertencia de middleware**
+  - Renombrar `middleware.ts` → `proxy.ts` (convención Next.js 16)
 
 ### Baja prioridad / futuro
 
