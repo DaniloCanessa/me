@@ -7,7 +7,7 @@ export default function HeroSection() {
       {/* Nav */}
       <nav className="absolute top-0 left-0 right-0 z-20 px-6 py-5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+          <Image src="/images/logotipo.png" alt="Mercado Energy" width={300} height={90} className="h-20 w-auto" />
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white">
             <a href="#soluciones" className="hover:text-[#ade1ed] transition-colors">Soluciones</a>
             <a href="#proyectos" className="hover:text-[#ade1ed] transition-colors">Proyectos</a>
@@ -24,14 +24,16 @@ export default function HeroSection() {
       </nav>
 
       {/* Background */}
-      <div className="absolute inset-0 bg-[#010101]">
-        <Image
-          src="/images/proyecto-coscaya.jpg"
-          alt="Instalación solar Mercado Energy"
-          fill
-          className="object-cover opacity-40"
-          priority
-        />
+      <div className="absolute inset-0 bg-[#010101] overflow-hidden">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-50"
+        >
+          <source src="/videos/video-poroma.mp4" type="video/mp4" />
+        </video>
       </div>
 
       {/* Content */}
