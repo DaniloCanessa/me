@@ -9,8 +9,8 @@ export default function Footer() {
 
           {/* Logo + descripción */}
           <div className="md:col-span-2">
-            <div className="inline-block bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 mb-4">
-              <Image src="/images/logotipo-2.png" alt="Mercado Energy" width={280} height={84} className="h-[4.5rem] w-auto" />
+            <div className="inline-block bg-white/25 backdrop-blur-sm rounded-xl px-4 py-3 mb-4">
+              <Image src="/images/logotipo-2.png" alt="Mercado Energy" width={560} height={168} className="h-[9rem] w-auto" />
             </div>
             <p className="text-white/50 text-sm leading-relaxed max-w-sm">
               Soluciones energéticas fotovoltaicas para hogares y empresas en Chile.
