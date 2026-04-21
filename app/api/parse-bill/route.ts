@@ -44,10 +44,16 @@ export interface ExtractedBill {
 
 // ─── Prompt ───────────────────────────────────────────────────────────────────
 
-function buildPrompt(): string {
-  return `Eres un asistente especializado en leer boletas eléctricas chilenas (Enel, CGE, Chilquinta, Frontel, Saesa, etc.).
+function buildPrompt(source: 'visual' | 'excel' = 'visual'): string {
+  const intro = source === 'excel'
+    ? `Eres un asistente especializado en interpretar datos de consumo eléctrico chileno exportados desde portales de distribuidoras (Enel, CGE, Chilquinta, Frontel, Saesa, etc.) en formato Excel/CSV.
 
-Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el siguiente formato JSON estricto:
+El texto adjunto proviene de un archivo Excel convertido a CSV. Las columnas pueden tener nombres variados según la distribuidora. Identifica los datos de consumo mensual y extrae TODA la información disponible en el siguiente formato JSON estricto:`
+    : `Eres un asistente especializado en leer boletas eléctricas chilenas (Enel, CGE, Chilquinta, Frontel, Saesa, etc.).
+
+Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el siguiente formato JSON estricto:`;
+
+  return `${intro}
 
 {
   "distribuidora": "nombre de la empresa distribuidora o null",
@@ -57,16 +63,16 @@ Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el s
   "potenciaConectadaKW": número en kW (ej: 8.8) o null — busca 'Potencia conectada', 'Potencia contratada', 'Cap. instalada',
   "amperajeA": número en amperes (ej: 40) o null — busca 'Amperaje', 'Amp', 'A' junto al empalme,
 
-  "fechaLimiteCambioTarifa": "fecha como aparece en la boleta o null",
-  "fechaTerminoTarifa": "fecha como aparece en la boleta o null",
+  "fechaLimiteCambioTarifa": "fecha como aparece o null",
+  "fechaTerminoTarifa": "fecha como aparece o null",
 
   "periods": [
     {
-      "month": número 1-12 — si el período cruza dos meses (ej: 17 jul → 18 ago), usa el mes de TÉRMINO (agosto = 8),
+      "month": número 1-12,
       "year": año con 4 dígitos,
-      "consumptionKWh": consumo neto en kWh — si el cliente inyecta más de lo que consume puede ser negativo,
+      "consumptionKWh": consumo neto en kWh — número positivo normalmente; negativo si inyecta más de lo que consume,
       "variableAmountCLP": monto variable en pesos CLP como entero o null,
-      "totalAmountCLP": monto total a pagar de la boleta en CLP (incluye todos los cargos + IVA) como entero o null — busca 'Total a pagar', 'Monto a pagar', 'Total facturado',
+      "totalAmountCLP": monto total a pagar en CLP (incluye todos los cargos + IVA) como entero o null — busca 'Total a pagar', 'Monto a pagar', 'Total facturado', 'Total',
       "powerChargeCLP": cargo por potencia o demanda en CLP como entero o null — busca 'Cargo por potencia', 'Cargo por demanda máxima', 'Cargo por demanda', 'Cargo por potencia contratada',
       "kWhPriceCLP": precio promedio por kWh como entero o null,
 
@@ -74,24 +80,23 @@ Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el s
       "tarifaDiaCLPPerKWh": precio en horas día como entero o null — solo en BT4.x/AT,
       "tarifaNocheCLPPerKWh": precio en horas noche como entero o null — solo en BT4.x/AT,
 
-      "energiaInyectadaKWh": kWh inyectados a la red como positivo (ej: 120) o null — busca 'Energía inyectada', 'Inyección', 'Excedentes',
+      "energiaInyectadaKWh": kWh inyectados a la red como positivo o null,
       "valorInyeccionCLPPerKWh": precio que paga la distribuidora por kWh inyectado o null,
 
-      "isCurrent": true solo para el período principal de la boleta, false para meses históricos
+      "isCurrent": true solo para el período más reciente, false para el resto
     }
   ],
 
-  "confidence": "high" si los datos son claros y completos, "medium" si hay ambigüedad o datos parciales, "low" si la imagen es ilegible o no es una boleta eléctrica,
-  "notes": "observación breve si hay algo relevante (ej: 'cliente ya inyecta energía', 'tarifa horaria detectada') o null"
+  "confidence": "high" si los datos son claros, "medium" si hay ambigüedad o datos parciales, "low" solo si es imposible extraer períodos de consumo,
+  "notes": "observación breve o null"
 }
 
 Reglas importantes:
-- Incluye TODOS los meses visibles: el período actual Y el historial (tablas, gráficos de barras, columnas de consumo anteriores).
-- Si ves amperaje (ej: 40A) pero no potencia, calcula: potenciaConectadaKW = amperajeA × 220 / 1000.
-- Los montos deben estar en CLP sin puntos de miles (ej: 45000, no 45.000).
-- Para la energía inyectada: conserva el signo tal como aparece en la boleta; no lo conviertas.
-- Períodos de medición que cruzan meses (ej: 17 jul → 18 ago): asigna al mes de TÉRMINO (agosto). Esto es lo estándar en boletas chilenas.
-- Si la imagen es ilegible o no es una boleta eléctrica: confidence "low" y periods [].
+- Incluye TODOS los períodos/meses visibles en los datos.
+- Los montos deben estar en CLP sin puntos de miles (ej: 45000, no 45.000). Si vienen con puntos de miles o comas decimales, conviértelos a entero.
+- Si ves fechas en formato "ene-24", "01/2024", "2024-01" u otros, interprétalas correctamente como month/year.
+- Si la columna de consumo tiene valores como "450 kWh" o "450,00", extrae solo el número.
+- ${source === 'excel' ? 'Si el Excel no contiene datos de consumo eléctrico: confidence "low" y periods [].' : 'Si la imagen es ilegible o no es una boleta eléctrica: confidence "low" y periods [].'}
 - Devuelve SOLO el JSON, sin texto adicional ni bloques de código.`;
 }
 
@@ -194,9 +199,10 @@ export async function POST(request: Request) {
       if (!excelText.trim()) {
         return Response.json({ ok: false, reason: 'unreadable', message: 'El archivo Excel está vacío o no se pudo leer' });
       }
+      console.log('[parse-bill] Excel text preview:', excelText.slice(0, 500));
       messages = [{
         role: 'user',
-        content: `El siguiente contenido proviene de un archivo Excel con datos de boletas eléctricas chilenas. Analízalo y extrae la información solicitada.\n\n${excelText}\n\n${buildPrompt()}`,
+        content: `${buildPrompt('excel')}\n\nDatos del archivo Excel:\n\n${excelText}`,
       }];
     } else {
       const base64 = Buffer.from(bytes).toString('base64');
@@ -205,7 +211,7 @@ export async function POST(request: Request) {
         ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
         : { type: 'image', source: { type: 'base64', media_type: file.type as string, data: base64 } };
       if (isPdf) headers['anthropic-beta'] = 'pdfs-2024-09-25';
-      messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt() }] }];
+      messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt('visual') }] }];
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -243,7 +249,9 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, reason: 'unreadable', message: 'No se pudo interpretar la respuesta del análisis' }, { status: 422 });
     }
 
+    console.log('[parse-bill] confidence:', extracted.confidence, 'periods:', extracted.periods.length);
     if (extracted.confidence === 'low' || extracted.periods.length === 0) {
+      console.log('[parse-bill] rejected — confidence or empty periods. notes:', extracted.notes);
       return Response.json({ ok: false, reason: 'unreadable', message: 'No se pudo leer la boleta con suficiente claridad' });
     }
 
