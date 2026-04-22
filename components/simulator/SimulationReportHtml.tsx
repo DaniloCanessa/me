@@ -321,6 +321,12 @@ export default function SimulationReportHtml({
             <div style={{ flex: 1 }}>
               <KVRow label="Distribuidora" value={supply.distribuidora ?? 'No especificada'} />
               <KVRow label="Tarifa" value={supply.tarifa === 'unknown' ? 'BT1 (referencia)' : supply.tarifa} />
+              {isBusiness && supply.potenciaContratadaKW != null && (
+                <KVRow label="Potencia contratada" value={`${supply.potenciaContratadaKW} kW`} />
+              )}
+              {isBusiness && (
+                <KVRow label="Tensión de suministro" value={supply.tensionSuministro ?? 'No especificada'} />
+              )}
             </div>
             <div style={{ flex: 1 }}>
               <KVRow label="Consumo promedio mensual" value={`${profile.averageMonthlyKWh} kWh/mes`} />
