@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 21 de abril 2026
+> Última actualización: 23 de abril 2026 (sesión 3)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://me-fawn-eight.vercel.app
 
@@ -21,6 +21,18 @@ El flujo termina con una solicitud de contacto que deriva el lead a un especiali
 El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de boletas (múltiples archivos + Excel), captura de leads por email, lógica de 3 escenarios de PFV (residencial) + dimensionamiento continuo (empresa), baterías modulares (dropdowns 1–10 residencial, 1–100 empresa), toggle base/futuro en resultados, gráfico de líneas mensual, exportación de informe PDF (residencial y empresa), interpolación estacional de meses faltantes, aviso de sobredimensionamiento (Regla 2).
 
 La landing page está completamente construida con identidad visual de marca. El simulador usa la paleta de colores de Mercado Energy (azules) en lugar de verdes.
+
+**Desarrollos sesión 3 (23 abril 2026):**
+- PDF empresa: se agregaron campos **Potencia contratada** (kW) y **Tensión de suministro** (BT/AT) en el bloque "Información eléctrica" del informe. Aparecen solo cuando `isBusiness === true`. Archivo modificado: `SimulationReportHtml.tsx` (bloque líneas ~320–335).
+
+**Desarrollos sesión 2 (21 abril 2026):**
+- Fix análisis tarifario: BT1 eliminada de lista de tarifas comparables para clientes en BT2/BT3 (instalaciones trifásicas no pueden bajar a BT1 sin cambio de infraestructura)
+- Aviso de capacidad de empalme: nuevo bloque informativo en paso 7 cuando equipos futuros superan el 60% o 90% del empalme. Incluye amperajes de pico por tipo de equipo y sugiere empalmes adicionales de 40A. Mercado Energy puede gestionar la factibilidad con la distribuidora.
+- Selector de tipo de cargador EV: Modo 2 (16A) o Wallbox (32A) en paso 6
+- Selector de reserva de batería: 10%–50% configurable por el usuario en el bloque ámbar del paso 7 (residencial y empresa). Default 30%.
+- Fix bug financiero batería: `batteryDischargeSavingsCLP` no se contabilizaba en el beneficio anual. Corregido: ahorro nocturno de batería ahora se suma correctamente. Nueva línea "Ahorro nocturno por batería" visible en el desglose financiero.
+- UI paso 5: leyenda de colores permanente en el gráfico de barras (azul = mes mayor consumo, verde = datos reales, gris = interpolados)
+- UI paso 7: botones de consumo actual/futuro y escenarios A/B/C rediseñados con borde y relleno explícito para mayor claridad visual. Estado inicial del toggle = "Consumo actual".
 
 ---
 
@@ -161,7 +173,7 @@ mercado-energy/
 ### Paso 6 — Consumos futuros (`StepFutureConsumption`)
 - **Aire acondicionado:** steppers por tamaño BTU (9.000 / 12.000 / 18.000)
 - **Termo eléctrico:** steppers de ocupantes → calcula capacidad y kWh/mes
-- **Auto eléctrico:** cantidad de autos → estima +33% de consumo por auto
+- **Auto eléctrico:** cantidad de autos + **tipo de cargador** (Modo 2 cable portable 16A / Wallbox 32A)
 - Resumen en vivo: consumo actual vs. proyectado
 - **Las baterías ya NO se seleccionan aquí** — se configuran en el paso 7 (Escenario C)
 
@@ -232,16 +244,19 @@ Empresa:      empalmeMaxKW = potenciaContratadaKW  (directo en kW, sin conversi�
 
 ### Parámetros clave (en `lib/constants.ts`)
 ```typescript
-SOLAR_DEFAULTS.batteryUsableFraction        = 0.70  // 70% disponible para uso nocturno
+SOLAR_DEFAULTS.batteryUsableFraction        = 0.70  // default 70% disponible (reserva 30%)
 SOLAR_DEFAULTS.batteryModuleKWh             = 5     // kWh por módulo de batería
 SOLAR_DEFAULTS.batteryModulePriceCLP        = 1_500_000  // CLP por módulo
 SOLAR_DEFAULTS.batteryDailyCycleEfficiency  = 0.80  // eficiencia ida+vuelta del ciclo
 ```
 
+**Reserva configurable por el usuario (sesión 2):** el usuario puede elegir entre 10%–50% en el paso 7. El valor se pasa como `batteryUsableFraction` en `SimulatorInput` y sobreescribe el default. A mayor reserva = menos kWh usables en la noche; a menor reserva = más kWh aprovechados pero menos respaldo ante cortes.
+
 ### Modelo de carga y descarga (por mes en `calcMonthlyBalance`)
 ```
-capacidad_usable_diaria  = batteryCapacityKWh × 0.70
-reserva_emergencia       = batteryCapacityKWh × 0.30  // nunca se descarga
+// batteryUsableFraction viene de SimulatorInput (configurable, default 0.70)
+capacidad_usable_diaria  = batteryCapacityKWh × batteryUsableFraction
+reserva_emergencia       = batteryCapacityKWh × (1 - batteryUsableFraction)
 
 máx_carga_mensual  = (capacidad_usable_diaria / eficiencia) × días_del_mes
 máx_descarga_mensual = capacidad_usable_diaria × eficiencia × días_del_mes
@@ -253,6 +268,14 @@ descarga_batería = min(
   consumo_nocturno
 )
 ```
+
+### Beneficio mensual — fórmula corregida (sesión 2)
+```
+totalMonthlyBenefitCLP = selfConsumptionSavingsCLP     // ahorro diurno (autoconsumo × kWhPrice)
+                       + injectionIncomeCLP             // inyección × (kWhPrice × 0.5)
+                       + batteryDischargeSavingsCLP     // descarga nocturna × kWhPrice (antes faltaba → bug)
+```
+Bug anterior: el ahorro nocturno de la batería no se contabilizaba, lo que hacía que menor reserva apareciera con *peor* payback aunque económicamente fuera mejor.
 
 ---
 
@@ -591,8 +614,8 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 - [ ] **Regla 1: escenario óptimo automático**
   - Si el payback de A es > 12 años Y el de B es < 10 años → recomendar B como default
 
-- [ ] **PDF empresa completo**
-  - Agregar datos de potencia contratada y tensión al informe empresa
+- [x] **PDF empresa completo**
+  - Potencia contratada y tensión de suministro agregados al informe empresa (sesión 3)
 
 ### Media prioridad
 
