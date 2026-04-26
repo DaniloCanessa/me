@@ -11,7 +11,9 @@
       "Bash(gh run *)",
       "WebFetch(domain:me-ebec53gj9-danilo-canessas-projects.vercel.app)",
       "WebFetch(domain:me-fawn-eight.vercel.app)",
-      "Bash(git commit -m 'fix: usar logotipo.png como logo principal en hero y footer *)"
+      "Bash(git commit -m 'fix: usar logotipo.png como logo principal en hero y footer *)",
+      "Bash(npm run *)",
+      "Bash(node -e ' *)"
     ]
   }
 }

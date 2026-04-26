@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { AcBtu, FutureConsumption } from '@/lib/types';
+import type { AcBtu, EVChargerType, FutureConsumption } from '@/lib/types';
 import {
   calcACConsumption,
   calcWaterHeater,
@@ -140,6 +140,9 @@ export default function StepFutureConsumption({
   const [carCount, setCarCount] = useState(() =>
     initialData?.evCharger?.carCount ?? 1,
   );
+  const [chargerType, setChargerType] = useState<EVChargerType>(() =>
+    initialData?.evCharger?.chargerType ?? 'mode2',
+  );
 
   // ── Estado Equipos flexibles (solo empresa) ───────────────────────────────
   const [flexibleEquipment, setFlexibleEquipment] = useState(
@@ -179,6 +182,7 @@ export default function StepFutureConsumption({
     const evCharger = hasEV
       ? {
           carCount,
+          chargerType,
           estimatedIncreasePercent: Math.round(
             SOLAR_DEFAULTS.evConsumptionIncreasePerCar * carCount * 100,
           ),
@@ -322,6 +326,33 @@ export default function StepFutureConsumption({
                   max={4}
                   onChange={setCarCount}
                 />
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-700 mb-2">Tipo de cargador</p>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'mode2'   as EVChargerType, label: 'Cable portable', sub: 'Modo 2 · 16 A · más común' },
+                    { value: 'wallbox' as EVChargerType, label: 'Wallbox',         sub: 'Modo 3 · 32 A · instalación fija' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setChargerType(opt.value)}
+                      className={[
+                        'flex-1 rounded-xl border-2 px-3 py-2.5 text-left transition-colors',
+                        chargerType === opt.value
+                          ? 'border-[#389fe0] bg-[#dde3e9]/40'
+                          : 'border-gray-200 bg-white hover:border-gray-300',
+                      ].join(' ')}
+                    >
+                      <p className={`text-xs font-semibold ${chargerType === opt.value ? 'text-[#1d65c5]' : 'text-gray-700'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{opt.sub}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-between items-center bg-[#dde3e9]/50 rounded-xl px-4 py-2">

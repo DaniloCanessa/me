@@ -87,12 +87,14 @@ export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisRes
     : calcMonthlyCost(tarifa);
 
   // ── Tarifas comparables (no cruzar BT↔AT sin cambio de infraestructura) ───
-  // BT1 es exclusivamente residencial (< 10 kW monofásico) — nunca comparable para empresa
+  // BT1 es exclusivamente monofásico < 10 kW — nunca se sugiere como cambio:
+  // si el cliente ya está en BT1, quedaría filtrado por t !== tarifa; si está en
+  // BT2/BT3 (trifásico), cambiar a BT1 requeriría bajar la infraestructura.
   const isAT = tarifa.startsWith('AT');
   const comparableTariffs: string[] = isAT
     ? ['AT2', 'AT3', 'AT4.1', 'AT4.2', 'AT4.3']
     : isResidential
-      ? ['BT1', 'BT2', 'BT3']
+      ? ['BT2', 'BT3']
       : ['BT2', 'BT3', 'BT4.1', 'BT4.2', 'BT4.3'];
 
   const alternatives: TariffAlternative[] = comparableTariffs

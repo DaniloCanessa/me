@@ -29,8 +29,11 @@ export function calcKWhPriceFromBill(variableAmountCLP: number, measuredKWh: num
 
 // ─── Selección de kits residenciales ─────────────────────────────────────────
 
-export function selectKits(empalmeMaxKW: number): { kitA: SolarKit; kitB: SolarKit | null } {
-  const all = KIT_CATALOG
+export function selectKits(
+  empalmeMaxKW: number,
+  catalog?: SolarKit[],
+): { kitA: SolarKit; kitB: SolarKit | null } {
+  const all = (catalog ?? KIT_CATALOG)
     .filter((k) => !k.includesBattery)
     .sort((a, b) => a.sizekWp - b.sizekWp);
 
@@ -48,22 +51,35 @@ export function buildBusinessKit(
   monthlyConsumptionKWh: number,
   annualProductionPerKWp: number,
   empalmeMaxKW?: number,
+  opts?: {
+    businessCoverageTarget?: number;
+    netBillingMaxKWp?: number;
+    panelWattage?: number;
+    panelAreaM2?: number;
+    costPerKWpCLP?: number;
+  },
 ): SolarKit {
+  const coverageTarget  = opts?.businessCoverageTarget ?? SOLAR_DEFAULTS.businessCoverageTarget;
+  const maxNetKWp       = opts?.netBillingMaxKWp       ?? DFL4.netBillingMaxKWp;
+  const panelWattage    = opts?.panelWattage            ?? SOLAR_DEFAULTS.panelWattage;
+  const panelAreaM2     = opts?.panelAreaM2             ?? SOLAR_DEFAULTS.panelAreaM2;
+  const costPerKWp      = opts?.costPerKWpCLP           ?? BUSINESS_DEFAULTS.costPerKWpCLP;
+
   const annualConsumption = monthlyConsumptionKWh * 12;
-  const rawKWp = (annualConsumption * SOLAR_DEFAULTS.businessCoverageTarget) / annualProductionPerKWp;
+  const rawKWp = (annualConsumption * coverageTarget) / annualProductionPerKWp;
   const uncappedKWp = Math.ceil(rawKWp * 2) / 2;
   const cappedByEmpalme = empalmeMaxKW != null ? Math.min(uncappedKWp, empalmeMaxKW) : uncappedKWp;
   // Art. 149 bis DFL4: máximo 300 kW por inmueble para net billing
-  const sizekWp = Math.min(cappedByEmpalme, DFL4.netBillingMaxKWp);
-  const exceedsNetBillingLimit = uncappedKWp > DFL4.netBillingMaxKWp;
-  const panelCount = Math.ceil((sizekWp * 1000) / SOLAR_DEFAULTS.panelWattage);
+  const sizekWp = Math.min(cappedByEmpalme, maxNetKWp);
+  const exceedsNetBillingLimit = uncappedKWp > maxNetKWp;
+  const panelCount = Math.ceil((sizekWp * 1000) / panelWattage);
   return {
     id: `business-${sizekWp}kwp`,
     sizekWp,
     includesBattery: false,
     panelCount,
-    estimatedAreaM2: Math.round(panelCount * SOLAR_DEFAULTS.panelAreaM2),
-    priceReferenceCLP: Math.round(sizekWp * BUSINESS_DEFAULTS.costPerKWpCLP),
+    estimatedAreaM2: Math.round(panelCount * panelAreaM2),
+    priceReferenceCLP: Math.round(sizekWp * costPerKWp),
     exceedsNetBillingLimit,
   };
 }
@@ -79,6 +95,8 @@ function calcMonthlyBalance(
   fixedChargeCLP: number,
   batteryCapacityKWh: number,
   daysInMonth: number,
+  batteryUsableFraction: number,
+  batteryCycleEfficiency: number,
 ): MonthlyEnergyBalance {
   const daytimeConsumption  = consumptionKWh * SOLAR_DEFAULTS.dayConsumptionRatio;
   const nighttimeConsumption = consumptionKWh * SOLAR_DEFAULTS.nightConsumptionRatio;
@@ -95,14 +113,13 @@ function calcMonthlyBalance(
     const surplus = productionKWh - daytimeConsumption;
 
     if (batteryCapacityKWh > 0) {
-      // Solo el 70% de la capacidad se usa para descarga nocturna (30% = reserva de cortes)
-      const maxDailyUsable = batteryCapacityKWh * SOLAR_DEFAULTS.batteryUsableFraction;
-      const maxMonthlyCharge    = (maxDailyUsable / SOLAR_DEFAULTS.batteryDailyCycleEfficiency) * daysInMonth;
-      const maxMonthlyDischarge = maxDailyUsable * SOLAR_DEFAULTS.batteryDailyCycleEfficiency * daysInMonth;
+      const maxDailyUsable = batteryCapacityKWh * batteryUsableFraction;
+      const maxMonthlyCharge    = (maxDailyUsable / batteryCycleEfficiency) * daysInMonth;
+      const maxMonthlyDischarge = maxDailyUsable * batteryCycleEfficiency * daysInMonth;
 
       batteryChargeKWh    = Math.min(surplus, maxMonthlyCharge);
       batteryDischargeKWh = Math.min(
-        batteryChargeKWh * SOLAR_DEFAULTS.batteryDailyCycleEfficiency,
+        batteryChargeKWh * batteryCycleEfficiency,
         maxMonthlyDischarge,
         nighttimeConsumption,
       );
@@ -122,10 +139,11 @@ function calcMonthlyBalance(
     consumedFromGridKWh = (daytimeConsumption - productionKWh) + nighttimeConsumption;
   }
 
-  const selfConsumptionSavingsCLP = Math.round(selfConsumptionKWh * kWhPriceCLP);
-  const injectionIncomeCLP        = Math.round(injectedToGridKWh  * injectionValueCLP);
-  const totalMonthlyBenefitCLP    = selfConsumptionSavingsCLP + injectionIncomeCLP;
-  const netGridCostCLP            = Math.round(consumedFromGridKWh * kWhPriceCLP + fixedChargeCLP);
+  const selfConsumptionSavingsCLP  = Math.round(selfConsumptionKWh   * kWhPriceCLP);
+  const injectionIncomeCLP         = Math.round(injectedToGridKWh    * injectionValueCLP);
+  const batteryDischargeSavingsCLP = Math.round(batteryDischargeKWh  * kWhPriceCLP);
+  const totalMonthlyBenefitCLP     = selfConsumptionSavingsCLP + injectionIncomeCLP + batteryDischargeSavingsCLP;
+  const netGridCostCLP             = Math.round(consumedFromGridKWh  * kWhPriceCLP + fixedChargeCLP);
 
   return {
     month,
@@ -140,6 +158,7 @@ function calcMonthlyBalance(
     consumedFromGridKWh:    Math.round(consumedFromGridKWh),
     selfConsumptionSavingsCLP,
     injectionIncomeCLP,
+    batteryDischargeSavingsCLP,
     totalMonthlyBenefitCLP,
     netGridCostCLP,
     originalGridCostCLP,
@@ -157,9 +176,12 @@ export function runSimulation(
   const region = getRegionById(input.regionId);
   if (!region) throw new Error(`Región no encontrada: ${input.regionId}`);
 
-  const kWhPriceCLP      = input.energyPrice.kWhPriceCLP;
-  const fixedChargeCLP   = input.fixedChargeCLP ?? CHILE_BT1.fixedChargeCLP;
-  const injectionValueCLP = kWhPriceCLP * SOLAR_DEFAULTS.injectionValueFactor;
+  const kWhPriceCLP           = input.energyPrice.kWhPriceCLP;
+  const fixedChargeCLP        = input.fixedChargeCLP ?? CHILE_BT1.fixedChargeCLP;
+  const injectionFactor       = input.injectionValueFactor ?? SOLAR_DEFAULTS.injectionValueFactor;
+  const injectionValueCLP     = kWhPriceCLP * injectionFactor;
+  const batteryUsableFraction = input.batteryUsableFraction ?? SOLAR_DEFAULTS.batteryUsableFraction;
+  const batteryCycleEff       = input.batteryCycleEfficiency ?? SOLAR_DEFAULTS.batteryDailyCycleEfficiency;
 
   const monthly: MonthlyEnergyBalance[] = [];
   for (let m = 1; m <= 12; m++) {
@@ -174,6 +196,8 @@ export function runSimulation(
         fixedChargeCLP,
         batteryCapacityKWh,
         DAYS_IN_MONTH[m],
+        batteryUsableFraction,
+        batteryCycleEff,
       ),
     );
   }
@@ -196,17 +220,18 @@ export function runSimulation(
       Math.round(((totalSelfConsumptionKWh + totalBatteryDischargeKWh) / totalConsumptionKWh) * 100),
       100,
     ),
-    totalSelfConsumptionSavingsCLP: monthly.reduce((s, m) => s + m.selfConsumptionSavingsCLP, 0),
-    totalInjectionIncomeCLP:        monthly.reduce((s, m) => s + m.injectionIncomeCLP, 0),
-    totalAnnualBenefitCLP:          monthly.reduce((s, m) => s + m.totalMonthlyBenefitCLP, 0),
+    totalSelfConsumptionSavingsCLP:  monthly.reduce((s, m) => s + m.selfConsumptionSavingsCLP, 0),
+    totalInjectionIncomeCLP:         monthly.reduce((s, m) => s + m.injectionIncomeCLP, 0),
+    totalBatteryDischargeSavingsCLP: monthly.reduce((s, m) => s + m.batteryDischargeSavingsCLP, 0),
+    totalAnnualBenefitCLP:           monthly.reduce((s, m) => s + m.totalMonthlyBenefitCLP, 0),
     totalNetGridCostCLP:            monthly.reduce((s, m) => s + m.netGridCostCLP, 0),
     totalOriginalGridCostCLP:       monthly.reduce((s, m) => s + m.originalGridCostCLP, 0),
   };
 
   const systemCostCLP = systemCostOverrideCLP ?? kit.priceReferenceCLP;
   const annualBenefit = energyBalance.totalAnnualBenefitCLP;
-  const r = DFL4.discountRateReal;
-  const n = SOLAR_DEFAULTS.systemLifeYears;
+  const r = input.discountRateReal ?? DFL4.discountRateReal;
+  const n = input.systemLifeYears  ?? SOLAR_DEFAULTS.systemLifeYears;
 
   // Factor de anualidad: (1 - (1+r)^-n) / r
   const annuityFactor = (1 - Math.pow(1 + r, -n)) / r;
@@ -233,8 +258,9 @@ export function runSimulation(
     injectionValuePerKWhCLP: Math.round(injectionValueCLP),
   };
 
+  const co2Factor = input.co2FactorKgPerKWh ?? SOLAR_DEFAULTS.co2FactorKgPerKWh;
   const annualCO2AvoidedKg = Math.round(
-    energyBalance.totalProductionKWh * SOLAR_DEFAULTS.co2FactorKgPerKWh,
+    energyBalance.totalProductionKWh * co2Factor,
   );
   const environmental: EnvironmentalSummary = {
     annualCO2AvoidedKg,
@@ -249,11 +275,12 @@ export function runSimulation(
 export function calcThreeScenarios(
   input: SimulatorInput,
   batteryCount: number,
+  catalog?: SolarKit[],
 ): KitScenarios {
-  const empalmeMaxKW = input.empalmeMaxKW!;
-  const { kitA, kitB } = selectKits(empalmeMaxKW);
-  const batteryKWh      = batteryCount * SOLAR_DEFAULTS.batteryModuleKWh;
-  const batteryCostCLP  = batteryCount * SOLAR_DEFAULTS.batteryModulePriceCLP;
+  const empalmeMaxKW    = input.empalmeMaxKW!;
+  const { kitA, kitB }  = selectKits(empalmeMaxKW, catalog);
+  const batteryKWh      = batteryCount * (input.batteryModuleKWh    ?? SOLAR_DEFAULTS.batteryModuleKWh);
+  const batteryCostCLP  = batteryCount * (input.batteryModulePriceCLP ?? SOLAR_DEFAULTS.batteryModulePriceCLP);
 
   return {
     A:    runSimulation(input, kitA, 0),
@@ -266,18 +293,30 @@ export function calcThreeScenarios(
 
 // ─── Simulación empresa (un solo escenario) ───────────────────────────────────
 
+function businessOpts(input: SimulatorInput) {
+  return {
+    businessCoverageTarget: input.businessCoverageTarget,
+    netBillingMaxKWp:       input.netBillingMaxKWp,
+    panelWattage:           input.panelWattageWp,
+    panelAreaM2:            input.panelAreaM2,
+    costPerKWpCLP:          input.costPerKWpBusinessCLP,
+  };
+}
+
 export function runBusinessSimulation(input: SimulatorInput): SimulatorResult {
   const region = getRegionById(input.regionId);
   if (!region) throw new Error(`Región no encontrada: ${input.regionId}`);
-  const kit = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW);
+  const kit = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW, businessOpts(input));
   return runSimulation(input, kit, 0);
 }
 
 export function runBusinessSimulationWithBattery(input: SimulatorInput, batteryCount: number): SimulatorResult {
   const region = getRegionById(input.regionId);
   if (!region) throw new Error(`Región no encontrada: ${input.regionId}`);
-  const kit = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW);
-  const batteryKWh = batteryCount * SOLAR_DEFAULTS.batteryModuleKWh;
-  const totalCost  = kit.priceReferenceCLP + batteryCount * SOLAR_DEFAULTS.batteryModulePriceCLP;
+  const kit       = buildBusinessKit(input.monthlyConsumptionKWh, region.annualProductionKWhPerKWp, input.empalmeMaxKW, businessOpts(input));
+  const moduleKWh = input.batteryModuleKWh    ?? SOLAR_DEFAULTS.batteryModuleKWh;
+  const moduleClp = input.batteryModulePriceCLP ?? SOLAR_DEFAULTS.batteryModulePriceCLP;
+  const batteryKWh = batteryCount * moduleKWh;
+  const totalCost  = kit.priceReferenceCLP + batteryCount * moduleClp;
   return runSimulation(input, kit, batteryKWh, totalCost);
 }

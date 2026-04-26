@@ -1,8 +1,23 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 23 de abril 2026 (sesión 3)
+> Última actualización: 26 de abril 2026 (sesión 9)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://me-fawn-eight.vercel.app
+
+---
+
+## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
+
+**Sesión 9 completa. CRM avanzado: asignación de vendedor, vista Kanban y recordatorios de seguimiento.**
+
+**SQL ya ejecutado en Supabase** (`supabase/leads_followup.sql`):
+- `follow_up_date DATE` en tabla `leads`
+- `assigned_to UUID REFERENCES users(id)` en tabla `leads`
+
+Al iniciar la próxima sesión, continuar con las mejoras de prioridad media (ver sección Pendientes):
+- Precio de kWh dinámico por distribuidora/tarifa
+- Notificaciones por email cuando llega un lead nuevo
+- Pipeline de ventas: métricas de conversión por etapa en el dashboard
 
 ---
 
@@ -12,15 +27,48 @@ Plataforma web de simulación solar fotovoltaica para Chile. Permite a clientes 
 
 El flujo termina con una solicitud de contacto que deriva el lead a un especialista para visita técnica.
 
+**Visión de largo plazo (desde sesión 4):** evolucionar hacia una plataforma completa de gestión comercial y energética con backoffice de configuración, cotizador online y CRM de leads.
+
 ---
 
 ## Estado actual
 
-**Fase 3 completada. Landing page y contenido público en producción.**
+**Sesión 7: Cotizador operativo, importación masiva de productos desde Excel/CSV, y flujo lead → cotización implementado. Falta ejecutar SQL en Supabase y agregar JWT_SECRET.**
 
 El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de boletas (múltiples archivos + Excel), captura de leads por email, lógica de 3 escenarios de PFV (residencial) + dimensionamiento continuo (empresa), baterías modulares (dropdowns 1–10 residencial, 1–100 empresa), toggle base/futuro en resultados, gráfico de líneas mensual, exportación de informe PDF (residencial y empresa), interpolación estacional de meses faltantes, aviso de sobredimensionamiento (Regla 2).
 
 La landing page está completamente construida con identidad visual de marca. El simulador usa la paleta de colores de Mercado Energy (azules) en lugar de verdes.
+
+**Desarrollos sesión 7 (24 abril 2026) — Cotizador + catálogo + flujo lead:**
+
+- **Fix dropdown cotizador:** removido `overflow-hidden` del card de ítems (`QuoteEditor.tsx:402`) — era el ancestro que cortaba el dropdown por z-index. Dropdown ahora tiene `max-h-60 overflow-y-auto` + `z-[200]` para scroll y superposición correcta.
+- **Fix ProductsManager:** div de cierre faltante para el contenedor `flex gap-4 items-start` — causaba estructura HTML inválida.
+- **Ítem libre en cotizador:** toggle "Desde catálogo" / "Ítem libre" en `AddItemSection` (`QuoteEditor.tsx`). Modo libre muestra 6 botones de acceso rápido (Mano de obra, Despacho, Materiales varios, Ingeniería y proyecto, Puesta en marcha, Garantía extendida) + campo descripción editable + campo **Precio c/IVA directo** (sin costo+margen). Preview de subtotal en tiempo real.
+- **Fix `upsertQuoteItem` (`app/admin/quotes/actions.ts`):** soporta campo `unit_price_direct` (precio final con IVA, se divide por 1.19 para obtener `unit_price_clp`). Fix de bug donde `margen_pct = 0` era tratado como 30 por el `|| 30` — corregido con chequeo explícito de string vacío.
+- **Importación masiva de productos desde Excel/CSV:**
+  - `app/admin/products/import/actions.ts` — Server Action `importProducts(rows[])`: upsert por SKU en lotes de 50. Si el SKU existe se actualiza; si es nuevo se inserta.
+  - `components/admin/ProductImporter.tsx` — componente cliente: drag-and-drop o selección de archivo (`.xlsx`, `.xls`, `.csv`), detección automática de columnas (nombres en español e inglés), mapeo configurable de columnas, normalización de categorías y tipo de cliente, preview de primeros 8 productos, contador de productos válidos, botón de descarga de plantilla de ejemplo.
+  - `app/admin/products/import/page.tsx` — página `/admin/products/import`.
+  - `app/admin/products/page.tsx` — botón "↑ Importar desde Excel" en el header que lleva a la página de importación.
+- **Flujo lead → cotización:**
+  - `createQuoteFromLead(leadId)` en `app/admin/leads/actions.ts` — crea cotización pre-rellena con datos del lead (`client_name`, `client_email`, `client_phone`), setea `lead_id` en la cotización, actualiza status del lead a `'quoted'`, redirige al editor.
+  - `LeadDetail.tsx` actualizado: botón **"+ Nueva cotización"** en el header del drawer (usa `useTransition` + server action). Sección **"Cotizaciones (N)"** muestra todas las cotizaciones vinculadas al lead con número, fecha, monto y estado — clickeables para abrir el editor.
+  - `app/admin/leads/page.tsx` actualizado: fetch de cotizaciones agrupadas por `lead_id` (`quotesMap`), pasadas como prop `quotes` a cada `LeadDetail`. Indicador `"X cot."` en azul debajo del estado en la tabla de leads.
+
+**Desarrollos sesión 5 (24 abril 2026) — Backoffice operativo + inicio Fase 2:**
+- **Fix proxy.ts (Next.js 16):** `middleware.ts` renombrado a `proxy.ts` y función `middleware` → `proxy`. Era requerido por Next.js 16 (v16.0.0 breaking change); sin el cambio las rutas `/admin/*` devolvían 404.
+- **SQL ejecutado en Supabase:** tablas `config_parameters` (15 parámetros) y `products` (14 kits) creadas con seed. Backoffice Fase 1 completamente operativo.
+- **Formateo de valores en ConfigTable:** función `formatValue(key, value)` en `ConfigTable.tsx` — detecta claves `_clp` y aplica formato `$1.000.000` (Intl.NumberFormat es-CL). Otros valores usan separador de miles sin símbolo de moneda.
+- **Inicio Fase 2 — Cotizador:** tablas `quotes` + `quote_items` creadas en Supabase con numeración automática `COT-YYYY-NNN` (trigger PostgreSQL). `@react-pdf/renderer` instalado. Tipos `Quote`, `QuoteItem`, `QuoteStatus` agregados a `lib/types.ts`. DB helper `lib/db/quotes.ts` con `getQuotes()`, `getQuote(id)`, `getQuoteByToken(token)`.
+
+**Desarrollos sesión 4 (23 abril 2026) — Fase 1 Backoffice:**
+- **Admin layout + sidebar:** `app/admin/layout.tsx` + `components/admin/AdminSidebar.tsx`. Sidebar con navegación a Leads / Productos / Configuración. Se muestra solo cuando hay sesión activa (no en login).
+- **Backoffice de configuración (`/admin/config`):** tabla editable de parámetros del simulador agrupados por categoría (simulator, battery, business, regulatory). Edición inline con Enter/Escape. Server Action `updateConfigParam`. Tabla `config_parameters` en Supabase (15 parámetros).
+- **Catálogo de productos (`/admin/products`):** CRUD completo (crear, editar, activar/desactivar, eliminar). Modal con specs dinámicos por categoría (solar_kit, battery). Tabla `products` en Supabase con 14 kits seed. Filtros por categoría.
+- **Migración del simulador a Server Component:** `app/simulator/page.tsx` convertido a Server Component que inyecta `config` y `catalog` desde Supabase. Lógica de wizard extraída a `app/simulator/SimulatorClient.tsx`.
+- **Config dinámica en el motor de cálculo:** `lib/types.ts` agrega `SimulatorConfig` y extiende `SimulatorInput` con overrides opcionales. `lib/calculations.ts` lee config del input con fallback a `constants.ts`. `buildBusinessKit()` acepta `opts` con parámetros configurables. Catálogo pasado como parámetro a `selectKits()` y `calcThreeScenarios()`.
+- **DB helpers:** `lib/db/config.ts` y `lib/db/catalog.ts` — fetch server-side con fallback graceful a constants.ts si la DB no responde.
+- **StepResults actualizado:** acepta `config?: SimulatorConfig` y `catalog?: SolarKit[]`. `buildBaseInput()` recibe config y propaga overrides al SimulatorInput.
 
 **Desarrollos sesión 3 (23 abril 2026):**
 - PDF empresa: se agregaron campos **Potencia contratada** (kW) y **Tensión de suministro** (BT/AT) en el bloque "Información eléctrica" del informe. Aparecen solo cuando `isBusiness === true`. Archivo modificado: `SimulationReportHtml.tsx` (bloque líneas ~320–335).
@@ -46,8 +94,10 @@ La landing page está completamente construida con identidad visual de marca. El
 | Hosting | Vercel (deploy automático desde GitHub) |
 | Email | Resend (`app/api/leads/route.ts`) |
 | OCR | Claude Haiku 4.5 (`app/api/parse-bill/route.ts`) |
-| PDF | html2canvas + jsPDF (`PDFDownloadButton.tsx`) |
-| BD | Supabase (leads) |
+| PDF simulador | html2canvas + jsPDF (`PDFDownloadButton.tsx`) |
+| PDF cotizaciones | `@react-pdf/renderer` server-side (Fase 2, pendiente) |
+| BD | Supabase (leads + config_parameters + products) |
+| Auth admin | Cookie `admin_token` vs `ADMIN_SECRET` + middleware |
 
 **Nota importante:** Tailwind v4 usa `@import "tailwindcss"` en lugar de directivas `@tailwind`. No mezclar con la sintaxis de v3.
 
@@ -64,7 +114,8 @@ mercado-energy/
 │   ├── page.tsx                    # Landing page (10 secciones)
 │   ├── icon.png                    # Favicon (logotipo-2.png — Next.js lo detecta automáticamente)
 │   ├── simulator/
-│   │   └── page.tsx                # Contenedor del wizard (WizardState, navegación)
+│   │   ├── page.tsx                # Server Component: fetch config+catalog → <SimulatorClient>
+│   │   └── SimulatorClient.tsx     # 'use client': wizard completo, recibe config+catalog como props
 │   ├── net-billing/
 │   │   ├── page.tsx                # Página explicativa Net Billing
 │   │   └── NetBillingClient.tsx    # Diagrama animado SVG con toggle día/noche
@@ -72,7 +123,13 @@ mercado-energy/
 │   ├── privacidad/page.tsx         # Política de privacidad (Ley 21.719 completa, 7 derechos)
 │   ├── devoluciones/page.tsx       # Política de devoluciones (Ley 19.496, 21.398, SERNAC)
 │   ├── admin/
-│   │   └── leads/                  # Panel de administración de leads (Supabase)
+│   │   ├── layout.tsx              # Admin layout: sidebar + main (sin sidebar en login)
+│   │   ├── login/page.tsx          # Login con ADMIN_SECRET
+│   │   ├── leads/                  # CRM leads: tabla + filtros + drawer detalle + botón crear cotización
+│   │   ├── config/                 # Parámetros del simulador (CRUD inline)
+│   │   ├── products/               # Catálogo: CRUD + sidebar categorías + filtro stock
+│   │   │   └── import/             # Importación masiva Excel/CSV (página + server action upsert por SKU)
+│   │   └── quotes/                 # Cotizaciones: lista + editor + PDF
 │   ├── lab/
 │   │   └── bill-parser/page.tsx    # Laboratorio experimental de OCR
 │   └── api/
@@ -109,16 +166,32 @@ mercado-energy/
 │       ├── PDFDownloadButton.tsx   # Botón + modal de informe (html2canvas + jsPDF)
 │       ├── SimulationReportHtml.tsx # HTML del informe para captura
 │       └── SimulatorResults.tsx    # Componente legacy
+│   ├── admin/
+│   │   ├── AdminSidebar.tsx        # 'use client': nav lateral con usePathname (active state)
+│   │   ├── ConfigTable.tsx         # 'use client': tabla editable de config_parameters
+│   │   ├── ProductsManager.tsx     # 'use client': tabla + modal CRUD + filtros categoría/stock
+│   │   ├── ProductImporter.tsx     # 'use client': importación masiva Excel/CSV con mapeo de columnas
+│   │   ├── QuoteEditor.tsx         # 'use client': editor de cotización con ítems catálogo/libre
+│   │   ├── LeadsFilter.tsx         # 'use client': filtros tipo/región + toggle "⚠ Seguimiento pendiente"
+│   │   ├── LeadsKanban.tsx         # 'use client': vista Kanban con drag & drop entre columnas de estado
+│   │   ├── ClientsManager.tsx      # 'use client': lista clientes con búsqueda + modal crear
+│   │   ├── ClientDetail.tsx        # 'use client': detalle cliente (tabs info/instalaciones/actividades/cotizaciones/proyectos)
+│   │   └── UserFilter.tsx          # 'use client': filtro de usuario en dashboard
 │   └── ui/
 │       └── ProgressBar.tsx         # Barra de progreso de 7 pasos (colores de marca)
 │
 └── lib/
-    ├── types.ts                    # Todas las interfaces TypeScript
-    ├── constants.ts                # Parámetros configurables (PFV, tarifas, defaults, baterías, DFL4)
+    ├── types.ts                    # Interfaces TypeScript (incluye SimulatorConfig, SimulatorInput extendido)
+    ├── constants.ts                # Valores por defecto (fallback cuando DB no responde)
     ├── regions.ts                  # 16 regiones de Chile con producción mensual kWh/kWp
     ├── calculations.ts             # Motor: runSimulation, calcThreeScenarios, selectKits, buildBusinessKit
-    ├── consumption.ts              # Cálculos de consumo futuro (AA, termo, EV)
-    └── format.ts                   # Formateo de valores (CLP, kWh, %, payback)
+    ├── consumption.ts              # Cálculos de consumo futuro (AA, termo, EV, calcEmpalmeLoad)
+    ├── tariffAnalysis.ts           # runTariffAnalysis(): comparación de tarifas BT/AT, alternativas y ahorro
+    ├── format.ts                   # Formateo de valores (CLP, kWh, %, payback)
+    └── db/
+        ├── config.ts               # getSimConfig(): fetch DB → SimulatorConfig (fallback a constants)
+        ├── catalog.ts              # getResidentialCatalog(): fetch DB → SolarKit[] (fallback a KIT_CATALOG)
+        └── quotes.ts               # getQuotes(), getQuote(id), getQuoteByToken(token)
 ```
 
 ---
@@ -165,8 +238,11 @@ mercado-energy/
 
 ### Paso 5 — Revisión de boletas (`StepBillReview`)
 - Estadísticas: promedio, máximo, mínimo, completitud (X/12)
-- **Gráfico de barras CSS con los 12 meses:** meses reales en verde, interpolados en gris
-  - kWh mostrado encima de **todas** las barras (máxima en verde bold, resto en gris)
+- **Gráfico de barras CSS con los 12 meses — leyenda permanente de 3 colores:**
+  - Azul (`#389fe0`): mes de mayor consumo
+  - Verde: meses con datos reales
+  - Gris: meses estimados por interpolación estacional
+  - kWh mostrado encima de **todas** las barras (máxima en bold)
 - Tabla detallada: mes, kWh, monto CLP, $/kWh calculado
 - Avisos contextuales: precio promedio calculado, meses faltantes
 
@@ -603,34 +679,84 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 
 ## Advertencias conocidas
 
-- **Middleware deprecado:** `middleware.ts` usa la convención antigua. Next.js 16 lo llama "proxy". No afecta funcionalidad pero genera warning en build. Pendiente renombrar a `proxy.ts`.
+- Sin advertencias activas.
 
 ---
 
 ## Pendientes y próximos pasos
 
-### Alta prioridad
+### ✅ Completado en sesión 9 (26 abril 2026)
 
-- [ ] **Regla 1: escenario óptimo automático**
-  - Si el payback de A es > 12 años Y el de B es < 10 años → recomendar B como default
+- [x] **Asignar vendedor a lead** — campo `assigned_to UUID` en tabla `leads`. Dropdown "Vendedor:" en header de LeadCRM (se guarda automáticamente al cambiar). Nombre del vendedor visible en la lista de leads (columna Cliente, en azul) y en tarjetas Kanban (badge azul)
+- [x] **Vista Kanban de leads** — `components/admin/LeadsKanban.tsx`. 5 columnas (Nuevo/Contactado/Cotizado/Ganado/Perdido). Drag & drop con HTML5 DnD — `moveLeadToStatus()` server action actualiza estado y registra historial. Toggle "≡ Lista / ⊞ Kanban" en filtros de `/admin/leads`. Tarjetas muestran vendedor, follow_up_date y ahorro/mes
+- [x] **Recordatorios de seguimiento** — campo `follow_up_date DATE` en tabla `leads`. Selector de fecha "Próximo contacto:" en header de LeadCRM. `min` = hoy (bloquea fechas pasadas). Badge rojo si vencido / ámbar si futuro en lista y Kanban. Filtro "⚠ Seguimiento pendiente" en leads (toggle activo = filter `follow_up_date <= hoy AND status != won/lost`)
+- [x] **Dashboard seguimientos pendientes** — sección ámbar en `/admin` entre KPIs y grilla. Aparece solo cuando hay leads con `follow_up_date <= hoy`. Grilla de hasta 8 leads con fecha destacada (rojo si pasada, ámbar si hoy). Enlace "Ver todos →" a la lista filtrada. Respeta filtro de usuario activo
+- [x] **SQL ejecutado** — `supabase/leads_followup.sql` con ambas columnas nuevas en `leads`
 
-- [x] **PDF empresa completo**
-  - Potencia contratada y tensión de suministro agregados al informe empresa (sesión 3)
+### ✅ Completado en sesión 8 (25 abril 2026)
 
-### Media prioridad
+- [x] **Fase 3 CRM — Detalle de lead** — `app/admin/leads/[id]/page.tsx` + `LeadCRM.tsx`: 4 tabs (simulación, cotizaciones, notas, historial). Header con selector de estado, banner verde "Venta cerrada" cuando status=`won`
+- [x] **Notas de lead** — tabla `lead_notes` (SQL: `supabase/lead_crm.sql`). Formulario con tipo (nota/llamada/email/visita/reunión/otro) + textarea. Timeline con iconos. Actualización optimista
+- [x] **Historial de estado** — tabla `lead_status_history`. Se registra automáticamente cada cambio de estado. Tab "Historial" muestra from→to con timestamps
+- [x] **"Convertir a cliente"** — botón aparece solo cuando `lead.status === 'won'`. Si ya tiene cliente muestra "Ver cliente →". Fix NOT NULL en `clients.nombre` con fallback `name ?? contact_name ?? email`
+- [x] **Cotización desde simulación** — botón "⚡ Crear desde simulación" en tab cotizaciones del lead. Lee `scenarios_json.A` o fallback `kit_size_kwp`/`kit_price_clp`. Pre-carga `quote_items` con margen 30%
+- [x] **Auto-sync lead status desde cotización** — `updateQuoteStatus` en `quotes/actions.ts`: cuando cotización se acepta → lead pasa a `won`; cuando se rechaza → lead pasa a `lost`. Registra en `lead_status_history`
+- [x] **Módulo de proyectos** — flujo completo: `app/admin/projects/` (lista + detalle). SQL: `supabase/projects.sql` (tablas `project_items` y `project_costs`)
+- [x] **Proyecto desde cotización** — botón "🏗️ Crear proyecto" en QuoteEditor cuando `status === 'accepted'`. Copia ítems de la cotización a `project_items`. Resuelve `client_id` desde lead si no está en cotización directamente
+- [x] **Protección duplicados de proyecto** — 1 cotización = 1 proyecto. Si ya existe, botón cambia a "🏗️ Ver proyecto →". Server action redirige al existente sin crear nuevo
+- [x] **ProjectDetail** — KPIs financieros (ingresos, costo base, costos adicionales, utilidad bruta, margen). 4 tabs: Resumen (form editable), Ítems (tabla editable inline), Costos adicionales (agregar/eliminar), Cotización original (read-only)
+- [x] **Tab Proyectos en ClientDetail** — `getProjectsByClient()` en `lib/db/projects.ts`. Lista de proyectos con nombre, número de cotización, fecha inicio y badge de estado
+- [x] **AdminSidebar** — "🏗️ Proyectos" agregado a sección CRM
+- [x] **Labels de estados de cotización** — "Marcar enviada/aceptada" → "Enviada" / "Aceptada" / "Rechazada"
 
-- [ ] **Precio de kWh dinámico por distribuidora/tarifa**
-  - Hoy usa $220 fijo cuando no hay monto en la boleta
-  - Tabla de precios referenciales por distribuidora y tarifa
+### ✅ Completado en sesión 7
 
-- [ ] **Corregir advertencia de middleware**
-  - Renombrar `middleware.ts` → `proxy.ts` (convención Next.js 16)
+- [x] **Fix dropdown cotizador** — removido `overflow-hidden` del card padre; dropdown ahora tiene scroll (`max-h-60 overflow-y-auto`) y flota sobre todo (`z-[200]`)
+- [x] **Ítem libre en cotizador** — toggle "Desde catálogo" / "Ítem libre" con 6 botones de acceso rápido y campo de precio directo con IVA. Action `upsertQuoteItem` soporta `unit_price_direct` y fix de `margen=0`
+- [x] **Importación masiva Excel/CSV** — `ProductImporter.tsx` con drag-drop, detección automática de columnas, mapeo configurable, preview, upsert por SKU. Plantilla descargable. Página `/admin/products/import`
+- [x] **Flujo lead → cotización** — botón "+ Nueva cotización" en drawer del lead crea cotización pre-rellena, actualiza status a `quoted` y redirige al editor. Sección de cotizaciones existentes en el drawer con links directos. Indicador de cantidad de cotizaciones en la tabla de leads
 
-### Baja prioridad / futuro
+### ✅ Completado en sesión 6
+
+- [x] **Auth multi-usuario** — JWT con `jose` + bcrypt. `proxy.ts`, `login/route.ts` y `login/page.tsx` actualizados
+- [x] **SQL migration_fase2.sql** — tablas `users`, `clients`, `installations`, `client_contacts`, `activities`, `projects` + ALTER `leads`, `products`, `quotes`, `quote_items`
+- [x] **lib/types.ts** — nuevos tipos: `AdminUser`, `Client`, `Installation`, `ClientContact`, `Activity`, `Project`. `Quote` y `QuoteItem` extendidos
+- [x] **DB helpers** — `lib/db/users.ts`, `lib/db/clients.ts`, `lib/db/quotes.ts` actualizado
+- [x] **AdminSidebar** — secciones CRM (Leads, Clientes, Cotizaciones), Configuración, Sistema (Usuarios solo para admin). Muestra nombre y rol del usuario
+- [x] **Módulo usuarios `/admin/users`** — CRUD completo, cambio de contraseña, protección del último admin
+- [x] **Módulo clientes `/admin/clients`** — lista con búsqueda, detalle con tabs (info, instalaciones, actividades, cotizaciones), crear/editar, agregar instalaciones y actividades
+- [x] **Conversión lead → cliente** — `convertLeadToClient()` crea cliente + primera instalación desde datos del lead
+- [x] **Módulo cotizaciones `/admin/quotes`** — lista con filtros, editor completo con tabla de ítems (columnas internas de margen vs columnas de cliente), totales en tiempo real, gestión de estados
+- [x] **PDF cotización** — `lib/pdf/QuotePDF.tsx` con `@react-pdf/renderer` server-side. Route `/api/admin/quotes/[id]/pdf`
+- [x] **Productos actualizados** — nuevos campos `stock`, `costo_proveedor_clp`, `margen_pct` en tabla y modal
+
+### ✅ Completado en sesión 5
+
+- [x] **Fix proxy.ts** — `middleware.ts` → `proxy.ts`, función `middleware` → `proxy` (Next.js 16)
+- [x] **SQL ejecutado** — tablas `config_parameters` y `products` operativas en Supabase
+- [x] **Backoffice Fase 1 operativo** — `/admin/config` y `/admin/products` funcionando con datos reales
+- [x] **Formateo CLP en ConfigTable** — `$` y separador de miles para parámetros `_clp`
+- [x] **Tablas Fase 2 creadas** — `quotes` + `quote_items` en Supabase con autonumeración
+- [x] **`@react-pdf/renderer` instalado**
+- [x] **Tipos Quote/QuoteItem/QuoteStatus** — en `lib/types.ts`
+- [x] **DB helper quotes** — `lib/db/quotes.ts` con `getQuotes`, `getQuote`, `getQuoteByToken`
+
+### ✅ Completado en sesión 4
+
+- [x] **Backoffice Fase 1 completo** — config_parameters, products, admin layout, simulador wired
+- [x] **Regla 1: escenario óptimo automático** — si payback A > 12 años y B < 10 años → recomendar B
+- [x] **PDF empresa completo** — Potencia contratada y tensión de suministro (sesión 3)
+
+### 🟡 Próximo — Media prioridad
+
+- [ ] **Precio de kWh dinámico por distribuidora/tarifa** — hoy usa $220 fijo cuando no hay monto en la boleta
+- [ ] **Notificaciones por email** — avisar al admin cuando un lead nuevo llega o un proyecto cambia de estado
+- [ ] **Métricas de conversión en dashboard** — tasa de conversión lead→cotización→proyecto, tiempo promedio por etapa
+
+### ⚪ Baja prioridad / futuro
 
 - [ ] **Múltiples tarifas en resultados** — comparar qué tarifa conviene según perfil de demanda
 - [ ] **Modelo horario para BT4.x/AT** — integrar precios por bloque horario con batería
-- [ ] **Actualización de precios de PFV** — panel para actualizar sin tocar código
 - [ ] **Ajuste de consumo AA por zona climática** — norte vs. sur tienen perfiles distintos
 - [ ] **PMGD/PMG para empresas > 300 kW** — marco regulatorio diferente al net billing
 
@@ -661,6 +787,66 @@ StepResults           → buildBaseInput() → empalmeMaxKW según tipo de clien
                       → POST /api/leads si el usuario hace clic en CTA
                       → PDFDownloadButton genera informe (residencial o empresa)
 ```
+
+---
+
+---
+
+## Backoffice — Arquitectura y decisiones (sesión 4)
+
+### Auth admin
+Cookie `admin_token` comparada contra `ADMIN_SECRET` en `proxy.ts` (renombrado desde `middleware.ts` en sesión 5, requerido por Next.js 16) y en Server Components. Simple y funcional para un solo admin. No usa Supabase Auth (se deja para cuando haya múltiples usuarios).
+
+### Patrón de config dinámica
+
+```
+DB config_parameters (15 parámetros)
+  → getSimConfig() en lib/db/config.ts
+    → SimulatorConfig (typed)
+      → app/simulator/page.tsx (Server Component) lo inyecta
+        → SimulatorClient recibe como prop
+          → StepResults recibe como prop
+            → buildBaseInput() popula SimulatorInput con overrides
+              → calculations.ts lee override ?? constante_ts
+```
+
+Si la DB falla → graceful fallback a `constants.ts`. El simulador nunca se rompe.
+
+### Patrón de catálogo dinámico
+
+```
+DB products (tabla solar_kit, is_active=true)
+  → getResidentialCatalog() en lib/db/catalog.ts
+    → SolarKit[] (misma interfaz que constants.ts)
+      → app/simulator/page.tsx lo inyecta junto con config
+        → StepResults lo pasa a calcThreeScenarios(input, count, catalog)
+          → selectKits(empalmeMaxKW, catalog ?? KIT_CATALOG)
+```
+
+### Tablas Supabase (sesión 4)
+
+| Tabla | Descripción |
+|---|---|
+| `leads` | Leads del simulador |
+| `config_parameters` | 15 parámetros del simulador editables desde `/admin/config` |
+| `products` | Catálogo de kits y componentes, editables desde `/admin/products` |
+| `quotes` | Cabecera de cotización — número auto (`COT-YYYY-NNN`), estado, cliente, totales, token público |
+| `quote_items` | Líneas de cotización — producto del catálogo o ítem libre, cantidad, precio, descuento |
+
+**Tablas Fase 3 (sesiones 8–9):**
+
+| Tabla | Descripción |
+|---|---|
+| `lead_notes` | Notas sobre leads (tipo, contenido, fecha) |
+| `lead_status_history` | Auditoría de cambios de estado del lead |
+| `project_payments` | Pagos recibidos por proyecto (monto, fecha, método, referencia) |
+
+**Columnas agregadas en sesión 9:**
+
+| Tabla | Columna | Descripción |
+|---|---|---|
+| `leads` | `follow_up_date DATE` | Fecha de próximo contacto programado |
+| `leads` | `assigned_to UUID → users` | Vendedor asignado al lead |
 
 ---
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { updateLeadDetails } from './actions';
+import { useState, useTransition } from 'react';
+import { updateLeadDetails, createQuoteFromLead } from './actions';
+import { convertLeadToClient } from '../clients/actions';
 import type { Lead } from './page';
 
 const MONTH_NAMES: Record<number, string> = {
@@ -9,14 +10,46 @@ const MONTH_NAMES: Record<number, string> = {
   7:'Jul',8:'Ago',9:'Sep',10:'Oct',11:'Nov',12:'Dic',
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  draft:    'bg-gray-100 text-gray-500',
+  sent:     'bg-blue-100 text-blue-700',
+  accepted: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-600',
+  expired:  'bg-amber-100 text-amber-700',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  draft:    'Borrador',
+  sent:     'Enviada',
+  accepted: 'Aceptada',
+  rejected: 'Rechazada',
+  expired:  'Expirada',
+};
+
+export interface QuoteSummary {
+  id: string;
+  quote_number: string;
+  status: string;
+  total_clp: number;
+  created_at: string;
+}
+
 function clp(n: number | null | undefined) {
   if (n == null) return '—';
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
-export default function LeadDetail({ lead }: { lead: Lead }) {
-  const [open, setOpen]   = useState(false);
-  const [saved, setSaved] = useState(false);
+function dateLabel(iso: string) {
+  return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+export default function LeadDetail({ lead, quotes = [] }: { lead: Lead; quotes?: QuoteSummary[] }) {
+  const [open, setOpen]             = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [isPending, startTrans]      = useTransition();
+  const [isConverting, startConvert] = useTransition();
+  const [clientId, setClientId]      = useState<string | null>(lead.client_id ?? null);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
   const profile   = lead.consumption_profile as { bills: Array<{ month: number; year: number; consumptionKWh: number; variableAmountCLP?: number }> } | null;
   const scenarios = lead.scenarios_json as Record<string, { kitSizeKWp: number; kitPriceCLP: number; monthlyBenefitCLP: number; paybackYears: number; coveragePercent: number; panelCount: number; areaM2: number; batteryKWh?: number } | null> | null;
@@ -27,6 +60,24 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
     await updateLeadDetails(formData);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  function handleCreateQuote() {
+    startTrans(async () => {
+      await createQuoteFromLead(lead.id);
+    });
+  }
+
+  function handleConvert() {
+    setConvertError(null);
+    startConvert(async () => {
+      const result = await convertLeadToClient(lead.id);
+      if (result.clientId) {
+        setClientId(result.clientId);
+      } else if (result.error) {
+        setConvertError(result.error);
+      }
+    });
   }
 
   return (
@@ -45,16 +96,77 @@ export default function LeadDetail({ lead }: { lead: Lead }) {
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div style={{ width: '100%', maxWidth: 600, backgroundColor: '#fff', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
             {/* Header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 10 }}>
               <div>
                 <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>{lead.name ?? lead.email}</p>
                 <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0' }}>{lead.email} · {lead.region_name}</p>
               </div>
-              <button onClick={() => setOpen(false)} style={{ fontSize: 20, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  {clientId ? (
+                    <a
+                      href={`/admin/clients/${clientId}`}
+                      className="flex items-center gap-1 border border-green-500 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
+                    >
+                      Ver cliente →
+                    </a>
+                  ) : lead.status === 'won' ? (
+                    <button
+                      onClick={handleConvert}
+                      disabled={isConverting}
+                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
+                    >
+                      {isConverting ? 'Convirtiendo…' : 'Convertir a cliente →'}
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={handleCreateQuote}
+                    disabled={isPending}
+                    className="flex items-center gap-1.5 bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
+                  >
+                    {isPending ? 'Creando…' : '+ Cotización'}
+                  </button>
+                  <button onClick={() => setOpen(false)} style={{ fontSize: 20, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                </div>
+                {convertError && (
+                  <p className="text-xs text-red-500">{convertError}</p>
+                )}
+              </div>
             </div>
 
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+              {/* Cotizaciones existentes */}
+              {quotes.length > 0 && (
+                <section>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Cotizaciones ({quotes.length})
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {quotes.map((q) => (
+                      <a
+                        key={q.id}
+                        href={`/admin/quotes/${q.id}`}
+                        className="flex items-center justify-between bg-gray-50 hover:bg-blue-50/40 border border-gray-100 hover:border-[#389fe0]/30 rounded-xl px-4 py-3 transition-colors"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{q.quote_number}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{dateLabel(q.created_at)}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-800 tabular-nums">{clp(q.total_clp)}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_COLORS[q.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                            {STATUS_LABELS[q.status] ?? q.status}
+                          </span>
+                          <span className="text-gray-300">→</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Consumo mensual */}
               {profile?.bills && profile.bills.length > 0 && (

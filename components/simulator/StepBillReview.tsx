@@ -60,12 +60,22 @@ function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
           );
         })}
       </div>
-      {sorted.some((b) => b.source === 'interpolated') && (
-        <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
-          <span className="inline-block w-3 h-2 rounded-sm bg-gray-200" />
-          Meses estimados por interpolación estacional
-        </p>
-      )}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+        <span className="text-[10px] text-gray-500 flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-[#389fe0]" />
+          Mes de mayor consumo
+        </span>
+        <span className="text-[10px] text-gray-500 flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-green-300" />
+          Meses con datos reales
+        </span>
+        {sorted.some((b) => b.source === 'interpolated') && (
+          <span className="text-[10px] text-gray-400 flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm bg-gray-200" />
+            Meses estimados por interpolación estacional
+          </span>
+        )}
+      </div>
     </div>
   );
 }
