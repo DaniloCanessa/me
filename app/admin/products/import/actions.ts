@@ -8,6 +8,7 @@ export interface ImportRow {
   sku: string;
   category: string;
   customer_type: string;
+  proveedor: string | null;
   costo_proveedor_clp: number;
   margen_pct: number | null;
   base_price_clp: number;

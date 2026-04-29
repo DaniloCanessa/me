@@ -15,6 +15,7 @@ interface Product {
   category: string;
   customer_type: string;
   specs: Record<string, unknown>;
+  proveedor: string | null;
   costo_proveedor_clp: number;
   margen_pct: number | null;
   base_price_clp: number;
@@ -166,6 +167,14 @@ function ProductModal({
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#389fe0]" />
             </label>
           </div>
+
+          {/* Proveedor */}
+          <label className="block">
+            <span className="text-xs text-gray-500 mb-1 block">Proveedor</span>
+            <input name="proveedor" type="text" defaultValue={product?.proveedor ?? ''}
+              placeholder="Ej: Huawei, JA Solar, BYD…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+          </label>
 
           {/* Categoría + Tipo cliente */}
           <div className="grid grid-cols-2 gap-3">
@@ -426,6 +435,7 @@ export default function ProductsManager({ products }: { products: Product[] }) {
                     <td className="px-5 py-3.5">
                       <p className="font-medium text-gray-900">{p.name}</p>
                       <p className="text-xs font-mono text-gray-400 mt-0.5">{p.sku}</p>
+                      {p.proveedor && <p className="text-xs text-gray-500 mt-0.5">{p.proveedor}</p>}
                       {p.notes && <p className="text-xs text-gray-400 mt-0.5 italic">{p.notes}</p>}
                     </td>
                     <td className="px-5 py-3.5">
