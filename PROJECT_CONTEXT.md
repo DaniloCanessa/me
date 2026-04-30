@@ -1,18 +1,20 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 26 de abril 2026 (sesión 9)
+> Última actualización: 30 de abril 2026 (sesión 10)
 > Repositorio: https://github.com/DaniloCanessa/me
-> Producción: https://me-fawn-eight.vercel.app
+> Producción: https://mercado-energy.vercel.app
 
 ---
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesión 9 completa. CRM avanzado: asignación de vendedor, vista Kanban y recordatorios de seguimiento.**
+**Sesión 10 completa. Infraestructura Vercel configurada + campo Proveedor en productos + fixes de importación Excel.**
 
-**SQL ya ejecutado en Supabase** (`supabase/leads_followup.sql`):
-- `follow_up_date DATE` en tabla `leads`
-- `assigned_to UUID REFERENCES users(id)` en tabla `leads`
+**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Todas las variables de entorno cargadas en Vercel production.
+
+**SQL ya ejecutado en Supabase (sesión 10):**
+- `ALTER TABLE products ADD COLUMN IF NOT EXISTS proveedor text;`
+- Constraint `products_category_check` actualizada para incluir `'ac'`
 
 Al iniciar la próxima sesión, continuar con las mejoras de prioridad media (ver sección Pendientes):
 - Precio de kWh dinámico por distribuidora/tarifa
@@ -685,6 +687,13 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 
 ## Pendientes y próximos pasos
 
+### ✅ Completado en sesión 10 (30 abril 2026)
+
+- [x] **Vercel configurado** — proyecto vinculado (`vercel link`), 6 variables de entorno cargadas (`RESEND_API_KEY`, `LEAD_RECIPIENT_EMAIL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_SECRET`, `JWT_SECRET`). URL producción: `https://mercado-energy.vercel.app`
+- [x] **Fix importación Excel — tipo integer** — `Math.round()` aplicado a `costo_proveedor_clp`, `base_price_clp` e `installation_price_clp` en `ProductImporter.tsx`. Excel introduce decimales por precisión flotante (ej: `434356.149...`) que Supabase rechaza en columnas `integer`
+- [x] **Campo Proveedor en productos** — nuevo campo `proveedor text` (nullable) en: interfaz `Product`, formulario modal, tabla (debajo del SKU), `createProduct`/`updateProduct` en `actions.ts`, `ImportRow` y mapeo de columnas en `ProductImporter` (aliases: `proveedor`, `supplier`, `marca`, `fabricante`). SQL: `ALTER TABLE products ADD COLUMN IF NOT EXISTS proveedor text`
+- [x] **Fix constraint category** — `products_category_check` actualizada en Supabase para incluir `'ac'` (Aire Acondicionado), que existía en la app pero no en la constraint de la BD
+
 ### ✅ Completado en sesión 9 (26 abril 2026)
 
 - [x] **Asignar vendedor a lead** — campo `assigned_to UUID` en tabla `leads`. Dropdown "Vendedor:" en header de LeadCRM (se guarda automáticamente al cambiar). Nombre del vendedor visible en la lista de leads (columna Cliente, en azul) y en tarjetas Kanban (badge azul)
@@ -847,6 +856,12 @@ DB products (tabla solar_kit, is_active=true)
 |---|---|---|
 | `leads` | `follow_up_date DATE` | Fecha de próximo contacto programado |
 | `leads` | `assigned_to UUID → users` | Vendedor asignado al lead |
+
+**Columnas agregadas en sesión 10:**
+
+| Tabla | Columna | Descripción |
+|---|---|---|
+| `products` | `proveedor text` | Nombre del proveedor/fabricante del producto |
 
 ---
 
