@@ -121,6 +121,29 @@ export async function getProjectPayments(projectId: string): Promise<ProjectPaym
   return (data ?? []) as ProjectPayment[];
 }
 
+export type ProjectPurchase = {
+  id: string;
+  project_id: string;
+  project_item_id: string | null;
+  tipo: 'factura' | 'anticipo';
+  proveedor: string | null;
+  folio: string | null;
+  monto_clp: number;
+  fecha: string;
+  notas: string | null;
+  created_at: string;
+};
+
+export async function getProjectPurchases(projectId: string): Promise<ProjectPurchase[]> {
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from('project_purchases')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('fecha', { ascending: false });
+  return (data ?? []) as ProjectPurchase[];
+}
+
 export async function getProjectsByClient(clientId: string): Promise<ProjectRow[]> {
   const db = getSupabaseAdmin();
   const { data } = await db

@@ -1,8 +1,15 @@
 import { getClients } from '@/lib/db/clients';
 import ClientsManager from '@/components/admin/ClientsManager';
 
-export default async function ClientsPage() {
-  const clients = await getClients();
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const { from } = await searchParams;
+  const clients   = await getClients();
+  const fromQuotes = from === 'quotes';
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -11,7 +18,7 @@ export default async function ClientsPage() {
           {clients.length} cliente{clients.length !== 1 ? 's' : ''}
         </p>
       </div>
-      <ClientsManager clients={clients} />
+      <ClientsManager clients={clients} fromQuotes={fromQuotes} />
     </div>
   );
 }

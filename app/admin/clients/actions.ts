@@ -132,6 +132,7 @@ export async function addInstallation(formData: FormData) {
     client_id:                   clientId,
     nombre_instalacion:          formData.get('nombre_instalacion') as string,
     direccion:                   (formData.get('direccion') as string) || null,
+    comuna:                      (formData.get('comuna') as string) || null,
     ciudad:                      (formData.get('ciudad') as string) || null,
     region_id:                   (formData.get('region_id') as string) || null,
     customer_type:               (formData.get('customer_type') as string) || null,
@@ -143,6 +144,30 @@ export async function addInstallation(formData: FormData) {
     consumo_promedio_mensual_kwh: formData.get('consumo_kwh') ? parseFloat(formData.get('consumo_kwh') as string) : null,
     notas:                       (formData.get('notas') as string) || null,
   });
+
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/clients/${clientId}`);
+  return { ok: true };
+}
+
+export async function updateInstallation(installationId: string, clientId: string, formData: FormData) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('installations').update({
+    nombre_instalacion:           formData.get('nombre_instalacion') as string,
+    direccion:                    (formData.get('direccion') as string) || null,
+    comuna:                       (formData.get('comuna') as string) || null,
+    ciudad:                       (formData.get('ciudad') as string) || null,
+    region_id:                    (formData.get('region_id') as string) || null,
+    customer_type:                (formData.get('customer_type') as string) || null,
+    distribuidora:                (formData.get('distribuidora') as string) || null,
+    tarifa:                       (formData.get('tarifa') as string) || null,
+    amperaje_a:                   formData.get('amperaje_a') ? parseInt(formData.get('amperaje_a') as string) : null,
+    potencia_contratada_kw:       formData.get('potencia_contratada_kw') ? parseFloat(formData.get('potencia_contratada_kw') as string) : null,
+    tension_suministro:           (formData.get('tension_suministro') as string) || null,
+    consumo_promedio_mensual_kwh: formData.get('consumo_kwh') ? parseFloat(formData.get('consumo_kwh') as string) : null,
+    notas:                        (formData.get('notas') as string) || null,
+    updated_at:                   new Date().toISOString(),
+  }).eq('id', installationId);
 
   if (error) return { error: error.message };
   revalidatePath(`/admin/clients/${clientId}`);

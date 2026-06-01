@@ -26,6 +26,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
   }
 
+  await db.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', user.id);
+
   const secret = new TextEncoder().encode(
     process.env.JWT_SECRET ?? process.env.ADMIN_SECRET ?? ''
   );

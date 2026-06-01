@@ -7,6 +7,21 @@ import {
   toggleUserActive, deleteUser,
 } from '@/app/admin/users/actions';
 
+const PROTECTED_EMAIL = 'danilo.canessa@gmail.com';
+
+function relativeTime(date: string | null | undefined): string {
+  if (!date) return 'Nunca';
+  const diff = Date.now() - new Date(date).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 2) return 'Ahora';
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `hace ${days} d`;
+  return new Intl.DateTimeFormat('es-CL', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(date));
+}
+
 function UserModal({
   user,
   onClose,
@@ -166,54 +181,72 @@ export default function UsersManager({ users }: { users: AdminUser[] }) {
               <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Usuario</th>
               <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Rol</th>
               <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Estado</th>
+              <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Último acceso</th>
               <th className="px-5 py-3"></th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/40">
-                <td className="px-5 py-3.5">
-                  <p className="font-medium text-gray-900">{u.name}</p>
-                  <p className="text-xs text-gray-400">{u.email}</p>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    u.role === 'admin'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {u.role === 'admin' ? 'Admin' : 'Usuario'}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5 text-center">
-                  <button
-                    onClick={() => handleToggle(u)}
-                    disabled={isPending}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      u.is_active
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
-                  >
-                    {u.is_active ? 'Activo' : 'Inactivo'}
-                  </button>
-                </td>
-                <td className="px-5 py-3.5">
-                  <div className="flex gap-3 justify-end">
-                    <button onClick={() => openEdit(u)}
-                      className="text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium">
-                      Editar
-                    </button>
+            {users.map((u) => {
+              const isProtected = u.email === PROTECTED_EMAIL;
+              return (
+                <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/40">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <p className="font-medium text-gray-900">{u.name}</p>
+                        <p className="text-xs text-gray-400">{u.email}</p>
+                      </div>
+                      {isProtected && (
+                        <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-md font-medium">
+                          🔒 protegido
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      u.role === 'admin'
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {u.role === 'admin' ? 'Admin' : 'Usuario'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
                     <button
-                      onClick={() => handleDelete(u)}
-                      disabled={isPending}
-                      className="text-xs text-red-400 hover:text-red-600 font-medium disabled:opacity-40">
-                      Eliminar
+                      onClick={() => handleToggle(u)}
+                      disabled={isPending || isProtected}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        u.is_active
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200 disabled:hover:bg-green-100'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:hover:bg-gray-100'
+                      } disabled:cursor-not-allowed`}
+                    >
+                      {u.is_active ? 'Activo' : 'Inactivo'}
                     </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="text-xs text-gray-400">{relativeTime(u.last_login_at)}</span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => openEdit(u)}
+                        className="text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium">
+                        Editar
+                      </button>
+                      {!isProtected && (
+                        <button
+                          onClick={() => handleDelete(u)}
+                          disabled={isPending}
+                          className="text-xs text-red-400 hover:text-red-600 font-medium disabled:opacity-40">
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

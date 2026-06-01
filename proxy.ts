@@ -5,7 +5,8 @@ import { jwtVerify } from 'jose';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
+  const PUBLIC_ADMIN = ['/admin/login', '/admin/forgot-password', '/admin/reset-password'];
+  if (pathname.startsWith('/admin') && !PUBLIC_ADMIN.some((p) => pathname.startsWith(p))) {
     const token = request.cookies.get('admin_token')?.value;
 
     if (!token) return redirectToLogin(request);

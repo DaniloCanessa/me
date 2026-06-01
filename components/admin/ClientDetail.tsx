@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Client, Installation, Activity, Quote } from '@/lib/types';
 import type { ProjectRow } from '@/lib/db/projects';
-import { updateClient, addActivity, addInstallation, deleteClient } from '@/app/admin/clients/actions';
+import { updateClient, addActivity, addInstallation, updateInstallation, deleteClient } from '@/app/admin/clients/actions';
+import { deleteQuotes } from '@/app/admin/quotes/actions';
 
 const ACTIVITY_ICONS: Record<string, string> = {
   llamada: '📞', visita: '🏠', email: '✉️',
@@ -57,7 +58,9 @@ export default function ClientDetail({
   const [tab, setTab]                = useState<'info' | 'instalaciones' | 'actividades' | 'cotizaciones' | 'proyectos'>('info');
   const [editMode, setEditMode]      = useState(false);
   const [showActForm, setShowActForm] = useState(false);
-  const [showInstForm, setShowInstForm] = useState(false);
+  const [showInstForm, setShowInstForm]   = useState(false);
+  const [editingInstId, setEditingInstId]   = useState<string | null>(null);
+  const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
 
   function handleDelete() {
@@ -204,16 +207,101 @@ export default function ClientDetail({
         <div className="flex flex-col gap-4">
           {(client.installations ?? []).map((inst: Installation) => (
             <div key={inst.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <p className="font-semibold text-gray-900 mb-3">{inst.nombre_instalacion}</p>
-              <div className="grid grid-cols-3 gap-3 text-xs text-gray-600">
-                {inst.direccion && <div><span className="text-gray-400">Dirección</span><p>{inst.direccion}</p></div>}
-                {inst.region_id && <div><span className="text-gray-400">Región</span><p>{inst.region_id}</p></div>}
-                {inst.distribuidora && <div><span className="text-gray-400">Distribuidora</span><p>{inst.distribuidora}</p></div>}
-                {inst.tarifa && <div><span className="text-gray-400">Tarifa</span><p>{inst.tarifa}</p></div>}
-                {inst.amperaje_a && <div><span className="text-gray-400">Empalme</span><p>{inst.amperaje_a} A</p></div>}
-                {inst.potencia_contratada_kw && <div><span className="text-gray-400">Potencia contratada</span><p>{inst.potencia_contratada_kw} kW</p></div>}
-                {inst.consumo_promedio_mensual_kwh && <div><span className="text-gray-400">Consumo prom.</span><p>{inst.consumo_promedio_mensual_kwh} kWh/mes</p></div>}
-              </div>
+              {editingInstId !== inst.id ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-gray-900">{inst.nombre_instalacion}</p>
+                    <button
+                      onClick={() => setEditingInstId(inst.id)}
+                      className="text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs text-gray-600">
+                    {inst.direccion && <div><span className="text-gray-400">Dirección</span><p>{inst.direccion}</p></div>}
+                    {inst.comuna && <div><span className="text-gray-400">Comuna</span><p>{inst.comuna}</p></div>}
+                    {inst.ciudad && <div><span className="text-gray-400">Ciudad</span><p>{inst.ciudad}</p></div>}
+                    {inst.region_id && <div><span className="text-gray-400">Región</span><p>{inst.region_id}</p></div>}
+                    {inst.distribuidora && <div><span className="text-gray-400">Distribuidora</span><p>{inst.distribuidora}</p></div>}
+                    {inst.tarifa && <div><span className="text-gray-400">Tarifa</span><p>{inst.tarifa}</p></div>}
+                    {inst.amperaje_a && <div><span className="text-gray-400">Empalme</span><p>{inst.amperaje_a} A</p></div>}
+                    {inst.potencia_contratada_kw && <div><span className="text-gray-400">Potencia contratada</span><p>{inst.potencia_contratada_kw} kW</p></div>}
+                    {inst.consumo_promedio_mensual_kwh && <div><span className="text-gray-400">Consumo prom.</span><p>{inst.consumo_promedio_mensual_kwh} kWh/mes</p></div>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-900 mb-4">Editar instalación</p>
+                  <form
+                    action={(fd) => {
+                      startTransition(async () => {
+                        await updateInstallation(inst.id, client.id, fd);
+                        setEditingInstId(null);
+                      });
+                    }}
+                    className="flex flex-col gap-3"
+                  >
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block col-span-2">
+                        <span className="text-xs text-gray-500 mb-1 block">Nombre de la instalación *</span>
+                        <input name="nombre_instalacion" required defaultValue={inst.nombre_instalacion}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Dirección</span>
+                        <input name="direccion" defaultValue={inst.direccion ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Comuna</span>
+                        <input name="comuna" defaultValue={inst.comuna ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Ciudad</span>
+                        <input name="ciudad" defaultValue={inst.ciudad ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Tipo</span>
+                        <select name="customer_type" defaultValue={inst.customer_type ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]">
+                          <option value="">— Seleccionar —</option>
+                          <option value="natural">Residencial</option>
+                          <option value="business">Empresa</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Distribuidora</span>
+                        <input name="distribuidora" defaultValue={inst.distribuidora ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Tarifa</span>
+                        <input name="tarifa" defaultValue={inst.tarifa ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs text-gray-500 mb-1 block">Consumo prom. (kWh/mes)</span>
+                        <input name="consumo_kwh" type="number" step="1"
+                          defaultValue={inst.consumo_promedio_mensual_kwh ?? ''}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                      </label>
+                    </div>
+                    <div className="flex gap-3 mt-1">
+                      <button type="button" onClick={() => setEditingInstId(null)}
+                        className="flex-1 border border-gray-200 rounded-xl py-2 text-sm text-gray-600 hover:bg-gray-50">
+                        Cancelar
+                      </button>
+                      <button type="submit" disabled={isPending}
+                        className="flex-1 bg-[#389fe0] hover:bg-[#1d65c5] text-white rounded-xl py-2 text-sm font-semibold disabled:opacity-50">
+                        {isPending ? 'Guardando…' : 'Guardar cambios'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
             </div>
           ))}
 
@@ -247,6 +335,11 @@ export default function ClientDetail({
                   <label className="block">
                     <span className="text-xs text-gray-500 mb-1 block">Dirección</span>
                     <input name="direccion"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-500 mb-1 block">Comuna</span>
+                    <input name="comuna"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
                   </label>
                   <label className="block">
@@ -381,25 +474,81 @@ export default function ClientDetail({
               </Link>
             </div>
           ) : (
-            quotes.map((q) => {
-              const st = STATUS_LABELS[q.status] ?? { label: q.status, color: 'bg-gray-100 text-gray-600' };
-              return (
-                <Link
-                  key={q.id}
-                  href={`/admin/quotes/${q.id}`}
-                  className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 hover:border-[#389fe0]/30 transition-colors"
-                >
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{q.quote_number}</p>
-                    <p className="text-xs text-gray-400">{dateStr(q.created_at)}</p>
+            <>
+              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={quotes.length > 0 && selectedQuotes.size === quotes.length}
+                    onChange={() => setSelectedQuotes(
+                      selectedQuotes.size === quotes.length
+                        ? new Set()
+                        : new Set(quotes.map(q => q.id))
+                    )}
+                    className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]"
+                  />
+                  <span className="text-xs text-gray-500">Seleccionar todas</span>
+                </label>
+                {selectedQuotes.size > 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-red-700 font-medium">
+                      {selectedQuotes.size} seleccionada{selectedQuotes.size > 1 ? 's' : ''}
+                    </span>
+                    <button
+                      disabled={isPending}
+                      onClick={() => {
+                        const ids = [...selectedQuotes];
+                        if (!confirm(`¿Eliminar ${ids.length} cotización${ids.length > 1 ? 'es' : ''}?`)) return;
+                        startTransition(async () => {
+                          await deleteQuotes(ids);
+                          setSelectedQuotes(new Set());
+                          router.refresh();
+                        });
+                      }}
+                      className="bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      {isPending ? 'Eliminando…' : 'Eliminar'}
+                    </button>
                   </div>
-                  <p className="font-semibold text-gray-900">{clp(q.total_clp)}</p>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${st.color}`}>
-                    {st.label}
-                  </span>
-                </Link>
-              );
-            })
+                )}
+              </div>
+              {quotes.map((q) => {
+                const st = STATUS_LABELS[q.status] ?? { label: q.status, color: 'bg-gray-100 text-gray-600' };
+                const isSelected = selectedQuotes.has(q.id);
+                return (
+                  <div
+                    key={q.id}
+                    className={`bg-white rounded-xl border p-4 flex items-center gap-3 transition-colors ${
+                      isSelected ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-[#389fe0]/30'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => setSelectedQuotes(prev => {
+                        const next = new Set(prev);
+                        next.has(q.id) ? next.delete(q.id) : next.add(q.id);
+                        return next;
+                      })}
+                      className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0] shrink-0"
+                    />
+                    <Link
+                      href={`/admin/quotes/${q.id}`}
+                      className="flex-1 flex items-center gap-4 min-w-0"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900">{q.quote_number}</p>
+                        <p className="text-xs text-gray-400">{dateStr(q.created_at)}</p>
+                      </div>
+                      <p className="font-semibold text-gray-900 shrink-0">{clp(q.total_clp)}</p>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${st.color}`}>
+                        {st.label}
+                      </span>
+                    </Link>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       )}

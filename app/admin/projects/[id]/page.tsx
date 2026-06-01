@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getProject, getProjectItems, getProjectCosts, getProjectPayments } from '@/lib/db/projects';
+import { getProject, getProjectItems, getProjectCosts, getProjectPayments, getProjectPurchases } from '@/lib/db/projects';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import ProjectDetail from './ProjectDetail';
 
@@ -7,11 +7,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const db = getSupabaseAdmin();
 
-  const [project, items, costs, payments] = await Promise.all([
+  const [project, items, costs, payments, purchases] = await Promise.all([
     getProject(id),
     getProjectItems(id),
     getProjectCosts(id),
     getProjectPayments(id),
+    getProjectPurchases(id),
   ]);
 
   if (!project) notFound();
@@ -33,6 +34,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       items={items}
       costs={costs}
       payments={payments}
+      purchases={purchases}
       quoteItems={quoteItems}
     />
   );

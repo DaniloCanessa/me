@@ -10,6 +10,7 @@ export interface AdminUser {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  last_login_at?: string | null;
 }
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ export interface Installation {
   lead_id: string | null;
   nombre_instalacion: string;
   direccion: string | null;
+  comuna: string | null;
   ciudad: string | null;
   region_id: string | null;
   customer_type: 'natural' | 'business' | null;

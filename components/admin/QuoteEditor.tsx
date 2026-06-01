@@ -8,6 +8,8 @@ import {
   updateQuoteHeader, updateQuoteStatus, deleteQuote,
 } from '@/app/admin/quotes/actions';
 import { createProjectFromQuote } from '@/app/admin/projects/actions';
+import { getProductById } from '@/app/admin/products/actions';
+import ProductEditForm, { type Product as FullProduct } from '@/app/admin/products/[id]/ProductEditForm';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
 
@@ -63,14 +65,27 @@ function ItemRow({
   quoteId: string;
   sortOrder: number;
 }) {
-  const [costo,   setCosto]   = useState(item.costo_proveedor_clp);
-  const [margen,  setMargen]  = useState(item.margen_pct);
-  const [qty,     setQty]     = useState(item.quantity);
-  const [desc,    setDesc]    = useState(item.discount_percent);
-  const [editing, setEditing] = useState(false);
-  const [isPending, start]    = useTransition();
+  const isFreeItem = item.costo_proveedor_clp === 0 && item.margen_pct === 0;
+  const [costo,     setCosto]    = useState(item.costo_proveedor_clp);
+  const [margenStr, setMargenStr]= useState(String(item.margen_pct ?? 0));
+  const [freeNeto,  setFreeNeto] = useState(item.unit_price_clp);
+  const [qtyStr,    setQtyStr]   = useState(String(item.quantity));
+  const [descStr,   setDescStr]  = useState(String(item.discount_percent));
 
-  const calc = calcItem(costo, margen, qty, desc);
+  const margen = parseFloat(margenStr) || 0;
+  const qty    = parseFloat(qtyStr)    || 1;
+  const desc   = parseFloat(descStr)   || 0;
+  const [editing,  setEditing] = useState(false);
+  const [isPending, start]     = useTransition();
+
+  const calc = isFreeItem
+    ? {
+        neto:        freeNeto,
+        margenPesos: 0,
+        conIva:      Math.round(freeNeto * 1.19),
+        subtotal:    Math.round(freeNeto * 1.19 * qty * (1 - desc / 100)),
+      }
+    : calcItem(costo, margen, qty, desc);
 
   function save() {
     const fd = new FormData();
@@ -79,10 +94,16 @@ function ItemRow({
     fd.set('product_id',         item.product_id ?? '');
     fd.set('description',        item.description);
     fd.set('quantity',           String(qty));
-    fd.set('costo_proveedor_clp', String(costo));
-    fd.set('margen_pct',         String(margen));
     fd.set('discount_percent',   String(desc));
     fd.set('sort_order',         String(sortOrder));
+    if (isFreeItem) {
+      fd.set('unit_price_direct',   String(Math.round(freeNeto * 1.19)));
+      fd.set('costo_proveedor_clp', '0');
+      fd.set('margen_pct',          '0');
+    } else {
+      fd.set('costo_proveedor_clp', String(costo));
+      fd.set('margen_pct',         String(margen));
+    }
     start(async () => { await upsertQuoteItem(quoteId, fd); setEditing(false); });
   }
 
@@ -100,8 +121,8 @@ function ItemRow({
       {/* Cantidad */}
       <td className="px-2 py-3 text-center">
         {editing ? (
-          <input type="number" min="0.01" step="0.01" value={qty}
-            onChange={(e) => setQty(parseFloat(e.target.value) || 1)}
+          <input type="number" min="0.01" step="0.01" value={qtyStr}
+            onChange={(e) => setQtyStr(e.target.value)}
             className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
         ) : (
           <span className="tabular-nums">{qty}</span>
@@ -109,46 +130,47 @@ function ItemRow({
       </td>
       {/* Margen % — interno */}
       <td className="px-2 py-3 text-center bg-amber-50/30">
-        {editing ? (
-          <input type="number" min="0" max="100" step="0.5" value={margen}
-            onChange={(e) => setMargen(parseFloat(e.target.value) || 0)}
+        {editing && !isFreeItem ? (
+          <input type="number" min="0" max="100" step="0.5" value={margenStr}
+            onChange={(e) => setMargenStr(e.target.value)}
             className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
         ) : (
-          <span className="tabular-nums text-amber-700">{margen}%</span>
+          <span className="tabular-nums text-amber-700">{isFreeItem ? '—' : `${margen}%`}</span>
         )}
       </td>
-      {/* Margen $ — interno */}
-      <td className="px-2 py-3 text-right bg-amber-50/30 tabular-nums text-green-700 text-xs">
-        {clp(calc.margenPesos)}
-      </td>
-      {/* P. neto unit — interno */}
-      <td className="px-2 py-3 text-right bg-amber-50/30 tabular-nums text-gray-500 text-xs">
-        {editing ? (
-          <input type="number" min="0" step="1000" value={costo}
-            onChange={(e) => setCosto(parseFloat(e.target.value) || 0)}
-            className="w-24 text-right border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]"
-            placeholder="Costo" />
-        ) : (
-          clp(calc.neto)
-        )}
-      </td>
-      {/* Desc % — cliente */}
+      {/* Desc % */}
       <td className="px-2 py-3 text-center">
         {editing ? (
-          <input type="number" min="0" max="100" step="0.5" value={desc}
-            onChange={(e) => setDesc(parseFloat(e.target.value) || 0)}
+          <input type="number" min="0" max="100" step="0.5" value={descStr}
+            onChange={(e) => setDescStr(e.target.value)}
             className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
         ) : (
           <span className="tabular-nums">{desc > 0 ? `${desc}%` : '—'}</span>
         )}
       </td>
-      {/* P. unit c/IVA — cliente */}
+      {/* P. Unit s/IVA */}
       <td className="px-2 py-3 text-right tabular-nums font-medium text-gray-900">
-        {clp(calc.conIva)}
+        {editing ? (
+          isFreeItem ? (
+            <input type="text" inputMode="numeric"
+              value={freeNeto > 0 ? new Intl.NumberFormat('es-CL').format(freeNeto) : ''}
+              onChange={(e) => setFreeNeto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+              className="w-28 text-right border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]"
+              placeholder="0" />
+          ) : (
+            <input type="text" inputMode="numeric"
+              value={costo > 0 ? new Intl.NumberFormat('es-CL').format(costo) : ''}
+              onChange={(e) => setCosto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+              className="w-28 text-right border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]"
+              placeholder="0" />
+          )
+        ) : (
+          clp(calc.neto)
+        )}
       </td>
-      {/* Subtotal — cliente */}
+      {/* Total s/IVA = qty × p.unit s/IVA × (1 - desc%) */}
       <td className="px-2 py-3 text-right tabular-nums font-semibold text-gray-900">
-        {clp(calc.subtotal)}
+        {clp(Math.round(calc.neto * qty * (1 - desc / 100)))}
       </td>
       {/* Acciones */}
       <td className="px-2 py-3 text-right">
@@ -207,8 +229,21 @@ function AddItemSection({
   const [search,     setSearch]     = useState('');
   const [costo,      setCosto]      = useState(0);
   const [margen,     setMargen]     = useState(DEFAULT_MARGIN);
-  const [qty,        setQty]        = useState(1);
-  const [desc,       setDesc]       = useState(0);
+  const [qtyStr,     setQtyStr]     = useState('1');
+  const [descStr,    setDescStr]    = useState('0');
+  const [editProduct,    setEditProduct]    = useState<FullProduct | null>(null);
+  const [loadingEdit,    setLoadingEdit]    = useState(false);
+
+  const qty  = parseFloat(qtyStr)  || 1;
+  const desc = parseFloat(descStr) || 0;
+
+  async function openEditModal() {
+    if (!productId) return;
+    setLoadingEdit(true);
+    const data = await getProductById(productId);
+    setLoadingEdit(false);
+    if (data) setEditProduct(data as FullProduct);
+  }
   const [descTxt,    setDescTxt]    = useState('');
   const [productId,  setProductId]  = useState('');
   const [showList,   setShowList]   = useState(false);
@@ -225,7 +260,7 @@ function AddItemSection({
   function switchMode(m: 'catalog' | 'free') {
     setMode(m);
     setSearch(''); setDescTxt(''); setProductId('');
-    setCosto(0); setMargen(DEFAULT_MARGIN); setQty(1); setDesc(0); setFreePrice(0);
+    setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0);
   }
 
   function selectProduct(p: ProductOption) {
@@ -246,7 +281,8 @@ function AddItemSection({
     fd.set('discount_percent', String(desc));
     fd.set('sort_order',       String(nextOrder));
     if (mode === 'free') {
-      fd.set('unit_price_direct',   String(freePrice));
+      // freePrice es s/IVA → enviamos c/IVA para que la action divida por 1.19
+      fd.set('unit_price_direct',   String(Math.round(freePrice * 1.19)));
       fd.set('costo_proveedor_clp', '0');
       fd.set('margen_pct',          '');
     } else {
@@ -256,9 +292,12 @@ function AddItemSection({
     start(async () => {
       await upsertQuoteItem(quoteId, fd);
       setSearch(''); setDescTxt(''); setProductId('');
-      setCosto(0); setMargen(DEFAULT_MARGIN); setQty(1); setDesc(0); setFreePrice(0);
+      setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0);
     });
   }
+
+  const netoUnit     = Math.round(costo * (1 + margen / 100));
+  const totalSinIva  = Math.round(netoUnit * qty * (1 - desc / 100));
 
   const canAdd = mode === 'catalog' ? !!descTxt : (!!descTxt && freePrice > 0);
 
@@ -287,15 +326,28 @@ function AddItemSection({
             {/* Buscador de producto */}
             <div className="relative flex-1 min-w-52">
               <span className="text-[10px] text-gray-400 mb-1 block">Producto</span>
-              <input
-                type="text"
-                placeholder="Buscar por nombre o SKU…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setDescTxt(e.target.value); setShowList(true); }}
-                onFocus={() => setShowList(true)}
-                onBlur={() => setTimeout(() => setShowList(false), 150)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]"
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o SKU…"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setDescTxt(e.target.value); setShowList(true); setProductId(''); }}
+                  onFocus={() => setShowList(true)}
+                  onBlur={() => setTimeout(() => setShowList(false), 150)}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]"
+                />
+                {productId && (
+                  <button
+                    type="button"
+                    onClick={openEditModal}
+                    disabled={loadingEdit}
+                    className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 text-[10px] font-bold text-gray-500 hover:text-[#1d65c5] hover:border-[#389fe0] transition-colors disabled:opacity-40"
+                    title="Editar este producto"
+                  >
+                    {loadingEdit ? '…' : 'e'}
+                  </button>
+                )}
+              </div>
               {showList && filtered.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[200] max-h-60 overflow-y-auto">
                   {filtered.map((p) => (
@@ -318,12 +370,12 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="0.01" step="0.01" value={qty}
-                onChange={(e) => setQty(parseFloat(e.target.value) || 1)}
+              <input type="number" min="0.01" step="0.01" value={qtyStr}
+                onChange={(e) => setQtyStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
-            {/* Margen % */}
+            {/* Margen % — interno */}
             <div>
               <span className="text-[10px] text-amber-600 mb-1 block">Margen %</span>
               <input type="number" min="0" max="100" step="0.5" value={margen}
@@ -331,27 +383,27 @@ function AddItemSection({
                 className="w-16 text-center border border-amber-200 bg-amber-50/60 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-amber-400" />
             </div>
 
-            {/* Costo proveedor */}
-            <div>
-              <span className="text-[10px] text-amber-600 mb-1 block">Costo neto</span>
-              <input type="number" min="0" step="1000" value={costo}
-                onChange={(e) => setCosto(parseFloat(e.target.value) || 0)}
-                className="w-28 text-right border border-amber-200 bg-amber-50/60 rounded-lg px-2 py-2 text-xs focus:outline-none focus:border-amber-400" />
-            </div>
-
             {/* Desc % */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Desc %</span>
-              <input type="number" min="0" max="100" step="0.5" value={desc}
-                onChange={(e) => setDesc(parseFloat(e.target.value) || 0)}
+              <input type="number" min="0" max="100" step="0.5" value={descStr}
+                onChange={(e) => setDescStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
-            {/* Precio calculado */}
-            {calc.conIva > 0 && (
+            {/* P. Unit s/IVA — preview */}
+            {netoUnit > 0 && (
               <div>
-                <span className="text-[10px] text-gray-400 mb-1 block">P. unit c/IVA</span>
-                <div className="py-2 text-xs text-gray-600 tabular-nums font-medium">{clp(calc.conIva)}</div>
+                <span className="text-[10px] text-gray-400 mb-1 block">P. Unit s/IVA</span>
+                <div className="py-2 text-xs text-gray-700 tabular-nums font-semibold">{clp(netoUnit)}</div>
+              </div>
+            )}
+
+            {/* Total s/IVA — preview */}
+            {totalSinIva > 0 && (
+              <div>
+                <span className="text-[10px] text-gray-400 mb-1 block">Total s/IVA</span>
+                <div className="py-2 text-xs text-[#1d65c5] tabular-nums font-bold">{clp(totalSinIva)}</div>
               </div>
             )}
           </>
@@ -387,33 +439,34 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="0.01" step="0.01" value={qty}
-                onChange={(e) => setQty(parseFloat(e.target.value) || 1)}
+              <input type="number" min="0.01" step="0.01" value={qtyStr}
+                onChange={(e) => setQtyStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
-            {/* Precio directo c/IVA */}
+            {/* P. Unit s/IVA */}
             <div>
-              <span className="text-[10px] text-gray-400 mb-1 block">Precio c/IVA</span>
-              <input type="number" min="0" step="1000" value={freePrice || ''}
+              <span className="text-[10px] text-gray-400 mb-1 block">P. Unit s/IVA</span>
+              <input type="text" inputMode="numeric"
+                value={freePrice > 0 ? new Intl.NumberFormat('es-CL').format(freePrice) : ''}
                 placeholder="0"
-                onChange={(e) => setFreePrice(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setFreePrice(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
                 className="w-32 text-right border border-gray-200 rounded-lg px-2 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
             {/* Desc % */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Desc %</span>
-              <input type="number" min="0" max="100" step="0.5" value={desc}
-                onChange={(e) => setDesc(parseFloat(e.target.value) || 0)}
+              <input type="number" min="0" max="100" step="0.5" value={descStr}
+                onChange={(e) => setDescStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
-            {/* Subtotal preview */}
+            {/* Total s/IVA preview */}
             {freePrice > 0 && (
               <div>
-                <span className="text-[10px] text-gray-400 mb-1 block">Subtotal</span>
-                <div className="py-2 text-xs text-gray-600 tabular-nums font-medium">
+                <span className="text-[10px] text-gray-400 mb-1 block">Total s/IVA</span>
+                <div className="py-2 text-xs text-[#1d65c5] tabular-nums font-bold">
                   {clp(Math.round(freePrice * qty * (1 - desc / 100)))}
                 </div>
               </div>
@@ -431,6 +484,39 @@ function AddItemSection({
         </button>
 
       </div>
+
+      {/* Modal edición de producto */}
+      {editProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          onClick={() => setEditProduct(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{editProduct.name}</p>
+                <p className="text-xs font-mono text-gray-400">{editProduct.sku}</p>
+              </div>
+              <button
+                onClick={() => setEditProduct(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              <ProductEditForm
+                product={editProduct}
+                onSaved={() => setEditProduct(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -466,7 +552,7 @@ export default function QuoteEditor({
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-screen-2xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -557,11 +643,9 @@ export default function QuoteEditor({
                     <th className="px-3 py-2.5 text-gray-500 font-semibold uppercase tracking-wide">Producto</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-center">Cant.</th>
                     <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-center bg-amber-50/50">Margen %</th>
-                    <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-right bg-amber-50/50">Margen $</th>
-                    <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-right bg-amber-50/50">P. neto</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-center">Desc %</th>
-                    <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">P. unit c/IVA</th>
-                    <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">Subtotal</th>
+                    <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">P. Unit s/IVA</th>
+                    <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">Total s/IVA</th>
                     <th className="px-2 py-2.5"></th>
                   </tr>
                 </thead>

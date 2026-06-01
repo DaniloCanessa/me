@@ -39,6 +39,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   dc_converter:     'Conversor DC/DC',
   lighting:         'Iluminación',
   ac:               'Aire Acondicionado',
+  instalacion:      'Instalación',
   accessory:        'Accesorio',
 };
 
@@ -136,7 +137,13 @@ function ProductModal({
   onSave: (formData: FormData) => void;
   isPending: boolean;
 }) {
-  const [category, setCategory] = useState(product?.category ?? 'solar_kit');
+  const [category,   setCategory]  = useState(product?.category ?? 'solar_kit');
+  const [costo,      setCosto]     = useState(product?.costo_proveedor_clp ?? 0);
+  const [margenStr,  setMargenStr] = useState(String(product?.margen_pct ?? 30));
+
+  const margen      = parseFloat(margenStr) || 0;
+  const precioNeto  = Math.round(costo * (1 + margen / 100));
+  const precioConIva = Math.round(precioNeto * 1.19);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto py-8">
@@ -195,6 +202,7 @@ function ProductModal({
                 <option value="dc_converter">Conversor DC/DC</option>
                 <option value="lighting">Iluminación</option>
                 <option value="ac">Aire Acondicionado</option>
+                <option value="instalacion">Instalación</option>
                 <option value="accessory">Accesorio</option>
               </select>
             </label>
@@ -225,30 +233,44 @@ function ProductModal({
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-xs text-gray-500 mb-1 block">Costo proveedor neto (CLP) *</span>
-                <input name="costo_proveedor_clp" type="number" step="1000" required
-                  defaultValue={product?.costo_proveedor_clp ?? 0}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0] bg-white" />
+                <input
+                  type="text" inputMode="numeric" required
+                  value={costo > 0 ? new Intl.NumberFormat('es-CL').format(costo) : ''}
+                  onChange={e => setCosto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0] bg-white"
+                  placeholder="0" />
+                <input type="hidden" name="costo_proveedor_clp" value={costo} />
               </label>
               <label className="block">
-                <span className="text-xs text-gray-500 mb-1 block">Margen % (vacío = global 30%)</span>
-                <input name="margen_pct" type="number" step="0.5" min="0" max="100" placeholder="30"
-                  defaultValue={product?.margen_pct ?? ''}
+                <span className="text-xs text-gray-500 mb-1 block">Margen %</span>
+                <input
+                  type="number" step="0.1" min="0" max="100"
+                  value={margenStr}
+                  onChange={e => setMargenStr(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0] bg-white" />
+                <input type="hidden" name="margen_pct" value={margen} />
               </label>
             </div>
+
+            {/* Preview precio calculado */}
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t border-amber-100">
+              <div>
+                <p className="text-xs text-amber-600 mb-1">Precio venta s/IVA</p>
+                <p className="text-sm font-bold text-amber-800 tabular-nums">{clp(precioNeto)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-amber-600 mb-1">Precio venta c/IVA</p>
+                <p className="text-sm font-bold text-amber-800 tabular-nums">{clp(precioConIva)}</p>
+              </div>
+            </div>
+            <input type="hidden" name="base_price_clp" value={precioNeto} />
           </div>
 
-          {/* Precios */}
-          <div className="grid grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-xs text-gray-500 mb-1 block">Precio base (CLP) *</span>
-              <input name="base_price_clp" type="number" step="1000" required
-                defaultValue={product?.base_price_clp ?? ''}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0]" />
-            </label>
+          {/* Precios adicionales */}
+          <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-xs text-gray-500 mb-1 block">Precio instalación (CLP)</span>
-              <input name="installation_price_clp" type="number" step="1000"
+              <input name="installation_price_clp" type="number" step="1"
                 defaultValue={product?.installation_price_clp ?? 0}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0]" />
             </label>
@@ -307,6 +329,7 @@ function ProductModal({
 export default function ProductsManager({ products }: { products: Product[] }) {
   const [modalProduct, setModalProduct] = useState<Product | null | 'new'>('new' as never);
   const [showModal, setShowModal]       = useState(false);
+
   const [filterCat, setFilterCat]       = useState<string>('all');
   const [filterStock, setFilterStock]   = useState<'all' | 'in' | 'out'>('all');
   const [isPending, startTransition]    = useTransition();

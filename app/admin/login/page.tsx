@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail]     = useState('');
   const [pw, setPw]           = useState('');
   const [error, setError]     = useState('');
@@ -22,7 +21,9 @@ export default function AdminLoginPage() {
         body:    JSON.stringify({ email, password: pw }),
       });
       if (res.ok) {
-        router.push('/admin/leads');
+        // Hard redirect para forzar re-render del layout con el nuevo cookie
+        window.location.href = '/admin/leads';
+        return;
       } else {
         const data = await res.json() as { error?: string };
         setError(data.error ?? 'Credenciales incorrectas');
@@ -71,6 +72,12 @@ export default function AdminLoginPage() {
           >
             {loading ? 'Ingresando…' : 'Ingresar'}
           </button>
+          <Link
+            href="/admin/forgot-password"
+            className="text-center text-xs text-gray-400 hover:text-[#389fe0] transition-colors mt-1"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
         </form>
       </div>
     </div>

@@ -92,6 +92,12 @@ export async function toggleProductActive(id: string, isActive: boolean) {
   return { ok: true };
 }
 
+export async function getProductById(id: string) {
+  const db = getSupabaseAdmin();
+  const { data } = await db.from('products').select('*').eq('id', id).single();
+  return data;
+}
+
 export async function deleteProduct(id: string) {
   const db = getSupabaseAdmin();
   const { error } = await db.from('products').delete().eq('id', id);

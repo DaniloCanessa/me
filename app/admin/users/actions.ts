@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
 
+const PROTECTED_EMAIL = 'danilo.canessa@gmail.com';
+
 export async function createUser(formData: FormData) {
   const email    = (formData.get('email') as string).toLowerCase().trim();
   const name     = formData.get('name') as string;
@@ -57,6 +59,12 @@ export async function resetPassword(id: string, formData: FormData) {
 
 export async function toggleUserActive(id: string, isActive: boolean) {
   const db = getSupabaseAdmin();
+
+  if (!isActive) {
+    const { data: target } = await db.from('users').select('email').eq('id', id).single();
+    if (target?.email === PROTECTED_EMAIL) return { error: 'Esta cuenta no puede desactivarse' };
+  }
+
   const { error } = await db
     .from('users')
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
@@ -69,6 +77,9 @@ export async function toggleUserActive(id: string, isActive: boolean) {
 
 export async function deleteUser(id: string) {
   const db = getSupabaseAdmin();
+
+  const { data: target } = await db.from('users').select('email').eq('id', id).single();
+  if (target?.email === PROTECTED_EMAIL) return { error: 'Esta cuenta está protegida y no puede eliminarse' };
 
   // Evitar eliminar el último admin
   const { data: admins } = await db

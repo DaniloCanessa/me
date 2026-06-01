@@ -4,6 +4,15 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+export async function deleteQuotes(ids: string[]) {
+  if (!ids.length) return { ok: true };
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('quotes').delete().in('id', ids);
+  if (error) return { error: error.message };
+  revalidatePath('/admin/quotes');
+  return { ok: true };
+}
+
 export async function createQuote(clientId: string, installationId?: string) {
   const db = getSupabaseAdmin();
 
@@ -118,7 +127,7 @@ export async function upsertQuoteItem(quoteId: string, formData: FormData) {
     description:         formData.get('description') as string,
     quantity,
     costo_proveedor_clp: directPriceIva > 0 ? 0 : costo,
-    margen_pct:          directPriceIva > 0 ? null : margen,
+    margen_pct:          directPriceIva > 0 ? 0 : margen,
     unit_price_clp:      Math.round(precio_neto_unit),
     discount_percent,
     total_clp:           Math.round(total_clp),

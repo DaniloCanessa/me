@@ -184,6 +184,33 @@ export async function deleteProjectPayment(projectId: string, paymentId: string)
   return { ok: true };
 }
 
+// ─── Compras y anticipos ─────────────────────────────────────────────────────
+
+export async function addProjectPurchase(projectId: string, formData: FormData) {
+  const db = getSupabaseAdmin();
+  const itemId = (formData.get('project_item_id') as string) || null;
+  const { error } = await db.from('project_purchases').insert({
+    project_id:      projectId,
+    project_item_id: itemId || null,
+    tipo:            formData.get('tipo') as string,
+    proveedor:       (formData.get('proveedor') as string) || null,
+    folio:           (formData.get('folio') as string) || null,
+    monto_clp:       parseFloat(formData.get('monto_clp') as string) || 0,
+    fecha:           formData.get('fecha') as string,
+    notas:           (formData.get('notas') as string) || null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { ok: true };
+}
+
+export async function deleteProjectPurchase(projectId: string, purchaseId: string) {
+  const db = getSupabaseAdmin();
+  await db.from('project_purchases').delete().eq('id', purchaseId);
+  revalidatePath(`/admin/projects/${projectId}`);
+  return { ok: true };
+}
+
 // ─── Reimportar ítems desde cotización ───────────────────────────────────────
 
 export async function reimportItemsFromQuote(projectId: string) {

@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 30 de abril 2026 (sesión 10)
+> Última actualización: 20 de mayo 2026 (sesión 13)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,17 +8,13 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesión 10 completa. Infraestructura Vercel configurada + campo Proveedor en productos + fixes de importación Excel.**
+**Sesión 13 completada. Backoffice y simulador 100% operativos en producción.**
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Todas las variables de entorno cargadas en Vercel production.
 
-**SQL ya ejecutado en Supabase (sesión 10):**
-- `ALTER TABLE products ADD COLUMN IF NOT EXISTS proveedor text;`
-- Constraint `products_category_check` actualizada para incluir `'ac'`
-
-Al iniciar la próxima sesión, continuar con las mejoras de prioridad media (ver sección Pendientes):
-- Precio de kWh dinámico por distribuidora/tarifa
-- Notificaciones por email cuando llega un lead nuevo
+**Próximas mejoras (media prioridad):**
+- Precio de kWh dinámico por distribuidora/tarifa (hoy usa $220 fijo cuando no hay monto en boleta)
+- Notificaciones por email cuando llega un lead nuevo o un proyecto cambia de estado
 - Pipeline de ventas: métricas de conversión por etapa en el dashboard
 
 ---
@@ -90,7 +86,7 @@ La landing page está completamente construida con identidad visual de marca. El
 
 | Capa | Tecnología |
 |---|---|
-| Framework | Next.js 16.2.3 (App Router) |
+| Framework | Next.js 16.2.6 (App Router) |
 | UI | React 19.2.4 + Tailwind CSS v4 |
 | Lenguaje | TypeScript (strict) |
 | Hosting | Vercel (deploy automático desde GitHub) |
@@ -686,6 +682,31 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 ---
 
 ## Pendientes y próximos pasos
+
+### ✅ Completado en sesión 13 (20 mayo 2026)
+
+- [x] **Fix Tailwind CSS / Turbopack** — error `Can't resolve 'tailwindcss' in 'Documentos'` causado por bug de Turbopack que resolvía desde el directorio padre. Solución: Next.js actualizado a 16.2.6 + `resolveAlias: { tailwindcss: path.resolve(...) }` en `next.config.ts`.
+- [x] **Fix sidebar post-login** — sidebar no aparecía inmediatamente al entrar. Causa: `router.push` hace soft navigation sin recargar el layout. Fix: `window.location.href = '/admin/leads'` (hard reload) en `app/admin/login/page.tsx`.
+- [x] **Recuperación de contraseña admin** — flujo completo: formulario `/admin/forgot-password`, API `POST /api/admin/forgot-password` (genera token con 1h de expiración, envía email via Resend), página `/admin/reset-password?token=...`, API `POST /api/admin/reset-password` (valida token, hashea nueva contraseña, limpia token). Rutas agregadas a `PUBLIC_ADMIN` en `proxy.ts`. SQL: `ALTER TABLE users ADD COLUMN reset_token text; ADD COLUMN reset_token_expires timestamptz;`
+- [x] **Cuenta protegida** — `danilo.canessa@gmail.com` no puede ser eliminada ni desactivada por otros usuarios. Protección en `app/admin/users/actions.ts` (constante `PROTECTED_EMAIL`) y badge "🔒 protegido" en `UsersManager.tsx`.
+- [x] **Último acceso en usuarios** — columna "Último acceso" en tabla de usuarios con fecha relativa. La fecha se registra automáticamente al hacer login (`app/api/admin/login/route.ts` actualiza `last_login_at`). SQL: `ALTER TABLE users ADD COLUMN last_login_at timestamptz;`
+- [x] **Flujo cotización sin paso redundante** — al crear nueva cotización ya no hay que hacer clic en "Nueva cotización" dos veces. Al seleccionar cliente desde la lista, se redirige directamente al editor. Implementado con `?from=quotes` en `/admin/clients` + `ClientsManager` con `fromQuotes` prop que activa clic de fila completa.
+- [x] **Formulario de cotización más ancho** — `max-w-6xl` → `max-w-screen-2xl` en `QuoteEditor.tsx`.
+- [x] **Formulario de proyectos más ancho** — `max-w-5xl` → `max-w-screen-2xl` en `ProjectDetail.tsx` (4 instancias).
+- [x] **Separador de miles en "Costo neto"** — campo cambiado de `type="number"` a `type="text"` con `Intl.NumberFormat('es-CL')` para mostrar miles y `.replace(/\D/g, '')` para parsear. Aplicado en ambos campos de costo neto en `QuoteEditor.tsx`.
+- [x] **Fix ítems libres en cotización (bug 1 — margen_pct NOT NULL)** — columna `quote_items.margen_pct NUMERIC NOT NULL DEFAULT 30` rechazaba `null`. Fix: `margen_pct: directPriceIva > 0 ? 0 : margen` en `upsertQuoteItem` (`app/admin/quotes/actions.ts`).
+- [x] **Fix ítems libres en cotización (bug 2 — precio 0 en display)** — `ItemRow` en `QuoteEditor.tsx` recalculaba precio desde `calcItem(costo=0, margen=0)` dando 0. Fix: detecta `isFreeItem` (`costo=0 && margen=0`), usa `item.unit_price_clp` directamente para `freeNeto`, y en save envía `unit_price_direct = freeNeto * 1.19`. El campo de edición del precio neto también usa `freeNeto` para ítems libres.
+
+**SQL ejecutado esta sesión en Supabase:**
+```sql
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires timestamptz;
+```
+
+### ✅ Completado en sesión 11 (9 mayo 2026)
+
+- [x] **Recuperación de acceso admin** — contraseña del usuario `danilo.canessa@gmail.com` reseteada via SQL en Supabase. Técnica: dollar-quoting (`$h$...$h$`) para evitar que los `$` del hash bcrypt confundan al parser de PostgreSQL. Contraseña temporal: `password` — **cambiar desde `/admin/users`**.
 
 ### ✅ Completado en sesión 10 (30 abril 2026)
 
