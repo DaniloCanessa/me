@@ -692,6 +692,7 @@ export default function ProjectDetail({
       id:         `temp-${Date.now()}-${i}`,
       project_id: project.id,
       ...l,
+      costo_referencia_sin_iva: null, // Campo obligatorio agregado
       created_at: new Date().toISOString(),
     }));
 
