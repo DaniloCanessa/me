@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import {
   updateProject, upsertProjectItem, deleteProjectItem,
   addProjectCost, deleteProjectCost,
-  reimportItemsFromQuote,
+  reimportItemsFromQuote, importCostsAsPurchases,
   addProjectPayment, deleteProjectPayment,
-  addProjectPurchase, deleteProjectPurchase,
+  addProjectPurchase, updateProjectPurchase, deleteProjectPurchase, addProjectPurchaseBulk,
 } from '../actions';
 import type { ProjectRow, ProjectItem, ProjectCost, ProjectPayment, ProjectPurchase } from '@/lib/db/projects';
 
@@ -87,6 +87,12 @@ function PurchaseForm({
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const [cantidad, setCantidad] = useState(1);
+  const [precioUnitario, setPrecioUnitario] = useState(0);
+  const [costoReferencia, setCostoReferencia] = useState(0);
+  const [selectedItemId, setSelectedItemId] = useState(defaultItemId || '');
+  const totalLinea = Math.round(cantidad * precioUnitario);
+  const showCostoReferencia = selectedItemId === ''; // Solo cuando "Sin ítem específico"
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap gap-3 items-end">
       {defaultItemId !== null ? (
@@ -94,7 +100,14 @@ function PurchaseForm({
       ) : (
         <div className="w-52">
           <label className="text-xs text-gray-500 mb-1 block">Ítem</label>
-          <select name="project_item_id"
+          <select name="project_item_id" value={selectedItemId}
+            onChange={e => {
+              setSelectedItemId(e.target.value);
+              // Limpiar costo de referencia cuando se selecciona un ítem específico
+              if (e.target.value !== '') {
+                setCostoReferencia(0);
+              }
+            }}
             className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
             <option value="">Sin ítem específico</option>
             {items.map(item => (
@@ -125,11 +138,57 @@ function PurchaseForm({
           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
       </div>
 
-      <div className="w-32">
-        <label className="text-xs text-gray-500 mb-1 block">Monto (CLP)</label>
-        <input name="monto_clp" type="number" required min={0} placeholder="0"
+      <div className="w-24">
+        <label className="text-xs text-gray-500 mb-1 block">Cantidad</label>
+        <input name="cantidad_comprada" type="number" step="0.01" required min={0}
+          value={cantidad} onChange={e => setCantidad(parseFloat(e.target.value) || 0)}
           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
       </div>
+
+      {showCostoReferencia && (
+        <div className="w-32">
+          <label className="text-xs text-gray-500 mb-1 block">Costo ref. s/IVA</label>
+          <input name="costo_referencia_sin_iva" type="number" min={0}
+            value={costoReferencia > 0 ? costoReferencia : ''}
+            onChange={e => setCostoReferencia(parseFloat(e.target.value) || 0)}
+            placeholder="Opcional"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+        </div>
+      )}
+
+      <div className="w-32">
+        <label className="text-xs text-gray-500 mb-1 block">Precio unit. s/IVA</label>
+        <input name="precio_unitario_sin_iva" type="number" required min={0}
+          value={precioUnitario > 0 ? precioUnitario : ''}
+          onChange={e => setPrecioUnitario(parseFloat(e.target.value) || 0)}
+          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+      </div>
+
+      {totalLinea > 0 && (
+        <div className="w-32">
+          <label className="text-xs text-gray-500 mb-1 block">Total s/IVA</label>
+          <div className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600 tabular-nums">
+            {clp(totalLinea)}
+          </div>
+          <input type="hidden" name="monto_clp" value={totalLinea} />
+        </div>
+      )}
+
+      {showCostoReferencia && costoReferencia > 0 && precioUnitario > 0 && (
+        <div className="w-32">
+          <label className="text-xs text-gray-500 mb-1 block">Diferencia</label>
+          <div className={`w-full rounded-xl border px-3 py-2 text-sm tabular-nums ${
+            precioUnitario <= costoReferencia
+              ? 'bg-green-50 border-green-200 text-green-700'
+              : 'bg-red-50 border-red-200 text-red-600'
+          }`}>
+            {precioUnitario <= costoReferencia
+              ? `-${clp(costoReferencia - precioUnitario)} ahorro`
+              : `+${clp(precioUnitario - costoReferencia)} exceso`
+            }
+          </div>
+        </div>
+      )}
 
       <div className="w-36">
         <label className="text-xs text-gray-500 mb-1 block">Fecha</label>
@@ -184,11 +243,23 @@ export default function ProjectDetail({
   const [editingItem, setEditingItem] = useState<ProjectItem | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddCost, setShowAddCost] = useState(false);
+  const [costSinIva, setCostSinIva]   = useState(0);
+  const [costConIva, setCostConIva]   = useState(0);
+  const [lastCostField, setLastCostField] = useState<'sin_iva' | 'con_iva'>('sin_iva');
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [showGlobalAdd, setShowGlobalAdd]   = useState(false);
   const [addingForItem, setAddingForItem]   = useState<string | null>(null);
   const [expandedItems, setExpandedItems]   = useState<Set<string>>(new Set());
   const [purchaseError, setPurchaseError]   = useState<string | null>(null);
+  const [showMultiForm, setShowMultiForm]   = useState(false);
+  const [multiTipo,     setMultiTipo]       = useState<'factura' | 'anticipo'>('factura');
+  const [multiProv,     setMultiProv]       = useState('');
+  const [multiFolio,    setMultiFolio]      = useState('');
+  const [multiFecha,    setMultiFecha]      = useState(new Date().toISOString().slice(0, 10));
+  const [multiMontos,   setMultiMontos]     = useState<Record<string, string>>({});
+  const [multiCantidades, setMultiCantidades] = useState<Record<string, string>>({});
+  const [multiSelected, setMultiSelected]   = useState<Record<string, boolean>>({});
+  const [editingPurchase, setEditingPurchase] = useState<ProjectPurchase | null>(null);
   const [saved, setSaved] = useState(false);
 
   // Sincronizar estado local cuando el servidor actualiza (router.refresh)
@@ -214,8 +285,12 @@ export default function ProjectDetail({
   const IVA            = 1.19;
   const revenue        = items.reduce((s, i) => s + i.total_clp, 0);         // c/IVA
   const costBase       = items.reduce((s, i) => s + i.costo_proveedor_clp * i.quantity, 0); // net
-  const costExtra      = costs.reduce((s, c) => s + c.monto_clp, 0);         // net
-  const totalComprado  = purchases.reduce((s, p) => s + p.monto_clp, 0);     // c/IVA (facturas reales)
+  const costExtra      = costs.reduce((s, c) => {
+    const esCosteExistente = c.con_iva === undefined;
+    const conIva = esCosteExistente ? false : c.con_iva;
+    return s + (conIva ? c.monto_clp : Math.round(c.monto_clp * 1.19));
+  }, 0); // con IVA
+  const totalComprado  = purchases.reduce((s, p) => s + Math.round(p.monto_clp * 1.19), 0); // con IVA aplicado
   const totalCobrado   = payments.reduce((s, p) => s + p.monto_clp, 0);      // c/IVA
   const porCobrar      = revenue - totalCobrado;
   const cobradoPct     = revenue > 0 ? (totalCobrado / revenue) * 100 : 0;
@@ -223,7 +298,7 @@ export default function ProjectDetail({
 
   // Con IVA
   const costBaseIva    = Math.round(costBase * IVA);
-  const costExtraIva   = costExtra;                      // ingresado c/IVA
+  const costExtraIva   = costExtra;                      // ya calculado c/IVA
   const compradoIva    = totalComprado;
   const profitIva      = revenue - costBaseIva - costExtraIva;
   const marginIvaPct   = revenue > 0 ? (profitIva / revenue) * 100 : 0;
@@ -231,7 +306,11 @@ export default function ProjectDetail({
   // Sin IVA
   const revenueSinIva  = Math.round(revenue / IVA);
   const costBaseSinIva = costBase;
-  const costExtraSinIva= Math.round(costExtra / IVA);   // c/IVA → neto
+  const costExtraSinIva= costs.reduce((s, c) => {
+    const esCosteExistente = c.con_iva === undefined;
+    const conIva = esCosteExistente ? false : c.con_iva;
+    return s + (conIva ? Math.round(c.monto_clp / 1.19) : c.monto_clp);
+  }, 0); // neto
   const compradoSinIva = Math.round(totalComprado / IVA);
   const profitSinIva   = revenueSinIva - costBaseSinIva - costExtraSinIva;
   const marginSinIvaPct= revenueSinIva > 0 ? (profitSinIva / revenueSinIva) * 100 : 0;
@@ -250,6 +329,24 @@ export default function ProjectDetail({
       else next.add(itemId);
       return next;
     });
+  }
+
+  function expandAllItems() {
+    const allItemIds = items.map(item => item.id);
+    setExpandedItems(new Set(allItemIds));
+  }
+
+  function collapseAllItems() {
+    setExpandedItems(new Set());
+  }
+
+  function toggleAllItems() {
+    const allExpanded = items.every(item => expandedItems.has(item.id));
+    if (allExpanded) {
+      collapseAllItems();
+    } else {
+      expandAllItems();
+    }
   }
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -289,11 +386,39 @@ export default function ProjectDetail({
     const form = e.currentTarget;
     const fd = new FormData(form);
 
+    // Determinar qué valor usar: usar el campo que tenga valor > 0
+    const usarSinIva = costSinIva > 0 && costConIva === 0;
+    const usarConIva = costConIva > 0 && costSinIva === 0;
+
+    // Si ambos tienen valor, usar el que sea diferente del cálculo automático
+    let montoFinal, conIvaFinal;
+    if (usarSinIva || (!usarConIva && costSinIva > 0)) {
+      montoFinal = costSinIva;
+      conIvaFinal = false;
+    } else {
+      montoFinal = costConIva;
+      conIvaFinal = true;
+    }
+
+    // DEBUG: Mostrar qué se está guardando
+    console.log('🔍 DEBUG COSTO:', {
+      lastCostField,
+      costSinIva,
+      costConIva,
+      montoFinal,
+      conIvaFinal
+    });
+
+    // Agregar valores calculados al FormData
+    fd.set('monto_clp', String(montoFinal));
+    fd.set('con_iva', String(conIvaFinal));
+
     const optimistic: ProjectCost = {
       id:          `temp-${Date.now()}`,
       project_id:  project.id,
       descripcion: fd.get('descripcion') as string,
-      monto_clp:   parseFloat(fd.get('monto_clp') as string) || 0,
+      monto_clp:   montoFinal,
+      con_iva:     conIvaFinal, // Incluir siempre
       categoria:   (fd.get('categoria') as string) || 'otro',
       notas:       (fd.get('notas') as string) || null,
       created_at:  new Date().toISOString(),
@@ -302,6 +427,10 @@ export default function ProjectDetail({
     setCosts(prev => [...prev, optimistic]);
     setShowAddCost(false);
     form.reset();
+    // Limpiar estado local
+    setCostSinIva(0);
+    setCostConIva(0);
+    setLastCostField('sin_iva');
 
     startCost(async () => {
       const res = await addProjectCost(project.id, fd);
@@ -366,17 +495,25 @@ export default function ProjectDetail({
     const itemId = (fd.get('project_item_id') as string) || null;
     setPurchaseError(null);
 
+    const cantidad = parseFloat(fd.get('cantidad_comprada') as string) || 1;
+    const precioUnitario = parseFloat(fd.get('precio_unitario_sin_iva') as string) || 0;
+    const costoReferencia = parseFloat(fd.get('costo_referencia_sin_iva') as string) || null;
+    const montoTotal = cantidad * precioUnitario;
+
     const optimistic: ProjectPurchase = {
-      id:              `temp-${Date.now()}`,
-      project_id:      project.id,
-      project_item_id: itemId || null,
-      tipo:            (fd.get('tipo') as 'factura' | 'anticipo') || 'factura',
-      proveedor:       (fd.get('proveedor') as string) || null,
-      folio:           (fd.get('folio') as string) || null,
-      monto_clp:       parseFloat(fd.get('monto_clp') as string) || 0,
-      fecha:           fd.get('fecha') as string,
-      notas:           (fd.get('notas') as string) || null,
-      created_at:      new Date().toISOString(),
+      id:                      `temp-${Date.now()}`,
+      project_id:              project.id,
+      project_item_id:         itemId || null,
+      tipo:                    (fd.get('tipo') as 'factura' | 'anticipo') || 'factura',
+      proveedor:               (fd.get('proveedor') as string) || null,
+      folio:                   (fd.get('folio') as string) || null,
+      cantidad_comprada:       cantidad,
+      precio_unitario_sin_iva: precioUnitario,
+      costo_referencia_sin_iva: costoReferencia,
+      monto_clp:               montoTotal,
+      fecha:                   fd.get('fecha') as string,
+      notas:                  (fd.get('notas') as string) || null,
+      created_at:             new Date().toISOString(),
     };
 
     setPurchases(prev => [optimistic, ...prev]);
@@ -400,6 +537,192 @@ export default function ProjectDetail({
     setPurchases(prev => prev.filter(p => p.id !== purchase.id));
     startPurchase(async () => {
       await deleteProjectPurchase(project.id, purchase.id);
+      router.refresh();
+    });
+  }
+
+  function handleEditPurchase(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const purchaseId = fd.get('purchase_id') as string;
+
+    const cantidad = parseFloat(fd.get('cantidad_comprada') as string) || 1;
+    const precioUnitario = parseFloat(fd.get('precio_unitario_sin_iva') as string) || 0;
+    const costoReferencia = parseFloat(fd.get('costo_referencia_sin_iva') as string) || null;
+    const montoTotal = cantidad * precioUnitario;
+
+    // Actualizar purchase localmente (optimistic)
+    setPurchases(prev => prev.map(p => p.id === purchaseId ? {
+      ...p,
+      tipo: (fd.get('tipo') as 'factura' | 'anticipo') || 'factura',
+      proveedor: (fd.get('proveedor') as string) || null,
+      folio: (fd.get('folio') as string) || null,
+      cantidad_comprada: cantidad,
+      precio_unitario_sin_iva: precioUnitario,
+      costo_referencia_sin_iva: costoReferencia,
+      monto_clp: montoTotal,
+      fecha: fd.get('fecha') as string,
+      notas: (fd.get('notas') as string) || null,
+    } : p));
+
+    setEditingPurchase(null);
+
+    startPurchase(async () => {
+      const res = await updateProjectPurchase(project.id, purchaseId, fd);
+      if (res?.error) {
+        // Revertir en caso de error
+        router.refresh();
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function toggleSelectItem(itemId: string) {
+    const willBeSelected = !multiSelected[itemId];
+    setMultiSelected(prev => ({ ...prev, [itemId]: willBeSelected }));
+
+    // Si se selecciona, auto-completar cantidad y monto si no los tiene
+    if (willBeSelected) {
+      const item = items.find(i => i.id === itemId);
+      if (item) {
+        // Auto-completar cantidad con la cantidad cotizada si no tiene
+        if (!multiCantidades[itemId]) {
+          setMultiCantidades(prev => ({ ...prev, [itemId]: String(item.quantity) }));
+        }
+
+        // Auto-completar monto con precio pendiente si no tiene
+        if (!multiMontos[itemId]) {
+          const cantidadComprada = purchases.filter(p => p.project_item_id === itemId && !p.id.startsWith('temp-')).reduce((s, p) => s + (p.cantidad_comprada || 0), 0);
+          const cantidadPendiente = Math.max(0, item.quantity - cantidadComprada);
+          if (cantidadPendiente > 0) {
+            const precioUnitario = item.costo_proveedor_clp;
+            setMultiMontos(prev => ({ ...prev, [itemId]: String(precioUnitario) }));
+          }
+        }
+      }
+    }
+  }
+
+  function toggleSelectAll() {
+    const hasUnselected = items.some(item => !multiSelected[item.id]);
+    if (hasUnselected) {
+      // Seleccionar todos y auto-completar cantidades y montos pendientes
+      const newSelected: Record<string, boolean> = {};
+      const newMontos: Record<string, string> = { ...multiMontos };
+      const newCantidades: Record<string, string> = { ...multiCantidades };
+
+      items.forEach(item => {
+        newSelected[item.id] = true;
+
+        // Auto-completar cantidad pendiente si no tiene
+        if (!newCantidades[item.id]) {
+          const cantidadComprada = purchases.filter(p => p.project_item_id === item.id && !p.id.startsWith('temp-')).reduce((s, p) => s + (p.cantidad_comprada || 0), 0);
+          const cantidadPendiente = Math.max(0, item.quantity - cantidadComprada);
+          if (cantidadPendiente > 0) {
+            newCantidades[item.id] = String(cantidadPendiente);
+          } else {
+            newCantidades[item.id] = String(item.quantity);
+          }
+        }
+
+        // Auto-completar precio unitario si no tiene
+        if (!newMontos[item.id]) {
+          const precioUnitario = item.costo_proveedor_clp;
+          newMontos[item.id] = String(precioUnitario);
+        }
+      });
+
+      setMultiSelected(newSelected);
+      setMultiMontos(newMontos);
+      setMultiCantidades(newCantidades);
+    } else {
+      // Deseleccionar todos
+      setMultiSelected({});
+    }
+  }
+
+  function selectItemsWithPendingAmount() {
+    const newSelected: Record<string, boolean> = {};
+    const newMontos: Record<string, string> = {};
+    const newCantidades: Record<string, string> = {};
+
+    items.forEach(item => {
+      const cantidadComprada = purchases.filter(p => p.project_item_id === item.id && !p.id.startsWith('temp-')).reduce((s, p) => s + (p.cantidad_comprada || 0), 0);
+      const cantidadPendiente = Math.max(0, item.quantity - cantidadComprada);
+
+      if (cantidadPendiente > 0) {
+        newSelected[item.id] = true;
+        newCantidades[item.id] = String(cantidadPendiente);
+        newMontos[item.id] = String(item.costo_proveedor_clp);
+      }
+    });
+
+    setMultiSelected(newSelected);
+    setMultiMontos(newMontos);
+    setMultiCantidades(newCantidades);
+  }
+
+  function handleAddMultiPurchase() {
+    const lines = items
+      .filter(item => multiSelected[item.id])
+      .map(item => {
+        const cantidad = parseFloat(multiCantidades[item.id] ?? '1') || 1;
+        const precioUnitario = parseInt((multiMontos[item.id] ?? '').replace(/\D/g, ''), 10) || 0;
+        const montoTotal = cantidad * precioUnitario;
+
+        return {
+          project_item_id:         item.id,
+          tipo:                    multiTipo,
+          proveedor:               multiProv.trim() || null,
+          folio:                   multiFolio.trim() || null,
+          cantidad_comprada:       cantidad,
+          precio_unitario_sin_iva: precioUnitario,
+          monto_clp:               montoTotal,
+          fecha:                   multiFecha,
+          notas:                   null as string | null,
+        };
+      })
+      .filter(line => line.cantidad_comprada > 0 && line.precio_unitario_sin_iva > 0);
+
+    if (!lines.length) return;
+
+    const optimistic: ProjectPurchase[] = lines.map((l, i) => ({
+      id:         `temp-${Date.now()}-${i}`,
+      project_id: project.id,
+      ...l,
+      created_at: new Date().toISOString(),
+    }));
+
+    setPurchases(prev => [...optimistic, ...prev]);
+    setShowMultiForm(false);
+    setMultiMontos({});
+    setMultiCantidades({});
+    setMultiSelected({});
+    setMultiProv('');
+    setMultiFolio('');
+    setMultiFecha(new Date().toISOString().slice(0, 10));
+
+    startPurchase(async () => {
+      const res = await addProjectPurchaseBulk(project.id, lines);
+      if (res?.error) {
+        setPurchases(prev => prev.filter(p => !optimistic.find(o => o.id === p.id)));
+        setPurchaseError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleImportCosts() {
+    setImportError(null);
+    startImport(async () => {
+      const res = await importCostsAsPurchases(project.id);
+      if (res?.error) {
+        setImportError(res.error);
+        return;
+      }
       router.refresh();
     });
   }
@@ -616,12 +939,37 @@ export default function ProjectDetail({
           <div className="flex flex-col gap-4">
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Compras por ítem</p>
-                <button
-                  onClick={() => { setShowGlobalAdd(v => !v); setAddingForItem(null); }}
-                  className="text-xs text-[#389fe0] hover:underline font-medium">
-                  + Registrar compra
-                </button>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Compras por ítem</p>
+                  {items.length > 0 && (
+                    <button
+                      onClick={toggleAllItems}
+                      className="text-xs text-gray-400 hover:text-[#389fe0] font-medium transition-colors"
+                      title={items.every(item => expandedItems.has(item.id)) ? "Contraer todas" : "Expandir todas"}
+                    >
+                      {items.every(item => expandedItems.has(item.id)) ? "▼ Contraer todas" : "▶ Expandir todas"}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setShowMultiForm(true);
+                      setShowGlobalAdd(false);
+                      setAddingForItem(null);
+                      setMultiSelected({});
+                      setMultiMontos({});
+                      setMultiCantidades({});
+                    }}
+                    className="text-xs text-[#389fe0] hover:underline font-medium">
+                    + Factura con varios ítems
+                  </button>
+                  <button
+                    onClick={() => { setShowGlobalAdd(v => !v); setAddingForItem(null); }}
+                    className="text-xs text-gray-500 hover:underline font-medium">
+                    + Un ítem
+                  </button>
+                </div>
               </div>
 
               {purchaseError && (
@@ -652,22 +1000,29 @@ export default function ProjectDetail({
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Ítem</th>
-                      <th className="text-right px-4 py-2 font-medium">Cotizado</th>
-                      <th className="text-right px-4 py-2 font-medium">Comprado</th>
-                      <th className="text-right px-4 py-2 font-medium">Pendiente</th>
-                      <th className="text-right px-4 py-2 font-medium">Avance</th>
+                      <th className="text-right px-4 py-2 font-medium">Costo cotizado</th>
+                      <th className="text-right px-4 py-2 font-medium">Monto comprado</th>
+                      <th className="text-right px-4 py-2 font-medium">Diferencia precio</th>
+                      <th className="text-right px-4 py-2 font-medium">Avance físico</th>
                       <th className="px-4 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map(item => {
                       const itemPurchases = purchases.filter(p => p.project_item_id === item.id);
-                      const cotizado  = item.costo_proveedor_clp * item.quantity;
-                      const comprado  = itemPurchases.reduce((s, p) => s + p.monto_clp, 0);
-                      const pendiente = cotizado - comprado;
-                      const avancePct = cotizado > 0 ? (comprado / cotizado) * 100 : 0;
+
+                      // Cálculos por CANTIDAD (avance físico)
+                      const cantidadCotizada = item.quantity;
+                      const cantidadComprada = itemPurchases.reduce((s, p) => s + (p.cantidad_comprada || 0), 0);
+                      const avancePct = cantidadCotizada > 0 ? Math.min((cantidadComprada / cantidadCotizada) * 100, 100) : 0;
+
+                      // Cálculos por MONTO (performance financiero)
+                      const costoCotizado = item.costo_proveedor_clp * item.quantity;
+                      const montoComprado = itemPurchases.reduce((s, p) => s + p.monto_clp, 0);
+                      const diferenciaMonto = montoComprado - costoCotizado;
+
                       const isExpanded = expandedItems.has(item.id);
-                      const overrun   = pendiente < 0;
+                      const overrun = cantidadComprada > cantidadCotizada;
 
                       return (
                         <Fragment key={item.id}>
@@ -677,16 +1032,21 @@ export default function ProjectDetail({
                           >
                             <td className="px-4 py-3 text-gray-800">
                               <span className="mr-2 text-gray-400 text-xs select-none">{isExpanded ? '▼' : '▶'}</span>
-                              {item.description}
+                              <div>
+                                <p>{item.description}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {cantidadComprada}/{cantidadCotizada} unidades
+                                </p>
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-right text-gray-500">{cotizado > 0 ? clp(cotizado) : '—'}</td>
-                            <td className="px-4 py-3 text-right font-medium text-gray-700">{clp(comprado)}</td>
+                            <td className="px-4 py-3 text-right text-gray-500">{costoCotizado > 0 ? clp(costoCotizado) : '—'}</td>
+                            <td className="px-4 py-3 text-right font-medium text-gray-700">{clp(montoComprado)}</td>
                             <td className={`px-4 py-3 text-right font-medium ${
-                              overrun ? 'text-red-600' : pendiente === 0 && cotizado > 0 ? 'text-green-600' : 'text-amber-600'
+                              diferenciaMonto > 0 ? 'text-red-600' : diferenciaMonto < 0 ? 'text-green-600' : 'text-gray-500'
                             }`}>
-                              {overrun
-                                ? `+${clp(Math.abs(pendiente))} exceso`
-                                : cotizado > 0 ? clp(pendiente) : '—'}
+                              {diferenciaMonto > 0
+                                ? `+${clp(diferenciaMonto)} exceso`
+                                : diferenciaMonto < 0 ? `-${clp(Math.abs(diferenciaMonto))} ahorro` : '—'}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <AvanceBadge pct={avancePct} overrun={overrun} />
@@ -717,7 +1077,7 @@ export default function ProjectDetail({
 
                               {itemPurchases.map(purchase => (
                                 <tr key={purchase.id} className="bg-gray-50/40 border-b border-gray-100/60">
-                                  <td className="pl-10 pr-4 py-2.5 text-xs text-gray-600" colSpan={3}>
+                                  <td className="pl-10 pr-4 py-2.5 text-xs text-gray-600" colSpan={2}>
                                     <span className="text-gray-300 mr-2">└</span>
                                     <span className="text-gray-400 mr-2">
                                       {new Date(purchase.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -736,6 +1096,9 @@ export default function ProjectDetail({
                                     {purchase.notas && (
                                       <span className="text-gray-400 italic">{purchase.notas}</span>
                                     )}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right text-xs text-gray-500">
+                                    {purchase.cantidad_comprada || 1} × {clp(purchase.precio_unitario_sin_iva || 0)}
                                   </td>
                                   <td className="px-4 py-2.5 text-right text-xs font-semibold text-gray-800">
                                     {clp(purchase.monto_clp)}
@@ -777,14 +1140,14 @@ export default function ProjectDetail({
                       <td className="px-4 py-3 text-right font-semibold text-gray-500">{clp(costBase)}</td>
                       <td className="px-4 py-3 text-right font-bold text-gray-900">{clp(totalComprado)}</td>
                       <td className={`px-4 py-3 text-right font-bold ${
-                        costBase - totalComprado < 0 ? 'text-red-600' : costBase - totalComprado === 0 && costBase > 0 ? 'text-green-600' : 'text-amber-600'
+                        totalComprado - costBase > 0 ? 'text-red-600' : totalComprado - costBase < 0 ? 'text-green-600' : 'text-gray-500'
                       }`}>
-                        {costBase - totalComprado < 0
-                          ? `+${clp(Math.abs(costBase - totalComprado))} exceso`
-                          : clp(costBase - totalComprado)}
+                        {totalComprado - costBase > 0
+                          ? `+${clp(totalComprado - costBase)} exceso`
+                          : totalComprado - costBase < 0 ? `-${clp(Math.abs(totalComprado - costBase))} ahorro` : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-xs font-medium text-gray-500">{compradoPct.toFixed(0)}% ejecutado</span>
+                        <span className="text-xs font-medium text-gray-500">Promedio por cantidad</span>
                       </td>
                       <td></td>
                     </tr>
@@ -802,25 +1165,59 @@ export default function ProjectDetail({
                 <table className="w-full text-sm">
                   <tbody>
                     {purchases.filter(p => !p.project_item_id).map(purchase => (
-                      <tr key={purchase.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-xs text-gray-600">
-                          {new Date(purchase.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          {' · '}
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                            purchase.tipo === 'factura' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                          }`}>
-                            {purchase.tipo === 'factura' ? 'Factura' : 'Anticipo'}
-                          </span>
-                          {purchase.proveedor && <span className="ml-2 font-medium text-gray-700">{purchase.proveedor}</span>}
-                          {purchase.folio && <span className="ml-1 font-mono text-gray-400">#{purchase.folio}</span>}
-                          {purchase.notas && <span className="ml-2 text-gray-400 italic">{purchase.notas}</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{clp(purchase.monto_clp)}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => handleDeletePurchase(purchase)}
-                            className="text-xs text-red-400 hover:text-red-600">×</button>
-                        </td>
-                      </tr>
+                      editingPurchase?.id === purchase.id ? (
+                        <PurchaseEditForm
+                          key={purchase.id}
+                          purchase={purchase}
+                          onSubmit={handleEditPurchase}
+                          onCancel={() => setEditingPurchase(null)}
+                          isPending={isPurchasePending}
+                        />
+                      ) : (
+                        <tr key={purchase.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-3 text-xs text-gray-600">
+                            {new Date(purchase.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {' · '}
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                              purchase.tipo === 'factura' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {purchase.tipo === 'factura' ? 'Factura' : 'Anticipo'}
+                            </span>
+                            {purchase.proveedor && <span className="ml-2 font-medium text-gray-700">{purchase.proveedor}</span>}
+                            {purchase.folio && <span className="ml-1 font-mono text-gray-400">#{purchase.folio}</span>}
+                            <br />
+                            <span className="text-gray-400 text-xs">
+                              {purchase.cantidad_comprada || 1} × {clp(purchase.precio_unitario_sin_iva || 0)}
+                              {purchase.costo_referencia_sin_iva && (
+                                <>
+                                  {' '}
+                                  <span className={`ml-2 font-medium ${
+                                    purchase.precio_unitario_sin_iva <= purchase.costo_referencia_sin_iva
+                                      ? 'text-green-600'
+                                      : 'text-red-600'
+                                  }`}>
+                                    (ref: {clp(purchase.costo_referencia_sin_iva)} -
+                                    {purchase.precio_unitario_sin_iva <= purchase.costo_referencia_sin_iva
+                                      ? ` ahorro ${clp(purchase.costo_referencia_sin_iva - purchase.precio_unitario_sin_iva)}`
+                                      : ` exceso ${clp(purchase.precio_unitario_sin_iva - purchase.costo_referencia_sin_iva)}`
+                                    })
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                            {purchase.notas && <span className="ml-2 text-gray-400 italic">{purchase.notas}</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-800">{clp(purchase.monto_clp)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex gap-3 justify-end">
+                              <button onClick={() => setEditingPurchase(purchase)}
+                                className="text-xs text-[#389fe0] hover:underline">Editar</button>
+                              <button onClick={() => handleDeletePurchase(purchase)}
+                                className="text-xs text-red-400 hover:text-red-600">Eliminar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
                     ))}
                   </tbody>
                 </table>
@@ -828,6 +1225,223 @@ export default function ProjectDetail({
             )}
           </div>
         )}
+
+        {/* ═══ MODAL FACTURA MULTI-ÍTEM ════════════════════════════════════ */}
+        {showMultiForm && (() => {
+          const totalMulti = items
+            .filter(item => multiSelected[item.id])
+            .reduce((s, item) => {
+              const cantidad = parseFloat(multiCantidades[item.id] ?? '1') || 1;
+              const precioUnitario = parseInt((multiMontos[item.id] ?? '').replace(/\D/g, ''), 10) || 0;
+              return s + (cantidad * precioUnitario);
+            }, 0);
+          const linesCount = items.filter(item =>
+            multiSelected[item.id] &&
+            (parseFloat(multiCantidades[item.id] ?? '1') || 0) > 0 &&
+            (parseInt((multiMontos[item.id] ?? '').replace(/\D/g, ''), 10) || 0) > 0
+          ).length;
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+              onClick={() => {
+                setShowMultiForm(false);
+                setMultiSelected({});
+                setMultiMontos({});
+                setMultiCantidades({});
+              }}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[90vh] flex flex-col"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
+                  <p className="text-sm font-semibold text-gray-900">Registrar factura con varios ítems</p>
+                  <button onClick={() => {
+                    setShowMultiForm(false);
+                    setMultiSelected({});
+                    setMultiMontos({});
+                    setMultiCantidades({});
+                  }} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                </div>
+
+                {/* Datos de la factura */}
+                <div className="px-5 pt-4 pb-3 border-b border-gray-100 grid grid-cols-2 gap-3 shrink-0">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Tipo</label>
+                    <select value={multiTipo} onChange={e => setMultiTipo(e.target.value as 'factura' | 'anticipo')}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
+                      <option value="factura">Factura</option>
+                      <option value="anticipo">Anticipo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Proveedor</label>
+                    <input value={multiProv} onChange={e => setMultiProv(e.target.value)} placeholder="Vitel, Solis…"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Folio / N°</label>
+                    <input value={multiFolio} onChange={e => setMultiFolio(e.target.value)} placeholder="4521"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Fecha</label>
+                    <input type="date" value={multiFecha} onChange={e => setMultiFecha(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+                  </div>
+                </div>
+
+                {/* Tabla de ítems */}
+                <div className="overflow-y-auto flex-1">
+                  <div className="px-5 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        className="text-xs text-gray-500 hover:text-[#389fe0] font-medium"
+                      >
+                        {items.some(item => !multiSelected[item.id]) ? '☑ Seleccionar todos' : '☐ Deseleccionar todos'}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={selectItemsWithPendingAmount}
+                      className="text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium"
+                    >
+                      ☑ Seleccionar ítems con monto pendiente →
+                    </button>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+                        <th className="text-center px-2 py-2.5 font-medium w-10">
+                          <input
+                            type="checkbox"
+                            checked={items.length > 0 && items.every(item => multiSelected[item.id])}
+                            onChange={toggleSelectAll}
+                            className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]"
+                          />
+                        </th>
+                        <th className="text-left px-3 py-2.5 font-medium min-w-48">Ítem</th>
+                        <th className="text-center px-2 py-2.5 font-medium w-16">Cant. cot.</th>
+                        <th className="text-right px-2 py-2.5 font-medium w-24">Costo unit.</th>
+                        <th className="text-right px-2 py-2.5 font-medium w-28">Total cotizado</th>
+                        <th className="text-right px-2 py-2.5 font-medium w-28">Total comprado</th>
+                        <th className="text-center px-2 py-2.5 font-medium w-20">Cant.</th>
+                        <th className="text-right px-2 py-2.5 font-medium w-28">Precio unit.</th>
+                        <th className="text-right px-3 py-2.5 font-medium w-28">Total línea</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map(item => {
+                        const cotizadoSinIva  = item.costo_proveedor_clp * item.quantity;
+                        const compradoSinIva  = purchases.filter(p => p.project_item_id === item.id && !p.id.startsWith('temp-')).reduce((s, p) => s + p.monto_clp, 0);
+                        const pendiente = Math.max(0, cotizadoSinIva - compradoSinIva);
+                        const rawVal    = multiMontos[item.id] ?? '';
+                        const numVal    = parseInt(rawVal.replace(/\D/g, ''), 10) || 0;
+
+                        const isSelected = multiSelected[item.id];
+                        const cantidad = parseFloat(multiCantidades[item.id] ?? '1') || 1;
+                        const precioUnitario = parseInt((multiMontos[item.id] ?? '').replace(/\D/g, ''), 10) || 0;
+                        const totalLinea = cantidad * precioUnitario;
+
+                        return (
+                          <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/40 ${isSelected ? 'bg-blue-50/30' : ''}`}>
+                            <td className="px-2 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectItem(item.id)}
+                                className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]"
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-gray-800 max-w-48 truncate">{item.description}</td>
+                            <td className="px-2 py-3 text-center text-blue-600 font-medium text-xs">{item.quantity}</td>
+                            <td className="px-2 py-3 text-right text-blue-600 font-medium text-xs">{clp(item.costo_proveedor_clp)}</td>
+                            <td className="px-2 py-3 text-right text-gray-400 text-xs">{cotizadoSinIva > 0 ? clp(cotizadoSinIva) : '—'}</td>
+                            <td className="px-2 py-3 text-right text-gray-500 text-xs">{clp(compradoSinIva)}</td>
+                            <td className="px-2 py-2.5 text-center">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={multiCantidades[item.id] ?? ''}
+                                onChange={e => setMultiCantidades(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                disabled={!isSelected}
+                                className={`w-full text-center border border-gray-200 rounded-lg px-1 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0] ${
+                                  !isSelected ? 'bg-gray-100 text-gray-400' : ''
+                                }`}
+                                placeholder="1"
+                              />
+                            </td>
+                            <td className="px-2 py-2.5 text-right">
+                              <div className="flex flex-col gap-1">
+                                {pendiente > 0 && isSelected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setMultiMontos(prev => ({ ...prev, [item.id]: String(item.costo_proveedor_clp) }))}
+                                    className="text-[9px] text-gray-400 hover:text-[#389fe0] whitespace-nowrap self-end"
+                                    title={`Precio cotizado: ${clp(item.costo_proveedor_clp)}`}
+                                  >
+                                    ↑ cotizado
+                                  </button>
+                                )}
+                                <input
+                                  type="text" inputMode="numeric"
+                                  value={numVal > 0 ? new Intl.NumberFormat('es-CL').format(numVal) : rawVal}
+                                  placeholder={clp(item.costo_proveedor_clp)}
+                                  onChange={e => setMultiMontos(prev => ({ ...prev, [item.id]: e.target.value.replace(/\./g, '') }))}
+                                  disabled={!isSelected}
+                                  className={`w-full text-right border border-gray-200 rounded-lg px-1 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0] tabular-nums ${
+                                    !isSelected ? 'bg-gray-100 text-gray-400' : ''
+                                  }`}
+                                />
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <span className={`text-sm font-semibold tabular-nums ${isSelected && totalLinea > 0 ? 'text-[#1d65c5]' : 'text-gray-400'}`}>
+                                {isSelected && totalLinea > 0 ? clp(totalLinea) : '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50">
+                        <td className="px-2 py-3"></td>
+                        <td colSpan={7} className="px-3 py-3 text-sm font-semibold text-gray-700">Total a registrar</td>
+                        <td className="px-3 py-3 text-right text-sm font-bold text-[#1d65c5] tabular-nums">{clp(totalMulti)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-3 border-t border-gray-100 flex gap-3 shrink-0">
+                  <button onClick={() => {
+                    setShowMultiForm(false);
+                    setMultiSelected({});
+                    setMultiMontos({});
+                    setMultiCantidades({});
+                  }}
+                    className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-sm transition-colors">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddMultiPurchase}
+                    disabled={isPurchasePending || linesCount === 0}
+                    className="flex-1 bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  >
+                    {isPurchasePending ? 'Registrando…' : `Registrar ${linesCount > 0 ? linesCount : ''} compra${linesCount !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ═══ COSTOS ADICIONALES ═══════════════════════════════════════════ */}
         {tab === 'costos' && (
@@ -841,16 +1455,57 @@ export default function ProjectDetail({
 
               {showAddCost && (
                 <form onSubmit={handleAddCost} className="px-5 py-4 border-b border-gray-100 bg-blue-50/30 flex flex-col gap-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
+                  {/* Campos ocultos para envío */}
+                  <input type="hidden" name="monto_clp" value={lastCostField === 'sin_iva' ? costSinIva : costConIva} required />
+                  <input type="hidden" name="con_iva" value={lastCostField === 'sin_iva' ? 'false' : 'true'} />
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-3">
                       <label className="text-xs text-gray-500 mb-1 block">Descripción</label>
                       <input name="descripcion" required placeholder="ej: Cable adicional no cotizado"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Monto (CLP c/IVA)</label>
-                      <input name="monto_clp" type="number" required placeholder="0"
-                        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+                      <label className="text-xs text-gray-500 mb-1 block">
+                        Monto sin IVA (neto)
+                        {lastCostField === 'sin_iva' && costSinIva > 0 && (
+                          <span className="ml-1 text-blue-500 font-semibold">← Valor base</span>
+                        )}
+                      </label>
+                      <input type="number" placeholder="0"
+                        value={costSinIva > 0 ? costSinIva : ''}
+                        onChange={(e) => {
+                          const valor = parseFloat(e.target.value) || 0;
+                          setCostSinIva(valor);
+                          setCostConIva(Math.round(valor * 1.19));
+                          setLastCostField('sin_iva');
+                        }}
+                        className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                          lastCostField === 'sin_iva' && costSinIva > 0
+                            ? 'border-blue-300 bg-blue-50 focus:ring-blue-400'
+                            : 'border-gray-200 focus:ring-[#389fe0]'
+                        }`} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">
+                        Monto con IVA
+                        {lastCostField === 'con_iva' && costConIva > 0 && (
+                          <span className="ml-1 text-blue-500 font-semibold">← Valor base</span>
+                        )}
+                      </label>
+                      <input type="number" placeholder="0"
+                        value={costConIva > 0 ? costConIva : ''}
+                        onChange={(e) => {
+                          const valor = parseFloat(e.target.value) || 0;
+                          setCostConIva(valor);
+                          setCostSinIva(Math.round(valor / 1.19));
+                          setLastCostField('con_iva');
+                        }}
+                        className={`w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                          lastCostField === 'con_iva' && costConIva > 0
+                            ? 'border-blue-300 bg-blue-50 focus:ring-blue-400'
+                            : 'border-gray-200 focus:ring-[#389fe0]'
+                        }`} />
                     </div>
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">Categoría</label>
@@ -861,18 +1516,23 @@ export default function ProjectDetail({
                         ))}
                       </select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-3">
                       <label className="text-xs text-gray-500 mb-1 block">Notas (opcional)</label>
                       <input name="notas" placeholder="Descripción adicional"
                         className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button type="submit" disabled={isCostPending}
+                    <button type="submit" disabled={isCostPending || (costSinIva === 0 && costConIva === 0)}
                       className="bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
                       {isCostPending ? 'Guardando…' : 'Agregar'}
                     </button>
-                    <button type="button" onClick={() => setShowAddCost(false)}
+                    <button type="button" onClick={() => {
+                      setShowAddCost(false);
+                      setCostSinIva(0);
+                      setCostConIva(0);
+                      setLastCostField('sin_iva');
+                    }}
                       className="border border-gray-200 text-gray-500 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm transition-colors">
                       Cancelar
                     </button>
@@ -889,27 +1549,49 @@ export default function ProjectDetail({
                       <th className="text-left px-4 py-2 font-medium">Descripción</th>
                       <th className="text-left px-4 py-2 font-medium">Categoría</th>
                       <th className="text-left px-4 py-2 font-medium">Notas</th>
+                      <th className="text-center px-4 py-2 font-medium">IVA</th>
                       <th className="text-right px-4 py-2 font-medium">Monto</th>
                       <th className="px-4 py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {costs.map(cost => (
-                      <tr key={cost.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-4 py-3 text-gray-800">{cost.descripcion}</td>
-                        <td className="px-4 py-3 text-xs text-gray-500">{CATEGORIA_LABELS[cost.categoria] ?? cost.categoria}</td>
-                        <td className="px-4 py-3 text-xs text-gray-400">{cost.notas ?? '—'}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-red-600">{clp(cost.monto_clp)}</td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => handleDeleteCost(cost)}
-                            className="text-xs text-red-400 hover:underline">Eliminar</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {costs.map(cost => {
+                      const esCosteExistente = cost.con_iva === undefined;
+                      const conIva = esCosteExistente ? false : cost.con_iva;
+                      const montoConIva = conIva ? cost.monto_clp : Math.round(cost.monto_clp * 1.19);
+                      return (
+                        <tr key={cost.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-3 text-gray-800">{cost.descripcion}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{CATEGORIA_LABELS[cost.categoria] ?? cost.categoria}</td>
+                          <td className="px-4 py-3 text-xs text-gray-400">{cost.notas ?? '—'}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                              conIva
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {conIva ? 'Con IVA' : 'Sin IVA'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-red-600">
+                            {clp(montoConIva)}
+                            {!conIva && (
+                              <div className="text-xs text-gray-400 font-normal">
+                                (neto: {clp(cost.monto_clp)})
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button onClick={() => handleDeleteCost(cost)}
+                              className="text-xs text-red-400 hover:underline">Eliminar</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-gray-200 bg-red-50/30">
-                      <td colSpan={3} className="px-4 py-3 text-sm text-gray-500 font-medium">Total costos adicionales</td>
+                      <td colSpan={4} className="px-4 py-3 text-sm text-gray-500 font-medium">Total costos adicionales</td>
                       <td className="px-4 py-3 text-right font-bold text-red-600">{clp(costExtra)}</td>
                       <td></td>
                     </tr>
@@ -1030,6 +1712,27 @@ export default function ProjectDetail({
 
         {/* ═══ CUENTA CORRIENTE ═════════════════════════════════════════════ */}
         {tab === 'cuenta' && (() => {
+          // Agrupar compras por factura (mismo proveedor + folio + fecha + tipo)
+          const groupedPurchases = purchases
+            .filter(p => !p.id.startsWith('temp-'))
+            .reduce((groups, purchase) => {
+              const key = `${purchase.tipo}-${purchase.proveedor || 'Sin proveedor'}-${purchase.folio || 'Sin folio'}-${purchase.fecha}`;
+              if (!groups[key]) {
+                groups[key] = {
+                  ...purchase,
+                  monto_total: 0,
+                  items_count: 0,
+                };
+              }
+
+              // Convertir a valor con IVA para cuenta corriente
+              // Las compras se guardan sin IVA (precio_unitario_sin_iva × cantidad)
+              const montoConIva = Math.round(purchase.monto_clp * 1.19); // Aplicar IVA
+              groups[key].monto_total += montoConIva;
+              groups[key].items_count += 1;
+              return groups;
+            }, {} as Record<string, any>);
+
           const movements: Array<{
             id: string; fecha: string; concepto: string;
             tipo: 'cobro' | 'gasto'; badge: string; badgeColor: string; monto: number;
@@ -1040,22 +1743,49 @@ export default function ProjectDetail({
               tipo: 'cobro' as const, badge: 'Ingreso', badgeColor: 'bg-blue-50 text-blue-600',
               monto: p.monto_clp,
             })),
-            ...purchases.filter(p => !p.id.startsWith('temp-')).map(p => ({
-              id: p.id, fecha: p.fecha,
-              concepto: [p.tipo === 'factura' ? 'Factura' : 'Anticipo', p.proveedor, p.folio ? `#${p.folio}` : null, p.notas].filter(Boolean).join(' · '),
+            ...Object.values(groupedPurchases).map((group: any) => ({
+              id: group.id, fecha: group.fecha,
+              concepto: [
+                group.tipo === 'factura' ? 'Factura' : 'Anticipo',
+                group.proveedor,
+                group.folio ? `#${group.folio}` : null,
+                group.items_count > 1 ? `(${group.items_count} ítems)` : null,
+                group.notas
+              ].filter(Boolean).join(' · '),
               tipo: 'gasto' as const,
-              badge: p.tipo === 'factura' ? 'Factura' : 'Anticipo',
-              badgeColor: p.tipo === 'factura' ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-purple-600',
-              monto: p.monto_clp,
+              badge: group.tipo === 'factura' ? 'Factura' : 'Anticipo',
+              badgeColor: group.tipo === 'factura' ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-purple-600',
+              monto: group.monto_total,
             })),
-            ...costs.filter(c => !c.id.startsWith('temp-')).map(c => ({
-              id: c.id, fecha: c.created_at.slice(0, 10),
-              concepto: c.descripcion,
-              tipo: 'gasto' as const,
-              badge: CATEGORIA_LABELS[c.categoria] ?? c.categoria,
-              badgeColor: 'bg-red-50 text-red-600',
-              monto: c.monto_clp,
-            })),
+            ...costs.filter(c => !c.id.startsWith('temp-')).map(c => {
+              // Para costos nuevos: usar el campo con_iva
+              // Para costos existentes: asumir que son sin IVA
+              const esCosteExistente = c.con_iva === undefined;
+              const conIva = esCosteExistente ? false : c.con_iva;
+              const montoConIva = conIva ? c.monto_clp : Math.round(c.monto_clp * 1.19);
+
+              // DEBUG: Mostrar cálculo detallado
+              console.log(`🔍 CÁLCULO DETALLADO para ${c.descripcion}:`);
+              console.log('  - monto_clp:', c.monto_clp);
+              console.log('  - con_iva original:', c.con_iva);
+              console.log('  - conIva calculado:', conIva);
+              console.log('  - ¿Aplicar IVA?', !conIva);
+              console.log('  - montoConIva final:', montoConIva);
+              console.log('  - Cálculo: ', conIva ? `${c.monto_clp} (sin cambio)` : `${c.monto_clp} × 1.19 = ${Math.round(c.monto_clp * 1.19)}`);
+
+              // DEBUG CRÍTICO: ¿Qué valor se está REALMENTE usando?
+              const valorFinalUsado = montoConIva;
+              console.log('🚨 VALOR FINAL USADO EN CUENTA CORRIENTE:', valorFinalUsado);
+
+              return {
+                id: c.id, fecha: c.created_at.slice(0, 10),
+                concepto: c.descripcion,
+                tipo: 'gasto' as const,
+                badge: CATEGORIA_LABELS[c.categoria] ?? c.categoria,
+                badgeColor: 'bg-red-50 text-red-600',
+                monto: montoConIva, // ✅ Ahora siempre con IVA
+              };
+            }),
           ].sort((a, b) => a.fecha.localeCompare(b.fecha));
 
           const totalGastado  = totalComprado + costExtra;
@@ -1194,6 +1924,16 @@ export default function ProjectDetail({
                     >
                       {isImporting ? 'Importando…' : '↺ Reimportar ítems'}
                     </button>
+                    <button
+                      onClick={() => {
+                        if (!confirm('¿Importar los costos de referencia como compras? Esto creará compras automáticas basadas en los costos cotizados.')) return;
+                        handleImportCosts();
+                      }}
+                      disabled={isImporting}
+                      className="text-xs text-green-600 hover:underline disabled:opacity-50 font-medium"
+                    >
+                      {isImporting ? 'Importando…' : '📦 Importar costos como compras'}
+                    </button>
                     <a href={`/admin/quotes/${project.quote_id}`} className="text-xs text-[#389fe0] hover:underline">
                       Abrir en editor →
                     </a>
@@ -1246,6 +1986,129 @@ export default function ProjectDetail({
 
       </div>
     </div>
+  );
+}
+
+// ─── PurchaseEditForm ─────────────────────────────────────────────────────────────────
+
+function PurchaseEditForm({
+  purchase,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  purchase: ProjectPurchase;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [cantidad, setCantidad] = useState(purchase.cantidad_comprada || 1);
+  const [precioUnitario, setPrecioUnitario] = useState(purchase.precio_unitario_sin_iva || 0);
+  const [costoReferencia, setCostoReferencia] = useState(purchase.costo_referencia_sin_iva || 0);
+  const totalLinea = Math.round(cantidad * precioUnitario);
+
+  return (
+    <tr className="border-b border-blue-100 bg-blue-50/30">
+      <td colSpan={2} className="px-4 py-3">
+        <form onSubmit={onSubmit} className="flex flex-wrap gap-3 items-end">
+          <input type="hidden" name="purchase_id" value={purchase.id} />
+
+          <div className="w-32">
+            <label className="text-xs text-gray-500 mb-1 block">Tipo</label>
+            <select name="tipo" defaultValue={purchase.tipo}
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
+              <option value="factura">Factura</option>
+              <option value="anticipo">Anticipo</option>
+            </select>
+          </div>
+
+          <div className="w-36">
+            <label className="text-xs text-gray-500 mb-1 block">Proveedor</label>
+            <input name="proveedor" defaultValue={purchase.proveedor || ''} placeholder="Vitel, Solis…"
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="w-28">
+            <label className="text-xs text-gray-500 mb-1 block">Folio / N°</label>
+            <input name="folio" defaultValue={purchase.folio || ''} placeholder="4521"
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="w-24">
+            <label className="text-xs text-gray-500 mb-1 block">Cantidad</label>
+            <input name="cantidad_comprada" type="number" step="0.01" required min={0}
+              value={cantidad} onChange={e => setCantidad(parseFloat(e.target.value) || 0)}
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="w-32">
+            <label className="text-xs text-gray-500 mb-1 block">Costo ref. s/IVA</label>
+            <input name="costo_referencia_sin_iva" type="number" min={0}
+              value={costoReferencia > 0 ? costoReferencia : ''}
+              onChange={e => setCostoReferencia(parseFloat(e.target.value) || 0)}
+              placeholder="Opcional"
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="w-32">
+            <label className="text-xs text-gray-500 mb-1 block">Precio unit. s/IVA</label>
+            <input name="precio_unitario_sin_iva" type="number" required min={0}
+              value={precioUnitario > 0 ? precioUnitario : ''}
+              onChange={e => setPrecioUnitario(parseFloat(e.target.value) || 0)}
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          {totalLinea > 0 && (
+            <div className="w-32">
+              <label className="text-xs text-gray-500 mb-1 block">Total s/IVA</label>
+              <div className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 tabular-nums">
+                {clp(totalLinea)}
+              </div>
+              <input type="hidden" name="monto_clp" value={totalLinea} />
+            </div>
+          )}
+
+          {costoReferencia > 0 && precioUnitario > 0 && (
+            <div className="w-32">
+              <label className="text-xs text-gray-500 mb-1 block">Diferencia</label>
+              <div className={`w-full rounded-xl border px-3 py-1.5 text-xs tabular-nums ${
+                precioUnitario <= costoReferencia
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-red-50 border-red-200 text-red-600'
+              }`}>
+                {precioUnitario <= costoReferencia
+                  ? `-${clp(costoReferencia - precioUnitario)}`
+                  : `+${clp(precioUnitario - costoReferencia)}`
+                }
+              </div>
+            </div>
+          )}
+
+          <div className="w-36">
+            <label className="text-xs text-gray-500 mb-1 block">Fecha</label>
+            <input name="fecha" type="date" required defaultValue={purchase.fecha}
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="flex-1 min-w-32">
+            <label className="text-xs text-gray-500 mb-1 block">Notas</label>
+            <input name="notas" defaultValue={purchase.notas || ''} placeholder="Opcional"
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" disabled={isPending}
+              className="bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              {isPending ? '…' : 'Guardar'}
+            </button>
+            <button type="button" onClick={onCancel}
+              className="border border-gray-200 text-gray-500 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </td>
+    </tr>
   );
 }
 

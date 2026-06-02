@@ -65,7 +65,7 @@ function ItemRow({
   quoteId: string;
   sortOrder: number;
 }) {
-  const isFreeItem = item.costo_proveedor_clp === 0 && item.margen_pct === 0;
+  const isFreeItem = item.product_id === null;
   const [costo,     setCosto]    = useState(item.costo_proveedor_clp);
   const [margenStr, setMargenStr]= useState(String(item.margen_pct ?? 0));
   const [freeNeto,  setFreeNeto] = useState(item.unit_price_clp);
@@ -73,7 +73,7 @@ function ItemRow({
   const [descStr,   setDescStr]  = useState(String(item.discount_percent));
 
   const margen = parseFloat(margenStr) || 0;
-  const qty    = parseFloat(qtyStr)    || 1;
+  const qty    = Math.max(1, parseInt(qtyStr) || 1);
   const desc   = parseFloat(descStr)   || 0;
   const [editing,  setEditing] = useState(false);
   const [isPending, start]     = useTransition();
@@ -81,7 +81,7 @@ function ItemRow({
   const calc = isFreeItem
     ? {
         neto:        freeNeto,
-        margenPesos: 0,
+        margenPesos: Math.round(freeNeto - item.costo_proveedor_clp),
         conIva:      Math.round(freeNeto * 1.19),
         subtotal:    Math.round(freeNeto * 1.19 * qty * (1 - desc / 100)),
       }
@@ -135,7 +135,11 @@ function ItemRow({
             onChange={(e) => setMargenStr(e.target.value)}
             className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
         ) : (
-          <span className="tabular-nums text-amber-700">{isFreeItem ? '—' : `${margen}%`}</span>
+          <span className="tabular-nums text-amber-700">
+            {isFreeItem && item.costo_proveedor_clp > 0
+              ? `${(((freeNeto - item.costo_proveedor_clp) / item.costo_proveedor_clp) * 100).toFixed(1)}%`
+              : isFreeItem ? '—' : `${margen}%`}
+          </span>
         )}
       </td>
       {/* Desc % */}
@@ -248,6 +252,7 @@ function AddItemSection({
   const [productId,  setProductId]  = useState('');
   const [showList,   setShowList]   = useState(false);
   const [freePrice,  setFreePrice]  = useState(0);
+  const [freeCosto,  setFreeCosto]  = useState(0);
   const [isPending,  start]         = useTransition();
 
   const filtered = products.filter((p) =>
@@ -260,7 +265,7 @@ function AddItemSection({
   function switchMode(m: 'catalog' | 'free') {
     setMode(m);
     setSearch(''); setDescTxt(''); setProductId('');
-    setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0);
+    setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0); setFreeCosto(0);
   }
 
   function selectProduct(p: ProductOption) {
@@ -283,8 +288,8 @@ function AddItemSection({
     if (mode === 'free') {
       // freePrice es s/IVA → enviamos c/IVA para que la action divida por 1.19
       fd.set('unit_price_direct',   String(Math.round(freePrice * 1.19)));
-      fd.set('costo_proveedor_clp', '0');
-      fd.set('margen_pct',          '');
+      fd.set('costo_proveedor_clp', String(freeCosto));
+      fd.set('margen_pct',          freeCosto > 0 && freePrice > 0 ? String(((freePrice - freeCosto) / freeCosto * 100).toFixed(2)) : '0');
     } else {
       fd.set('costo_proveedor_clp', String(costo));
       fd.set('margen_pct',          String(margen));
@@ -292,7 +297,7 @@ function AddItemSection({
     start(async () => {
       await upsertQuoteItem(quoteId, fd);
       setSearch(''); setDescTxt(''); setProductId('');
-      setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0);
+      setCosto(0); setMargen(DEFAULT_MARGIN); setQtyStr('1'); setDescStr('0'); setFreePrice(0); setFreeCosto(0);
     });
   }
 
@@ -370,7 +375,7 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="0.01" step="0.01" value={qtyStr}
+              <input type="number" min="1" step="1" value={qtyStr}
                 onChange={(e) => setQtyStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
@@ -439,9 +444,19 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="0.01" step="0.01" value={qtyStr}
+              <input type="number" min="1" step="1" value={qtyStr}
                 onChange={(e) => setQtyStr(e.target.value)}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
+            </div>
+
+            {/* Costo proveedor s/IVA */}
+            <div>
+              <span className="text-[10px] text-amber-600 mb-1 block">Costo prov. s/IVA</span>
+              <input type="text" inputMode="numeric"
+                value={freeCosto > 0 ? new Intl.NumberFormat('es-CL').format(freeCosto) : ''}
+                placeholder="0"
+                onChange={(e) => setFreeCosto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                className="w-32 text-right border border-amber-200 bg-amber-50/60 rounded-lg px-2 py-2 text-xs focus:outline-none focus:border-amber-400" />
             </div>
 
             {/* P. Unit s/IVA */}
@@ -453,6 +468,16 @@ function AddItemSection({
                 onChange={(e) => setFreePrice(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
                 className="w-32 text-right border border-gray-200 rounded-lg px-2 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
+
+            {/* Margen % calculado */}
+            {freeCosto > 0 && freePrice > 0 && (
+              <div>
+                <span className="text-[10px] text-amber-600 mb-1 block">Margen %</span>
+                <div className="py-2 text-xs text-amber-700 tabular-nums font-semibold">
+                  {((freePrice - freeCosto) / freeCosto * 100).toFixed(1)}%
+                </div>
+              </div>
+            )}
 
             {/* Desc % */}
             <div>
@@ -679,6 +704,48 @@ export default function QuoteEditor({
                 </div>
               </div>
             </div>
+
+            {/* Condiciones comerciales y datos bancarios */}
+            {(() => {
+              const totalTarjeta = Math.round(total * (1 + 0.0127 * 1.19));
+              return (
+                <div className="px-5 py-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs text-gray-600">
+                  {/* Datos bancarios */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Datos bancarios para transferencia</p>
+                    <div className="flex flex-col gap-1">
+                      <p><span className="text-gray-400">Nombre cuenta:</span> Biznexus Group SPA</p>
+                      <p><span className="text-gray-400">RUT:</span> 77.958.683-9</p>
+                      <p><span className="text-gray-400">Banco:</span> Banco De Chile</p>
+                      <p><span className="text-gray-400">Tipo:</span> Cuenta Corriente</p>
+                      <p><span className="text-gray-400">N° cuenta:</span> 4020957900</p>
+                      <p><span className="text-gray-400">Mail:</span> danilo.canessa@mercadoenergy.cl</p>
+                    </div>
+                  </div>
+
+                  {/* Condiciones de pago */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Condiciones comerciales</p>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-gray-400">Pago contado:</span>
+                        <span className="font-semibold text-gray-900 tabular-nums">{clp(total)}</span>
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-gray-400">Pago con tarjeta:</span>
+                        <span className="font-semibold text-gray-900 tabular-nums">{clp(totalTarjeta)}</span>
+                      </div>
+
+                      {quote.client_notes && (
+                        <p className="whitespace-pre-wrap text-gray-600 mt-1 pt-1 border-t border-gray-100">
+                          {quote.client_notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -752,8 +819,9 @@ export default function QuoteEditor({
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-[#389fe0]" />
               </label>
               <label className="block">
-                <span className="text-xs text-gray-500 mb-1 block">Condiciones para el cliente</span>
-                <textarea name="client_notes" rows={3} defaultValue={quote.client_notes ?? ''}
+                <span className="text-xs text-gray-500 mb-1 block">Condiciones comerciales</span>
+                <textarea name="client_notes" rows={4} defaultValue={quote.client_notes ?? ''}
+                  placeholder="Ej: 50% al confirmar, saldo contra entrega. Garantía 12 meses…"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-[#389fe0]" />
               </label>
               <button type="submit" disabled={isPending}

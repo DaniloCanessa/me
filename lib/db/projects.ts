@@ -36,6 +36,7 @@ export type ProjectCost = {
   project_id: string;
   descripcion: string;
   monto_clp: number;
+  con_iva: boolean;
   categoria: string;
   notas: string | null;
   created_at: string;
@@ -128,6 +129,9 @@ export type ProjectPurchase = {
   tipo: 'factura' | 'anticipo';
   proveedor: string | null;
   folio: string | null;
+  cantidad_comprada: number;
+  precio_unitario_sin_iva: number;
+  costo_referencia_sin_iva: number | null;
   monto_clp: number;
   fecha: string;
   notas: string | null;

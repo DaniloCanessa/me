@@ -1,12 +1,5 @@
 import { getProjects } from '@/lib/db/projects';
-import Link from 'next/link';
-
-const ESTADO_COLORS: Record<string, string> = {
-  pendiente:    'bg-amber-100 text-amber-700',
-  en_ejecucion: 'bg-blue-100 text-blue-700',
-  completado:   'bg-green-100 text-green-700',
-  cancelado:    'bg-gray-100 text-gray-500',
-};
+import { ProjectsTable } from '@/components/admin/ProjectsTable';
 
 const ESTADO_LABELS: Record<string, string> = {
   pendiente:    'Pendiente',
@@ -14,15 +7,6 @@ const ESTADO_LABELS: Record<string, string> = {
   completado:   'Completado',
   cancelado:    'Cancelado',
 };
-
-function clp(n: number) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
-}
-
-function dateShort(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: '2-digit' });
-}
 
 export default async function ProjectsPage() {
   const projects = await getProjects();
@@ -53,49 +37,7 @@ export default async function ProjectsPage() {
         </div>
 
         {/* Tabla */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {projects.length === 0 ? (
-            <div className="py-20 text-center">
-              <p className="text-sm text-gray-400">No hay proyectos aún.</p>
-              <p className="text-xs text-gray-400 mt-1">Los proyectos se crean desde una cotización aceptada.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Proyecto</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cotización</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Inicio</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Término</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projects.map(p => (
-                    <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <Link href={`/admin/projects/${p.id}`} className="font-medium text-gray-900 hover:text-[#389fe0] transition-colors">
-                          {p.nombre}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{p.client_name}</td>
-                      <td className="px-4 py-3 text-xs font-mono text-gray-400">{p.quote_number ?? '—'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_COLORS[p.estado] ?? 'bg-gray-100 text-gray-500'}`}>
-                          {ESTADO_LABELS[p.estado] ?? p.estado}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-400">{dateShort(p.fecha_inicio)}</td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-400">{dateShort(p.fecha_termino)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <ProjectsTable projects={projects} />
       </div>
     </div>
   );

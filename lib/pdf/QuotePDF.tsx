@@ -56,9 +56,19 @@ const S = StyleSheet.create({
   totalLabelFinal: { fontSize: 10, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
   totalValueFinal: { fontSize: 10, color: '#ffffff', fontFamily: 'Helvetica-Bold' },
   // Notas
-  notesBox: { marginTop: 24, backgroundColor: '#f8fafc', borderRadius: 4, border: '1 solid #e2e8f0', padding: '10 12' },
+  notesBox: { marginTop: 16, backgroundColor: '#f8fafc', borderRadius: 4, border: '1 solid #e2e8f0', padding: '10 12' },
   notesTitle: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 5 },
   notesText: { fontSize: 8.5, color: '#475569', lineHeight: 1.5 },
+  // Sección inferior: banco + condiciones
+  bottomSection: { marginTop: 24, flexDirection: 'row', gap: 16, borderTop: '1 solid #e5e7eb', paddingTop: 14 },
+  bottomCol: { flex: 1 },
+  bottomTitle: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#389fe0', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
+  bottomRow: { flexDirection: 'row', marginBottom: 2 },
+  bottomLabel: { fontSize: 8, color: '#94a3b8', width: 80 },
+  bottomValue: { fontSize: 8, color: '#334155', flex: 1 },
+  payRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+  payLabel: { fontSize: 8.5, color: '#475569' },
+  payValue: { fontSize: 8.5, color: '#0f172a', fontFamily: 'Helvetica-Bold' },
   // Footer
   footer: { position: 'absolute', bottom: 24, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   footerLine: { borderTop: '0.5 solid #e2e8f0', paddingTop: 6 },
@@ -110,11 +120,12 @@ function ItemRow({ item, index }: { item: QuoteItem; index: number }) {
 export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string }) {
   const items = quote.items ?? [];
 
-  const subtotalNeto = items.reduce((acc, item) => {
+  const subtotalNeto  = items.reduce((acc, item) => {
     return acc + item.unit_price_clp * item.quantity * (1 - item.discount_percent / 100);
   }, 0);
-  const iva   = Math.round(subtotalNeto * 0.19);
-  const total = Math.round(subtotalNeto + iva);
+  const iva           = Math.round(subtotalNeto * 0.19);
+  const total         = Math.round(subtotalNeto + iva);
+  const totalTarjeta  = Math.round(total * (1 + 0.0127 * 1.19));
 
   return (
     <Document
@@ -182,10 +193,42 @@ export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string })
           </View>
         </View>
 
-        {/* ── Notas ── */}
+        {/* ── Banco + Condiciones de pago ── */}
+        <View style={S.bottomSection}>
+          <View style={S.bottomCol}>
+            <Text style={S.bottomTitle}>Datos bancarios para transferencia</Text>
+            {[
+              ['Nombre cuenta', 'Biznexus Group SPA'],
+              ['RUT',           '77.958.683-9'],
+              ['Banco',         'Banco De Chile'],
+              ['Tipo',          'Cuenta Corriente'],
+              ['N° cuenta',     '4020957900'],
+              ['Mail',          'danilo.canessa@mercadoenergy.cl'],
+            ].map(([label, value]) => (
+              <View key={label} style={S.bottomRow}>
+                <Text style={S.bottomLabel}>{label}:</Text>
+                <Text style={S.bottomValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={S.bottomCol}>
+            <Text style={S.bottomTitle}>Condiciones comerciales</Text>
+            <View style={S.payRow}>
+              <Text style={S.payLabel}>Pago contado:</Text>
+              <Text style={S.payValue}>{clp(total)}</Text>
+            </View>
+            <View style={S.payRow}>
+              <Text style={S.payLabel}>Pago con tarjeta:</Text>
+              <Text style={S.payValue}>{clp(totalTarjeta)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Notas del cliente ── */}
         {quote.client_notes && (
           <View style={S.notesBox}>
-            <Text style={S.notesTitle}>Condiciones y notas</Text>
+            <Text style={S.notesTitle}>Notas y condiciones adicionales</Text>
             <Text style={S.notesText}>{quote.client_notes}</Text>
           </View>
         )}

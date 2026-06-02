@@ -126,7 +126,7 @@ export async function upsertQuoteItem(quoteId: string, formData: FormData) {
     product_id:          (formData.get('product_id') as string) || null,
     description:         formData.get('description') as string,
     quantity,
-    costo_proveedor_clp: directPriceIva > 0 ? 0 : costo,
+    costo_proveedor_clp: costo,
     margen_pct:          directPriceIva > 0 ? 0 : margen,
     unit_price_clp:      Math.round(precio_neto_unit),
     discount_percent,

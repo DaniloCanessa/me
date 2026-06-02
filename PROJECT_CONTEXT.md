@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 20 de mayo 2026 (sesión 13)
+> Última actualización: 2 de junio 2026 (sesión 16)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,11 +8,14 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesión 13 completada. Backoffice y simulador 100% operativos en producción.**
+**Sesión 16 completada. Items libres en cotizaciones 100% funcionales y eliminación de proyectos implementada.**
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Todas las variables de entorno cargadas en Vercel production.
 
+**Último problema pendiente:** función importCostsAsPurchases() no está funcionando correctamente — costos de referencia de items libres en cotizaciones no se importan como compras en proyectos. LISTO PARA PROBAR.
+
 **Próximas mejoras (media prioridad):**
+- Debuggear y arreglar importación de costos como compras
 - Precio de kWh dinámico por distribuidora/tarifa (hoy usa $220 fijo cuando no hay monto en boleta)
 - Notificaciones por email cuando llega un lead nuevo o un proyecto cambia de estado
 - Pipeline de ventas: métricas de conversión por etapa en el dashboard
@@ -79,6 +82,64 @@ La landing page está completamente construida con identidad visual de marca. El
 - Fix bug financiero batería: `batteryDischargeSavingsCLP` no se contabilizaba en el beneficio anual. Corregido: ahorro nocturno de batería ahora se suma correctamente. Nueva línea "Ahorro nocturno por batería" visible en el desglose financiero.
 - UI paso 5: leyenda de colores permanente en el gráfico de barras (azul = mes mayor consumo, verde = datos reales, gris = interpolados)
 - UI paso 7: botones de consumo actual/futuro y escenarios A/B/C rediseñados con borde y relleno explícito para mayor claridad visual. Estado inicial del toggle = "Consumo actual".
+
+**Desarrollos sesiones 14-15 (1 junio 2026) — Sistema IVA en proyectos:**
+
+- **Problema inicial:** items libres en cotizaciones no mostraban costos de referencia, IVA no se calculaba correctamente en costos adicionales, subtotales inconsistentes
+- **Migración SQL project_costs con campo con_iva:** `supabase/project_costs_con_iva.sql` — agregado campo `con_iva BOOLEAN NOT NULL DEFAULT true` con actualización de registros existentes
+- **Migración SQL project_purchases con costo_referencia:** `supabase/project_purchases_cantidad.sql` — agregado campo `costo_referencia_sin_iva NUMERIC`
+- **Tipos actualizados en lib/db/projects.ts:** `ProjectCost` incluye `con_iva: boolean`, `ProjectPurchase` incluye `costo_referencia_sin_iva: number | null`
+- **Formulario automático de costos en ProjectDetail.tsx:**
+  - Campos duales "Sin IVA" y "Con IVA" con cálculo automático bidireccional
+  - Detección automática del campo activo por valor ingresado
+  - Validación para prevenir bucles infinitos en la sincronización
+  - Actualización automática de totales y cuenta corriente
+- **Corrección de cuenta corriente:** todos los montos ahora se muestran consistentemente con IVA (19%)
+  - Costos adicionales: aplicación de IVA según campo `con_iva`
+  - Compras: aplicación de IVA automático (`Math.round(purchase.monto_clp * 1.19)`)
+  - Subtotales: cálculo consistente con IVA incluido
+- **Fix detección items libres en QuoteEditor.tsx:** cambio de `costo_proveedor_clp === 0` a `product_id === null` para correcta identificación
+- **Fix cálculo margen en cotizaciones:** corrección de `margenPesos` para items libres usando precio neto versus costo
+- **Función importCostsAsPurchases (pendiente debug):** creada en `actions.ts` para importar costos de referencia de cotizaciones como compras de proyecto
+- **Botón importación en cotizaciones:** agregado "📦 Importar costos como compras" en tab cotizaciones de proyectos
+- **Problemas solucionados:**
+  1. ✅ Items libres sin costos de referencia visibles
+  2. ✅ IVA no calculado en formulario de costos 
+  3. ✅ Subtotales inconsistentes entre secciones
+  4. ✅ Cuenta corriente no mostraba montos con IVA
+  5. ⚠️ **PENDIENTE:** importación de costos como compras no funciona
+
+**SQL ejecutado esta sesión:**
+```sql
+-- project_costs_con_iva.sql
+ALTER TABLE project_costs ADD COLUMN IF NOT EXISTS con_iva BOOLEAN DEFAULT true;
+UPDATE project_costs SET con_iva = true WHERE con_iva IS NULL;
+ALTER TABLE project_costs ALTER COLUMN con_iva SET NOT NULL;
+
+-- project_purchases_cantidad.sql  
+ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva NUMERIC;
+```
+
+**Desarrollos sesión 16 (2 junio 2026) — Eliminación de proyectos e items libres corregidos:**
+
+- **Problema reportado:** usuario no podía agregar items libres en cotizaciones, y el margen no se mostraba correctamente
+- **Eliminación de proyectos con selección múltiple:**
+  - Función `deleteProject(projectId)` en `actions.ts` — elimina proyecto y todas las entidades relacionadas (payments, purchases, costs, items)
+  - Función `deleteMultipleProjects(projectIds[])` — eliminación en lote de múltiples proyectos
+  - Componente `ProjectsTable.tsx` con checkboxes individuales y "seleccionar todos"
+  - Barra de acciones que aparece al seleccionar proyectos con botón "🗑️ Eliminar seleccionados"
+  - Confirmaciones antes de eliminar para prevenir eliminaciones accidentales
+  - Estados de loading durante eliminaciones masivas
+- **Corrección crítica de errores de sintaxis en items libres:**
+  - **Frontend (QuoteEditor.tsx línea 288):** error `\` → `/` en cálculo de margen que impedía agregar items libres
+  - **Backend (actions.ts línea 117):** comentario mal formateado `\ Modo precio` → `// Modo precio` que causaba error de servidor
+  - **Cálculo de margen (QuoteEditor.tsx línea 129):** guardaba `costo_proveedor_clp: 0` para items libres → corregido a guardar el costo real
+- **Visualización de margen corregida:** items libres ahora muestran margen porcentual calculado en lugar de "—"
+  - Fórmula implementada: `((precio - costo) / costo) × 100`
+  - Para caso real del usuario: precio 1,472,268 - costo 1,600,000 = margen -8.0% (pérdida documentada)
+- **Debugging de error 404:** problema temporal después de reinicio de servidor en creación de cotizaciones → resuelto
+- **Aclaración sobre pagos:** confirmado que los pagos se registran correctamente CON IVA incluido (flujo normal del negocio)
+- **Estado actual:** items libres funcionan 100%, eliminación de proyectos operativa, LISTO para probar importación de costos como compras
 
 ---
 
@@ -683,6 +744,38 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 
 ## Pendientes y próximos pasos
 
+### ✅ Completado en sesiones 14-15 (1 junio 2026)
+
+- [x] **Sistema de gestión de IVA en costos** — implementado campo `con_iva` en `project_costs` con formulario de doble campo automático (sin IVA ↔ con IVA) para cálculo bidireccional
+- [x] **Migración SQL con campo con_iva** — `supabase/project_costs_con_iva.sql` ejecutado: agregado `con_iva BOOLEAN NOT NULL DEFAULT true`, actualización de registros existentes
+- [x] **Migración SQL costo_referencia_sin_iva** — `supabase/project_purchases_cantidad.sql` ejecutado: campo para costos de referencia en compras
+- [x] **Formulario automático de costos en ProjectDetail.tsx** — campos duales "Sin IVA" y "Con IVA" con sincronización automática, detección del campo activo por valor, prevención de bucles infinitos
+- [x] **Fix cuenta corriente con IVA** — corrección completa de visualización: costos adicionales según campo `con_iva`, compras con IVA automático (`* 1.19`), subtotales consistentes
+- [x] **Fix detección items libres en QuoteEditor** — cambio de `costo_proveedor_clp === 0` a `product_id === null` para correcta identificación de items libres
+- [x] **Fix cálculo margen cotizaciones** — corrección de `margenPesos` para items libres usando precio neto versus costo de referencia
+- [x] **Tipos actualizados** — `ProjectCost` incluye `con_iva: boolean`, `ProjectPurchase` incluye `costo_referencia_sin_iva: number | null` en `lib/db/projects.ts`
+- [x] **Función importCostsAsPurchases** — creada en `actions.ts` para importar costos de referencia como compras, botón agregado en interfaz (**pendiente debug**)
+- [x] **Problemas IVA solucionados** — items libres muestran costos, IVA se calcula correctamente, subtotales consistentes, cuenta corriente con IVA
+
+**SQL ejecutado esta sesión:**
+```sql
+ALTER TABLE project_costs ADD COLUMN IF NOT EXISTS con_iva BOOLEAN DEFAULT true;
+UPDATE project_costs SET con_iva = true WHERE con_iva IS NULL;
+ALTER TABLE project_costs ALTER COLUMN con_iva SET NOT NULL;
+ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva NUMERIC;
+```
+
+### ✅ Completado en sesión 16 (2 junio 2026)
+
+- [x] **Eliminación de proyectos con selección múltiple** — función `deleteProject()` y `deleteMultipleProjects()` en `actions.ts`, componente `ProjectsTable.tsx` con checkboxes y barra de acciones, confirmaciones y estados de loading
+- [x] **Fix crítico items libres en cotizaciones** — error de sintaxis `\` → `/` en cálculo de margen (QuoteEditor.tsx línea 288) que impedía agregar items libres
+- [x] **Fix crítico backend items libres** — comentario mal formateado en `actions.ts` línea 117 que causaba error de servidor al procesar items libres
+- [x] **Corrección guardado de costos de referencia** — items libres ahora guardan el `costo_proveedor_clp` real en lugar de 0, permitiendo cálculo correcto de margen
+- [x] **Visualización de margen en items libres** — items libres ahora muestran margen porcentual calculado `((precio-costo)/costo)×100` en lugar de "—"
+- [x] **Debugging error 404 en cotizaciones** — problema temporal después de reinicio de servidor resuelto, creación de cotizaciones operativa
+- [x] **Verificación sistema de pagos** — confirmado que los pagos se registran correctamente CON IVA incluido según flujo de negocio
+- [x] **Items libres 100% funcionales** — usuario puede agregar items libres con costos y precios reales, margen se calcula y muestra correctamente (ej: -8.0% para caso de pérdida documentada)
+
 ### ✅ Completado en sesión 13 (20 mayo 2026)
 
 - [x] **Fix Tailwind CSS / Turbopack** — error `Can't resolve 'tailwindcss' in 'Documentos'` causado por bug de Turbopack que resolvía desde el directorio padre. Solución: Next.js actualizado a 16.2.6 + `resolveAlias: { tailwindcss: path.resolve(...) }` en `next.config.ts`.
@@ -779,6 +872,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires timestamptz;
 
 ### 🟡 Próximo — Media prioridad
 
+- [ ] **INMEDIATO: Fix función importCostsAsPurchases** — debuggear por qué los costos de referencia de items libres en cotizaciones no se importan como compras en proyectos (flujo completo para probar listo)
 - [ ] **Precio de kWh dinámico por distribuidora/tarifa** — hoy usa $220 fijo cuando no hay monto en la boleta
 - [ ] **Notificaciones por email** — avisar al admin cuando un lead nuevo llega o un proyecto cambia de estado
 - [ ] **Métricas de conversión en dashboard** — tasa de conversión lead→cotización→proyecto, tiempo promedio por etapa
