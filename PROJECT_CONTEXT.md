@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 2 de junio 2026 (sesión 16)
+> Última actualización: 3 de junio 2026 (sesión 16 + hotfix)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,9 +8,9 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesión 16 completada. Items libres en cotizaciones 100% funcionales y eliminación de proyectos implementada.**
+**Sesión 16 completada + hotfix TypeScript aplicado. Build de Vercel corregido y sistema operativo.**
 
-**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Todas las variables de entorno cargadas en Vercel production.
+**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. ✅ **Build corregido** - error de TypeScript resuelto (commit `37c73ec`). Todas las variables de entorno cargadas en Vercel production.
 
 **Último problema pendiente:** función importCostsAsPurchases() no está funcionando correctamente — costos de referencia de items libres en cotizaciones no se importan como compras en proyectos. LISTO PARA PROBAR.
 
@@ -140,6 +140,18 @@ ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva 
 - **Debugging de error 404:** problema temporal después de reinicio de servidor en creación de cotizaciones → resuelto
 - **Aclaración sobre pagos:** confirmado que los pagos se registran correctamente CON IVA incluido (flujo normal del negocio)
 - **Estado actual:** items libres funcionan 100%, eliminación de proyectos operativa, LISTO para probar importación de costos como compras
+
+**Hotfix sesión 16 (3 junio 2026) — Build de Vercel corregido:**
+
+- **Problema detectado:** build de Vercel fallando por error de TypeScript en `ProjectDetail.tsx:691`
+  - Error: tipo `ProjectPurchase` requiere propiedad `costo_referencia_sin_iva: number | null`
+  - Faltaba en mapeo optimistic de compras masivas → causaba `Type error` en build
+- **Solución aplicada:** 
+  - Agregado `costo_referencia_sin_iva: null` en mapeo optimistic de `ProjectPurchase[]`
+  - Build local verificado exitoso antes de commit
+  - Commit `37c73ec`: "fix: agregar costo_referencia_sin_iva requerido en ProjectPurchase optimistic"
+- **Deploy corregido:** push exitoso → Vercel rebuild automático → build ✅ funcionando
+- **Estado actual:** proyecto desplegado correctamente en producción
 
 ---
 
