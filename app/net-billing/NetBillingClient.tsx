@@ -272,7 +272,7 @@ export default function NetBillingClient() {
             href="/simulator"
             className="inline-flex items-center gap-2 bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-4 px-10 rounded-xl text-base transition-colors"
           >
-            Simular mi ahorro →
+            Simula tu proyecto →
           </Link>
         </div>
       </div>

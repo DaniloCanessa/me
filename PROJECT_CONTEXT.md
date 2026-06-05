@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 3 de junio 2026 (sesión 16 + hotfix)
+> Última actualización: 4 de junio 2026 (sesión 17 — rediseño visual de landing + simulador)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,14 +8,16 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesión 16 completada + hotfix TypeScript aplicado. Build de Vercel corregido y sistema operativo.**
+**Sesión 17 completada: rediseño visual de coherencia y elegancia en toda la web pública + simulador.**
 
-**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. ✅ **Build corregido** - error de TypeScript resuelto (commit `37c73ec`). Todas las variables de entorno cargadas en Vercel production.
+> ⚠️ **IMPORTANTE: los cambios de la sesión 17 están en el working tree SIN COMMIT.** Antes de seguir, revisar y hacer commit/push para desplegar a Vercel. Verificado con `npx tsc --noEmit` (sin errores) y render local (todas las rutas 200).
 
-**Último problema pendiente:** función importCostsAsPurchases() no está funcionando correctamente — costos de referencia de items libres en cotizaciones no se importan como compras en proyectos. LISTO PARA PROBAR.
+**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno cargadas en production.
 
-**Próximas mejoras (media prioridad):**
-- Debuggear y arreglar importación de costos como compras
+**Pendiente inmediato de la sesión 17:** terminar de reemplazar los emojis de los avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) por íconos SVG. Requiere correr el wizard completo (residencial y empresa) para verificar cada aviso renderizado.
+
+**Otros pendientes (media prioridad):**
+- Debuggear y arreglar importación de costos como compras (`importCostsAsPurchases()`)
 - Precio de kWh dinámico por distribuidora/tarifa (hoy usa $220 fijo cuando no hay monto en boleta)
 - Notificaciones por email cuando llega un lead nuevo o un proyecto cambia de estado
 - Pipeline de ventas: métricas de conversión por etapa en el dashboard
@@ -39,6 +41,24 @@ El flujo termina con una solicitud de contacto que deriva el lead a un especiali
 El wizard de 7 pasos está completamente funcional. Incluye: lectura OCR de boletas (múltiples archivos + Excel), captura de leads por email, lógica de 3 escenarios de PFV (residencial) + dimensionamiento continuo (empresa), baterías modulares (dropdowns 1–10 residencial, 1–100 empresa), toggle base/futuro en resultados, gráfico de líneas mensual, exportación de informe PDF (residencial y empresa), interpolación estacional de meses faltantes, aviso de sobredimensionamiento (Regla 2).
 
 La landing page está completamente construida con identidad visual de marca. El simulador usa la paleta de colores de Mercado Energy (azules) en lugar de verdes.
+
+**Desarrollos sesión 17 (4 junio 2026) — Rediseño visual: coherencia y elegancia en landing + simulador:**
+
+> ⚠️ Todos estos cambios están **sin commit** en el working tree. Verificados con `tsc --noEmit` (sin errores) y render local (rutas 200). Capturas reales hechas con Chrome headless (`--headless=new --screenshot`).
+
+- **Reestructuración del home (`app/page.tsx`):** se acortó el home. Quitadas del home las secciones `AboutUs`, `Solutions`, `Projects`, `SimulatorCTA` y `FinalCTA`. El home quedó: Hero → HowItWorks → ValueProposition → Brands → ContactSection → Footer.
+- **Páginas independientes nuevas:** `app/soluciones/page.tsx`, `app/proyectos/page.tsx`, `app/nosotros/page.tsx`, `app/contacto/page.tsx`. Cada una con banda de título centrada (gradiente) + el componente correspondiente + Footer.
+- **Navbar compartido (`components/landing/Navbar.tsx`):** componente `'use client'` reutilizable con menú móvil (hamburguesa). Dos variantes: `transparent` (sobre el video del hero) y `solid` (blanco con blur, sticky, para páginas internas). Reemplazó los navs duplicados. Enlaces: Soluciones · Proyectos · Nosotros · Contacto · botón "Simulador". El HeroSection ahora usa `<Navbar variant="transparent" />`.
+- **Componente `Reveal` (`components/landing/Reveal.tsx`):** `'use client'`, IntersectionObserver para fade-in + translateY al hacer scroll, con `delay` para escalonar. Respeta `prefers-reduced-motion`.
+- **Set de íconos SVG (`components/landing/icons.tsx`):** íconos de línea estilo Lucide (stroke 1.5, currentColor) que reemplazaron emojis en todo el sitio. Incluye: Monitor, Ruler, Zap, BarChart, Scale, Battery, MapPin, Handshake, BadgeCheck, Sun, Snowflake, Wind, Headset, Target, Home, Building, Car, Mail, Pin.
+- **Pase de elegancia (todas las secciones):** tipografía `tracking-tight` + tamaños mayores, tarjetas premium (`ring-1 ring-[#b0cedd]/30` + sombras suaves azuladas + elevación hover), animaciones `Reveal`, gradientes en hero y stats. Componentes tocados: `HeroSection` (gradientes en capas sobre el video, animación de entrada escalonada, badge "Energía solar inteligente" eliminado), `HowItWorks`, `ValueProposition`, `AboutUs` (fix imágenes `fill` con `relative` + `sizes`), `Projects` (fix `sizes`), `ContactSection` (íconos SVG).
+- **Banner de marcas (`components/landing/Brands.tsx`):** reemplazó la lista de texto por un marquee con scroll infinito (CSS keyframes, pausa al hover, difuminado en bordes, respeta reduced-motion). Logos en `public/images/brands/`. Logos oficiales reales: LONGi, Jinko, Livoltek, SMA (campo `wordmark: true` = logo horizontal sin texto al lado). Resto (Huawei, Canadian Solar, Victron, Pylontech, Dyness) usan favicons (pendiente conseguir logos oficiales).
+- **Sección Soluciones rediseñada por completo:** alineada al brochure (`202605_Brochure empresas.pdf`). 4 servicios reales: Energía Solar, **Energía Eólica** (nuevo), Climatización Eficiente, **Consultoría y Soporte** (nuevo). Tarjetas horizontales con badge de gradiente azul + barra de acento al hover + banner CTA oscuro. Header interno opcional vía prop `showHeader` (en `/soluciones` se pasa `false` para no duplicar el título de página).
+- **Misión y Visión en `/nosotros`:** sección "Lo que nos mueve" con los textos del brochure (orden Misión/Visión corregido al convencional; en el brochure venían intercambiados).
+- **Cifras actualizadas:** "16 regiones" → "**+25 localidades**" (Hero, AboutUs, subtítulo de Proyectos). "+200 proyectos" se mantiene. Tercer stat del hero "25 años vida útil garantizada" → "**100% soluciones a medida**" (se quitó el compromiso de garantía).
+- **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
+- **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
+- **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
 
 **Desarrollos sesión 7 (24 abril 2026) — Cotizador + catálogo + flujo lead:**
 
@@ -182,8 +202,12 @@ ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva 
 mercado-energy/
 ├── app/
 │   ├── layout.tsx                  # Metadata global, font Geist, lang="es"
-│   ├── page.tsx                    # Landing page (10 secciones)
+│   ├── page.tsx                    # Home (acortado sesión 17): Hero, HowItWorks, ValueProposition, Brands, ContactSection, Footer
 │   ├── icon.png                    # Favicon (logotipo-2.png — Next.js lo detecta automáticamente)
+│   ├── soluciones/page.tsx         # (sesión 17) Página Soluciones: Navbar + título + <Solutions showHeader={false}>
+│   ├── proyectos/page.tsx          # (sesión 17) Página Proyectos: Navbar + título + <Projects showHeader={false}>
+│   ├── nosotros/page.tsx           # (sesión 17) Página Nosotros: Navbar + AboutUs + Misión/Visión (textos del brochure)
+│   ├── contacto/page.tsx           # (sesión 17) Página Contacto: Navbar + <ContactSection showEyebrow={false}>
 │   ├── simulator/
 │   │   ├── page.tsx                # Server Component: fetch config+catalog → <SimulatorClient>
 │   │   └── SimulatorClient.tsx     # 'use client': wizard completo, recibe config+catalog como props
@@ -211,16 +235,19 @@ mercado-energy/
 │
 ├── components/
 │   ├── landing/
-│   │   ├── HeroSection.tsx         # Nav + video de fondo (video-poroma.mp4) + stats bar
-│   │   ├── HowItWorks.tsx          # Cómo funciona el proceso
-│   │   ├── ValueProposition.tsx    # Propuesta de valor
-│   │   ├── SimulatorCTA.tsx        # CTA intermedio al simulador
-│   │   ├── AboutUs.tsx             # Quiénes somos + equipo
-│   │   ├── Solutions.tsx           # Soluciones residencial/empresa
-│   │   ├── Brands.tsx              # Marcas de equipos
-│   │   ├── Projects.tsx            # Grilla de proyectos ejecutados (9 proyectos)
-│   │   ├── FinalCTA.tsx            # CTA final
-│   │   ├── ContactSection.tsx      # Formulario de contacto (Persona natural / Empresa)
+│   │   ├── Navbar.tsx              # (sesión 17) 'use client': nav compartido responsive (variantes transparent/solid, menú móvil)
+│   │   ├── Reveal.tsx              # (sesión 17) 'use client': fade-in al scroll (IntersectionObserver, reduced-motion)
+│   │   ├── icons.tsx               # (sesión 17) Set de íconos SVG de línea (reemplazan emojis en todo el sitio)
+│   │   ├── HeroSection.tsx         # <Navbar transparent> + video con gradientes + stats bar + animación entrada
+│   │   ├── HowItWorks.tsx          # Cómo funciona (íconos SVG + Reveal)
+│   │   ├── ValueProposition.tsx    # Propuesta de valor (íconos SVG + tarjetas premium + Reveal)
+│   │   ├── SimulatorCTA.tsx        # CTA intermedio (ya NO se usa en el home)
+│   │   ├── AboutUs.tsx             # Quiénes somos + equipo (usado en /nosotros)
+│   │   ├── Solutions.tsx           # Soluciones: 4 servicios del brochure, prop showHeader (usado en /soluciones)
+│   │   ├── Brands.tsx              # Banner marquee de logos (scroll infinito, public/images/brands/)
+│   │   ├── Projects.tsx            # Grilla de proyectos + mapa Chile, prop showHeader (usado en /proyectos)
+│   │   ├── FinalCTA.tsx            # CTA final (ya NO se usa en el home)
+│   │   ├── ContactSection.tsx      # Formulario de contacto, prop showEyebrow (home + /contacto)
 │   │   ├── Footer.tsx              # Footer con logotipo-2, mapa, pagos, legal
 │   │   └── LegalLayout.tsx         # Layout compartido para páginas legales
 │   ├── lab/
@@ -756,6 +783,24 @@ La tasa del 10% real anual es la tasa de actualización referencial del sector e
 
 ## Pendientes y próximos pasos
 
+### ✅ Completado en sesión 17 (4 junio 2026) — Rediseño visual
+
+- [x] **Home acortado** — quitadas AboutUs, Solutions, Projects, SimulatorCTA, FinalCTA del home
+- [x] **Páginas independientes** — `/soluciones`, `/proyectos`, `/nosotros`, `/contacto`
+- [x] **Navbar compartido y responsive** — `components/landing/Navbar.tsx` (variantes transparent/solid, menú móvil)
+- [x] **Componente `Reveal`** — fade-in al scroll con IntersectionObserver (respeta reduced-motion)
+- [x] **Set de íconos SVG** — `components/landing/icons.tsx`, reemplazaron emojis en todo el sitio
+- [x] **Pase de elegancia** — tipografía, tarjetas premium, animaciones, gradientes en todas las secciones del home
+- [x] **Banner de marcas** — marquee con scroll infinito + logos reales (LONGi, Jinko, Livoltek, SMA)
+- [x] **Sección Soluciones rediseñada** — 4 servicios del brochure (incl. Eólica y Consultoría)
+- [x] **Misión/Visión en /nosotros** — textos del brochure
+- [x] **Cifras actualizadas** — +25 localidades, 100% soluciones a medida (quitado "25 años garantizados")
+- [x] **CTAs unificados** — "Simula tu proyecto" / "Simulador" en navbar
+- [x] **Simulador alineado** — header, paso 1, hero/KPIs/CTA del paso 7, fix de colores verdes no-semánticos
+- [ ] **PENDIENTE:** emojis de avisos condicionales del Paso 7 del simulador (ver media prioridad)
+- [ ] **PENDIENTE:** logos oficiales de Huawei, Canadian Solar, Victron, Pylontech, Dyness (hoy usan favicons)
+- [ ] **PENDIENTE:** commit + push de todos los cambios de la sesión 17 para desplegar a Vercel
+
 ### ✅ Completado en sesiones 14-15 (1 junio 2026)
 
 - [x] **Sistema de gestión de IVA en costos** — implementado campo `con_iva` en `project_costs` con formulario de doble campo automático (sin IVA ↔ con IVA) para cálculo bidireccional
@@ -888,6 +933,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires timestamptz;
 - [ ] **Precio de kWh dinámico por distribuidora/tarifa** — hoy usa $220 fijo cuando no hay monto en la boleta
 - [ ] **Notificaciones por email** — avisar al admin cuando un lead nuevo llega o un proyecto cambia de estado
 - [ ] **Métricas de conversión en dashboard** — tasa de conversión lead→cotización→proyecto, tiempo promedio por etapa
+- [ ] **Pulir avisos del Paso 7 (Resultados) del simulador** — reemplazar los emojis de las cajas de recomendación condicionales (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) por íconos SVG de `components/landing/icons.tsx`, para coherencia con el rediseño elegante. Requiere correr el wizard completo con datos válidos para verificar visualmente cada aviso (no se pudo capturar en headless). Ya están hechos: header, paso 1, hero/KPIs/CTA del paso 7 y el auto eléctrico (🚗 → IconCar).
 
 ### ⚪ Baja prioridad / futuro
 

@@ -137,7 +137,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   className={[
                     'flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all hover:border-[#389fe0]',
                     isSelected
-                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
                       : 'border-gray-200 text-gray-600 bg-white',
                   ].join(' ')}
                 >
@@ -183,7 +183,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   className={[
                     'px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
                     amperajeA === amp
-                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
                       : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
                   ].join(' ')}
                 >
@@ -226,7 +226,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   className={[
                     'px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
                     potenciaContratadaKW === kw
-                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-green-800'
+                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
                       : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
                   ].join(' ')}
                 >

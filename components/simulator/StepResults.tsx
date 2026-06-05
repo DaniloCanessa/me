@@ -16,6 +16,7 @@ import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalys
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
+import { IconCar } from '@/components/landing/icons';
 import dynamic from 'next/dynamic';
 
 const PDFDownloadButton = dynamic(() => import('./PDFDownloadButton'), { ssr: false });
@@ -107,7 +108,7 @@ function AnalysisPanel({ analysis, tarifa }: { analysis: TariffAnalysisResult; t
   if (!showAnyBlock) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
+    <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 flex flex-col gap-4">
       <h2 className="text-sm font-semibold text-gray-700">Análisis y recomendaciones</h2>
 
       {/* Tarifa desconocida */}
@@ -185,7 +186,7 @@ function StatCard({ label, value, sub, accent }: {
   label: string; value: string; sub?: string; accent?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div className="bg-white rounded-xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-4">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className={`text-2xl font-bold ${accent ?? 'text-gray-900'}`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
@@ -230,7 +231,7 @@ function CTABlock({
 
   if (ctaState === 'success') {
     return (
-      <div className="bg-gray-900 text-white rounded-2xl p-6 text-center">
+      <div className="bg-[#010101] text-white rounded-2xl p-6 text-center">
         <div className="w-12 h-12 bg-[#389fe0] rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
           ✓
         </div>
@@ -245,7 +246,7 @@ function CTABlock({
   }
 
   return (
-    <div className="bg-gray-900 text-white rounded-2xl p-5">
+    <div className="bg-[#010101] text-white rounded-2xl p-5">
       <p className="text-base font-bold mb-1">Instala tu sistema solar</p>
       <p className="text-sm text-gray-400 mb-4">
         Visita técnica gratuita y presupuesto definitivo sin costo ni compromiso.
@@ -269,7 +270,7 @@ function CTABlock({
         type="button"
         onClick={onCTA}
         disabled={ctaState === 'loading'}
-        className="w-full rounded-xl bg-[#389fe0] hover:bg-[#389fe0]/80 active:bg-[#389fe0] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 text-sm transition-colors"
+        className="w-full rounded-xl bg-[#389fe0] hover:bg-[#1d65c5] active:bg-[#389fe0] disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3.5 text-sm shadow-lg shadow-[#389fe0]/30 hover:shadow-xl hover:shadow-[#389fe0]/40 transition-all duration-300"
       >
         {ctaState === 'loading'
           ? 'Enviando...'
@@ -355,7 +356,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
   const { energyBalance, financial } = result;
   return (
     <>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Desglose financiero anual</h2>
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex justify-between">
@@ -403,7 +404,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 overflow-x-auto">
+      <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 overflow-x-auto">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Balance energético mensual</h2>
         <table className="w-full text-xs min-w-[560px]">
           <thead>
@@ -652,9 +653,9 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
       onCopy={(e) => e.preventDefault()}
     >
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white rounded-2xl p-5">
+      <div className="bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white rounded-2xl p-6 shadow-[0_16px_48px_rgba(56,159,224,0.25)]">
         <p className="text-sm opacity-70 mb-1">{contactName}</p>
-        <p className="text-3xl font-bold leading-tight">
+        <p className="text-4xl font-bold leading-tight tracking-tight">
           {formatCLP(activeResult.financial.monthlyBenefitCLP)}
           <span className="text-lg font-normal opacity-75">/mes</span>
         </p>
@@ -1029,12 +1030,14 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
 
       {/* ── Auto eléctrico ──────────────────────────────────────────────────── */}
       {evCharger && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">
             Auto eléctrico — recomendación de carga
           </h2>
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-2xl">🚗</span>
+            <span className="w-11 h-11 rounded-xl bg-[#389fe0]/10 text-[#1d65c5] flex items-center justify-center shrink-0">
+              <IconCar className="w-6 h-6" />
+            </span>
             <div>
               <p className="text-sm font-semibold text-gray-800">
                 {EVChargingLabel[evCharger.recommendedChargingTime]}

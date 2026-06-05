@@ -163,7 +163,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
   if (state.stage === 'loading') {
     return (
       <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
-        <div className="inline-block w-8 h-8 border-4 border-[#b0cedd]/40 border-t-green-600 rounded-full animate-spin mb-3" />
+        <div className="inline-block w-8 h-8 border-4 border-[#b0cedd]/40 border-t-[#389fe0] rounded-full animate-spin mb-3" />
         <p className="text-sm font-semibold text-gray-700">
           Analizando boleta{state.total > 1 ? ` ${state.current} de ${state.total}` : ''}...
         </p>

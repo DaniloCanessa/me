@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Reveal from './Reveal';
 
 const PROJECTS = [
   {
@@ -66,22 +67,26 @@ const PROJECTS = [
   },
 ];
 
-export default function Projects() {
+export default function Projects({ showHeader = true }: { showHeader?: boolean }) {
   return (
-    <section id="proyectos" className="py-24 bg-[#dde3e9]/30">
+    <section id="proyectos" className={`${showHeader ? 'py-28' : 'pt-12 pb-28'} bg-gradient-to-b from-[#dde3e9]/40 to-white`}>
       <div className="max-w-6xl mx-auto px-6">
-        <div className="grid md:grid-cols-2 gap-16 items-start mb-16">
-          <div>
-            <p className="text-sm font-semibold text-[#389fe0] uppercase tracking-widest mb-3">Trayectoria</p>
-            <h2 className="text-3xl md:text-4xl font-bold text-[#010101] leading-tight">
-              Proyectos ejecutados<br />en todo Chile
-            </h2>
-            <p className="text-gray-500 mt-4 leading-relaxed">
+        <div className="grid md:grid-cols-2 gap-16 items-center mb-16">
+          <Reveal>
+            {showHeader && (
+              <>
+                <p className="text-xs font-semibold text-[#389fe0] uppercase tracking-[0.2em] mb-4">Trayectoria</p>
+                <h2 className="text-3xl md:text-[2.6rem] font-bold text-[#010101] tracking-tight leading-tight">
+                  Proyectos ejecutados<br />en todo Chile
+                </h2>
+              </>
+            )}
+            <p className={`text-gray-500 leading-relaxed ${showHeader ? 'mt-5' : 'text-lg'}`}>
               Desde Arica hasta Magallanes, hemos instalado sistemas solares en hogares, empresas,
               universidades, comunidades rurales y organismos públicos.
             </p>
-          </div>
-          <div className="rounded-2xl overflow-hidden border border-[#b0cedd]/40 shadow-sm">
+          </Reveal>
+          <Reveal delay={120} className="rounded-2xl overflow-hidden border border-[#b0cedd]/40 shadow-[0_12px_40px_rgba(16,40,80,0.08)]">
             <Image
               src="/images/pais-con-proyectos.png"
               alt="Proyectos Mercado Energy en Chile"
@@ -89,37 +94,37 @@ export default function Projects() {
               height={600}
               className="w-full h-auto object-contain bg-white p-4"
             />
-          </div>
+          </Reveal>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {PROJECTS.map((p) => (
-            <div
-              key={p.title}
-              className="group bg-white rounded-2xl overflow-hidden border border-[#b0cedd]/30 hover:shadow-lg transition-shadow"
-            >
-              <div className="relative aspect-[4/3] overflow-hidden">
-                <Image
-                  src={p.image}
-                  alt={p.title}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
-                  {p.tags.map((tag) => (
-                    <span key={tag} className="bg-[#389fe0]/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
+          {PROJECTS.map((p, i) => (
+            <Reveal key={p.title} delay={(i % 3) * 100}>
+              <div className="group h-full bg-white rounded-2xl overflow-hidden ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] hover:shadow-[0_16px_48px_rgba(16,40,80,0.14)] hover:-translate-y-1 transition-all duration-300">
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <Image
+                    src={p.image}
+                    alt={p.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap">
+                    {p.tags.map((tag) => (
+                      <span key={tag} className="bg-[#389fe0]/90 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-[#389fe0] font-medium mb-1">{p.location}</p>
+                  <h3 className="text-sm font-bold text-[#010101] mb-2 tracking-tight">{p.title}</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">{p.description}</p>
                 </div>
               </div>
-              <div className="p-5">
-                <p className="text-xs text-[#389fe0] font-medium mb-1">{p.location}</p>
-                <h3 className="text-sm font-bold text-[#010101] mb-2">{p.title}</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">{p.description}</p>
-              </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>

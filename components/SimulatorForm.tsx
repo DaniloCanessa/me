@@ -220,7 +220,7 @@ export default function SimulatorForm({ onSubmit, isLoading }: SimulatorFormProp
         disabled={isLoading}
         className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-3 px-6 rounded-xl transition-colors text-sm"
       >
-        {isLoading ? 'Calculando...' : 'Simular mi ahorro solar →'}
+        {isLoading ? 'Calculando...' : 'Simula tu proyecto solar →'}
       </button>
     </form>
   );

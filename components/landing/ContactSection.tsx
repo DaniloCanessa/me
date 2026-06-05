@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { IconMail, IconPin } from './icons';
 
-export default function ContactSection() {
+export default function ContactSection({ showEyebrow = true }: { showEyebrow?: boolean }) {
   const [type, setType] = useState<'natural' | 'business'>('natural');
   const [form, setForm] = useState({ name: '', contactName: '', email: '', phone: '', message: '' });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -31,7 +32,7 @@ export default function ContactSection() {
 
           {/* Info izquierda */}
           <div>
-            <p className="text-sm font-semibold text-[#389fe0] uppercase tracking-widest mb-3">Contacto</p>
+            {showEyebrow && <p className="text-sm font-semibold text-[#389fe0] uppercase tracking-widest mb-3">Contacto</p>}
             <h2 className="text-3xl md:text-4xl font-bold text-[#010101] leading-tight mb-6">
               Hablemos de tu<br />proyecto solar
             </h2>
@@ -42,12 +43,12 @@ export default function ContactSection() {
 
             <div className="space-y-5">
               {[
-                { icon: '📧', label: 'Email', value: 'contacto@mercadoenergy.cl', href: 'mailto:contacto@mercadoenergy.cl' },
-                { icon: '📍', label: 'Oficina', value: 'Miguel León Prado 134, Santiago', href: null },
+                { Icon: IconMail, label: 'Email', value: 'contacto@mercadoenergy.cl', href: 'mailto:contacto@mercadoenergy.cl' },
+                { Icon: IconPin, label: 'Oficina', value: 'Miguel León Prado 134, Santiago', href: null },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#389fe0]/10 flex items-center justify-center text-lg shrink-0">
-                    {item.icon}
+                  <div className="w-10 h-10 rounded-xl bg-[#389fe0]/10 text-[#1d65c5] flex items-center justify-center shrink-0">
+                    <item.Icon className="w-5 h-5" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-400 mb-0.5">{item.label}</p>

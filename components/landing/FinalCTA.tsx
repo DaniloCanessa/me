@@ -22,7 +22,7 @@ export default function FinalCTA() {
             href="/simulator"
             className="inline-flex items-center justify-center gap-2 bg-white hover:bg-[#ade1ed] text-[#1d65c5] font-bold py-4 px-10 rounded-xl text-base transition-colors"
           >
-            Simular mi ahorro →
+            Simula tu proyecto →
           </Link>
           <a
             href="mailto:contacto@mercadoenergy.cl"

@@ -65,12 +65,14 @@ export default function SimulatorClient({ config, catalog }: Props) {
   return (
     <main className="min-h-screen bg-[#f4f8fb]">
       {/* Barra de navegación */}
-      <nav className="bg-[#b0cedd] px-4 py-3">
+      <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#b0cedd]/40 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/">
             <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
           </Link>
-          <span className="text-sm text-gray-500">Simulador Solar</span>
+          <span className="text-sm font-semibold bg-gradient-to-r from-[#389fe0] to-[#1d65c5] bg-clip-text text-transparent">
+            Simulador solar
+          </span>
         </div>
       </nav>
 
@@ -85,7 +87,7 @@ export default function SimulatorClient({ config, catalog }: Props) {
           <button
             type="button"
             onClick={goBack}
-            className="mb-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            className="mb-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#389fe0] transition-colors"
           >
             <span className="text-base leading-none">←</span> Volver
           </button>
