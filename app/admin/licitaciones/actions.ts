@@ -43,7 +43,10 @@ export async function addTenderRecipient(email: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return { ok: false, message: 'Email inválido' };
   const db = getSupabaseAdmin();
   const { error } = await db.from('tender_recipients').insert({ email: clean });
-  if (error) return { ok: false, message: error.message };
+  if (error) {
+    const message = error.code === '23505' ? 'Ese correo ya está en la lista' : error.message;
+    return { ok: false, message };
+  }
   revalidatePath('/admin/licitaciones');
   return { ok: true };
 }
@@ -71,7 +74,10 @@ export async function addTenderKeyword(keyword: string) {
   if (!clean) return { ok: false, message: 'Palabra vacía' };
   const db = getSupabaseAdmin();
   const { error } = await db.from('tender_keywords').insert({ keyword: clean });
-  if (error) return { ok: false, message: error.message };
+  if (error) {
+    const message = error.code === '23505' ? 'Esa palabra ya está en la lista' : error.message;
+    return { ok: false, message };
+  }
   revalidatePath('/admin/licitaciones');
   return { ok: true };
 }
