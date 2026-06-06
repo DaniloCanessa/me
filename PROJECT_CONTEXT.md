@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 5 de junio 2026 (sesión 18 — OCR Opus 4.8 interno, simulador en backoffice, informe de marca)
+> Última actualización: 5 de junio 2026 (sesión 19 — licitaciones de Mercado Público en el backoffice)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,15 +8,18 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 y 18 completadas, commiteadas y desplegadas** (commits `44c8201` y `77f740e` — push a main → Vercel rebuild automático, build verificado localmente antes del push).
+**Sesiones 17, 18 y 19 completadas, commiteadas y desplegadas** (commits `44c8201`, `77f740e`, `3959e36`, `d7d68c4`, `226e488`).
 
-**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno cargadas en production — el OCR con Opus 4.8 **no requiere variables nuevas** (modelo por defecto en código; override opcional `OCR_MODEL`).
+**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
+
+**Licitaciones operativo end-to-end:** tablas creadas en Supabase, primera sincronización real exitosa (2.435 publicaciones → 21 calzaron → email enviado), ticket definitivo verificado, cron diario activo a las 08:00 de Chile.
 
 **Verificación post-deploy pendiente (producción):**
 1. `/simulator` público → sin botón de subir boleta, ingreso flexible kWh/monto $
 2. `/admin/simulator` → OCR con badge "Modo interno" funcionando con Opus 4.8
 3. `/admin/products` → categoría "Kit Solar" visible con los 14 kits
 4. Informe PDF → diseño azul de marca con etiqueta "+ IVA"
+5. `/admin/licitaciones` → "Sincronizar ahora" funciona con el ticket definitivo
 
 **Pendientes (media prioridad):**
 - Emojis de avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) → íconos SVG (requiere correr el wizard completo para verificar cada aviso)
@@ -63,6 +66,16 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 19 (5 junio 2026) — Licitaciones de Mercado Público:**
+
+- **Integración con la API pública de ChileCompra** (`api.mercadopublico.cl`): autenticación por ticket gratuito. La API no soporta búsqueda por keyword → se listan las publicaciones por día y se filtran localmente. Ticket definitivo solicitado y configurado (`MERCADO_PUBLICO_TICKET` en local y Vercel; fallback al ticket de prueba público en desarrollo)
+- **`lib/mercadopublico.ts`**: cliente API (listado por fecha, detalle por código, retry ante inestabilidad, rate limit ~1 req/s) + `syncTenders()`: revisa hoy y ayer, filtra solo licitaciones con cierre futuro, match por keywords (sin acentos/mayúsculas) sobre nombre + descripción, inserta nuevas, notifica por email
+- **Tablas Supabase** (`supabase/tenders.sql`, ejecutado): `tenders` (PK codigo_externo, estado_interno con pipeline nueva/vista/interesa/descartada/postulada), `tender_keywords` (24 seed parametrizables), `tender_recipients` (correos de notificación, seed danilo.canessa@gmail.com)
+- **`/admin/licitaciones`** (`TendersManager.tsx`): lista con link a la ficha de Mercado Público, organismo/región, monto, cierre con cuenta regresiva (rojo ≤3 días), chips de keywords que calzaron, pipeline con botones (Me interesa/Postulada/Descartar/Restaurar), filtros por estado, "Marcar todas como vistas", editor de keywords y de correos de notificación (chips toggle/eliminar/agregar, errores de duplicado amigables)
+- **Cron diario** (`vercel.json` → `/api/cron/tenders`, 12:00 UTC = 08:00 Chile): protegido con `CRON_SECRET` (Vercel lo envía como Bearer) o sesión admin; `maxDuration 300`
+- **Email vía Resend** a todos los correos activos de `tender_recipients` (fallback `LEAD_RECIPIENT_EMAIL`): solo cuando hay licitaciones nuevas, con nombre/organismo/cierre/keywords/link
+- **Probado end-to-end con la API real**: 2.435 publicaciones revisadas → 21 sincronizadas → email recibido. Con el ticket definitivo: mismas 8 abiertas, 0 duplicados (dedup correcto). Se eliminaron 13 ya cerradas tras agregar el filtro de cierre futuro
 
 **Desarrollos sesión 18 (5 junio 2026) — OCR Opus 4.8 interno, simulador en backoffice, informe de marca:**
 
@@ -226,8 +239,9 @@ ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva 
 | OCR | Claude Opus 4.8 — solo usuarios internos (`app/api/parse-bill/route.ts`, override env `OCR_MODEL`) |
 | PDF simulador | html2canvas + jsPDF (`PDFDownloadButton.tsx`) |
 | PDF cotizaciones | `@react-pdf/renderer` server-side (Fase 2, pendiente) |
-| BD | Supabase (leads + config_parameters + products) |
+| BD | Supabase (leads + config_parameters + products + tenders) |
 | Auth admin | Cookie `admin_token` vs `ADMIN_SECRET` + middleware |
+| Licitaciones | API Mercado Público / ChileCompra (`lib/mercadopublico.ts`, ticket en `MERCADO_PUBLICO_TICKET`) + Vercel Cron diario |
 
 **Nota importante:** Tailwind v4 usa `@import "tailwindcss"` en lugar de directivas `@tailwind`. No mezclar con la sintaxis de v3.
 
@@ -264,13 +278,15 @@ mercado-energy/
 │   │   ├── products/               # Catálogo: CRUD + sidebar categorías + filtro stock (consulta paginada >1000 filas)
 │   │   │   └── import/             # Importación masiva Excel/CSV (página + server action upsert por SKU)
 │   │   ├── quotes/                 # Cotizaciones: lista + editor + PDF (dropdown productos paginado)
+│   │   ├── licitaciones/           # (sesión 19) Licitaciones Mercado Público: lista + pipeline + keywords + correos
 │   │   └── simulator/page.tsx      # (sesión 18) Simulador embebido en el backoffice: <SimulatorClient ocrEnabled embedded>
 │   ├── lab/
 │   │   └── bill-parser/page.tsx    # Laboratorio experimental de OCR
 │   └── api/
 │       ├── leads/route.ts          # POST: recibe lead, envía email via Resend
 │       ├── contact/route.ts        # POST: formulario de contacto landing (Resend)
-│       ├── parse-bill/route.ts     # POST: recibe imagen/PDF/Excel, devuelve JSON via Claude Haiku
+│       ├── parse-bill/route.ts     # POST: imagen/PDF/Excel → JSON via Claude Opus 4.8 (requiere sesión admin)
+│       ├── cron/tenders/route.ts   # (sesión 19) GET: sincronización diaria de licitaciones (CRON_SECRET o admin)
 │       └── send-report/route.ts    # POST: envía informe PDF por email al lead
 │
 ├── components/
@@ -321,6 +337,7 @@ mercado-energy/
 │
 └── lib/
     ├── auth.ts                     # (sesión 18) isAdminAuthenticated(): valida JWT de cookie admin_token (server-side)
+    ├── mercadopublico.ts           # (sesión 19) Cliente API ChileCompra + syncTenders() + email de notificación
     ├── types.ts                    # Interfaces TypeScript (incluye SimulatorConfig, SimulatorInput extendido)
     ├── constants.ts                # Valores por defecto (fallback cuando DB no responde)
     ├── regions.ts                  # 16 regiones de Chile con producción mensual kWh/kWp
@@ -728,6 +745,30 @@ Usuario interno sube 1 o más archivos (JPG/PNG/PDF)
 - Header `anthropic-beta: pdfs-2024-09-25` solo se envía para archivos PDF (no para imágenes)
 
 **Mock mode:** cuando no hay `ANTHROPIC_API_KEY`, retorna datos simulados con patrón estacional realista.
+
+---
+
+## Licitaciones — Mercado Público (ChileCompra)
+
+**Operativo end-to-end desde sesión 19.** Detecta licitaciones del Estado que calzan con los servicios de Mercado Energy y notifica por email.
+
+```
+Cron diario 08:00 Chile (vercel.json → /api/cron/tenders)
+  → syncTenders() en lib/mercadopublico.ts
+    → Lista publicaciones de hoy y ayer (API ChileCompra, ticket en MERCADO_PUBLICO_TICKET)
+    → Filtra: solo cierre futuro + match con tender_keywords (sin acentos/mayúsculas)
+    → Trae detalle solo de las que calzan (rate limit ~1 req/s, retry ante inestabilidad)
+    → Inserta nuevas en tabla tenders (dedup por codigo_externo)
+    → Email vía Resend a tender_recipients activos (fallback LEAD_RECIPIENT_EMAIL)
+  → Gestión en /admin/licitaciones: pipeline (nueva/vista/interesa/descartada/postulada),
+    keywords y correos parametrizables (chips toggle/eliminar/agregar)
+```
+
+**Claves:**
+- La API no soporta búsqueda por keyword → filtrado local. Ficha pública: `mercadopublico.cl/fichaLicitacion.html?idLicitacion=CODIGO`
+- Tablas: `tenders`, `tender_keywords` (24 seed), `tender_recipients` — SQL en `supabase/tenders.sql`
+- Env vars: `MERCADO_PUBLICO_TICKET` (definitivo, cargado en Vercel y local), `CRON_SECRET` (Vercel lo envía como Bearer al cron)
+- Sincronización manual: botón "Sincronizar ahora" en la página (server action) o GET al cron con sesión admin
 
 ---
 
