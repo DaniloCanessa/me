@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 5 de junio 2026 (sesión 19 — licitaciones de Mercado Público en el backoffice)
+> Última actualización: 6 de junio 2026 (sesión 20 — botón WhatsApp, redes sociales parametrizables y branding)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,7 +8,7 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17, 18 y 19 completadas, commiteadas y desplegadas** (commits `44c8201`, `77f740e`, `3959e36`, `d7d68c4`, `226e488`).
+**Sesiones 17 a 20 completadas, commiteadas y desplegadas** (últimos commits: `3959e36`, `d7d68c4`, `226e488`, `1ed376d`).
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
 
@@ -20,6 +20,10 @@
 3. `/admin/products` → categoría "Kit Solar" visible con los 14 kits
 4. Informe PDF → diseño azul de marca con etiqueta "+ IVA"
 5. `/admin/licitaciones` → "Sincronizar ahora" funciona con el ticket definitivo
+6. Botón flotante de WhatsApp → abre chat con +56 9 6654 6276 (sesión 20)
+7. Favicon del rayo + título "Energía limpia y sustentable" en la pestaña (sesión 20)
+
+**Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
 **Pendientes (media prioridad):**
 - Emojis de avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) → íconos SVG (requiere correr el wizard completo para verificar cada aviso)
@@ -66,6 +70,20 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 20 (6 junio 2026) — Botón WhatsApp, redes sociales parametrizables y branding (commit `1ed376d`):**
+
+- **Botón flotante de WhatsApp** (`components/landing/WhatsAppButton.tsx`, async Server Component): click-to-chat gratuito vía `wa.me` (sin API de pago), fijo abajo a la derecha, verde oficial #25d366, hover expande etiqueta "¿Conversemos?". Montado en las 6 páginas públicas (home, /soluciones, /proyectos, /nosotros, /contacto, /net-billing) — NO en simulador ni admin
+- **Parámetros de texto en `/admin/config`:** columna `value` de `config_parameters` convertida de NUMERIC a **JSONB** (`supabase/whatsapp_config.sql`, ejecutado — los 15 parámetros numéricos se preservaron). Nuevas categorías:
+  - **WhatsApp**: `whatsapp.number` (configurado: 56966546276) y `whatsapp.default_message`. Validación server-side del número (solo dígitos 8–15, sin "+")
+  - **Redes sociales**: `social.instagram/facebook/youtube/tiktok` (`supabase/social_config.sql`, ejecutado vía API). URL completa o vacío = red oculta en el footer. ⚠️ Seed vacío — falta que el usuario llene las URLs
+- `updateConfigParam` (`app/admin/config/actions.ts`): acepta texto para categorías `whatsapp`/`social`, revalida la landing (`revalidatePath('/', 'layout')`) al guardar — los cambios se reflejan sin redeploy. `ConfigTable` renderiza input de texto ancho para esas categorías (`TEXT_CATEGORIES`)
+- **Helpers DB** (`lib/db/config.ts`): `getWhatsAppConfig()` y `getSocialConfig()` con fallback graceful
+- **Teléfono en contacto:** +56 9 6654 6276 con `IconPhone` nuevo, bajo "Oficina" en `ContactSection` (link `tel:`)
+- **Redes sociales en el footer:** fila de íconos (`IconInstagram/Facebook/YouTube/TikTok` en `icons.tsx`, glifos rellenos) bajo el email — solo se muestran las que tienen URL configurada
+- **Marca Solis** agregada al banner de marcas (`public/images/brands/solis.png`, `wordmark: true`)
+- **Branding:** favicon nuevo del rayo (`app/icon.png` cuadrado 656×656 + `app/favicon.ico` regenerado — ojo: favicon.ico tiene prioridad sobre icon.png). Título de pestaña → "Mercado Energy — Energía limpia y sustentable". Navbar del home (variante transparent) → logo blanco completo `mercadoenergy-blanco.png` (h-24/28); páginas internas mantienen `logotipo.png` (h-16/20, agrandado). Footer → monograma blanco `me-blanco.png` (h-36) directo sobre el negro, sin el cuadro blanco. Header del simulador → logo h-16/20
+- **Limpieza:** eliminado `temp_create_quote.sql` (INSERT de prueba con placeholders, sin valor)
 
 **Desarrollos sesión 19 (5 junio 2026) — Licitaciones de Mercado Público:**
 
@@ -304,8 +322,9 @@ mercado-energy/
 │   │   ├── Brands.tsx              # Banner marquee de logos (scroll infinito, public/images/brands/)
 │   │   ├── Projects.tsx            # Grilla de proyectos + mapa Chile, prop showHeader (usado en /proyectos)
 │   │   ├── FinalCTA.tsx            # CTA final (ya NO se usa en el home)
-│   │   ├── ContactSection.tsx      # Formulario de contacto, prop showEyebrow (home + /contacto)
-│   │   ├── Footer.tsx              # Footer con logotipo-2, mapa, pagos, legal
+│   │   ├── ContactSection.tsx      # Formulario de contacto, prop showEyebrow (home + /contacto) + email/oficina/teléfono
+│   │   ├── WhatsAppButton.tsx      # (sesión 20) Botón flotante WhatsApp (async, lee número/mensaje de config_parameters)
+│   │   ├── Footer.tsx              # (async) Footer: monograma me-blanco, redes sociales desde config, mapa, pagos, legal
 │   │   └── LegalLayout.tsx         # Layout compartido para páginas legales
 │   ├── lab/
 │   │   └── BillParser.tsx          # UI standalone del lab OCR
