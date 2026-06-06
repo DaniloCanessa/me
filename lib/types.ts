@@ -1,3 +1,33 @@
+// ─── Licitaciones (Mercado Público) ──────────────────────────────────────────
+
+export type TenderStatus = 'nueva' | 'vista' | 'interesa' | 'descartada' | 'postulada';
+
+export interface Tender {
+  codigo_externo: string;          // ID de Mercado Público (ej: "1234-56-LE26")
+  nombre: string;
+  descripcion: string | null;
+  organismo: string | null;
+  unidad: string | null;
+  region: string | null;
+  fecha_publicacion: string | null;
+  fecha_cierre: string | null;
+  estado_mp: string | null;        // estado en Mercado Público (Publicada, Cerrada, etc.)
+  monto_estimado: number | null;
+  moneda: string | null;
+  keywords_matched: string[];
+  estado_interno: TenderStatus;
+  notificada: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenderKeyword {
+  id: string;
+  keyword: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'user';
