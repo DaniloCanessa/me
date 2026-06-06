@@ -1,6 +1,5 @@
-import Link from 'next/link';
 import Reveal from './Reveal';
-import { IconSun, IconWind, IconSnowflake, IconHeadset } from './icons';
+import { IconSun, IconWind, IconSnowflake, IconHeadset, IconBarChart } from './icons';
 
 const SERVICES = [
   {
@@ -23,6 +22,11 @@ const SERVICES = [
     title: 'Consultoría y Soporte',
     description: 'Asesoría experta en diseño energético, más mantenimiento preventivo y correctivo para asegurar el rendimiento óptimo de tus sistemas.',
   },
+  {
+    Icon: IconBarChart,
+    title: 'Asesoría Energética',
+    description: 'Te ayudamos a reducir el consumo y el valor final de tu boleta: analizamos tu tarifa, tus patrones y horarios de consumo, y te entregamos recomendaciones concretas de optimización.',
+  },
 ];
 
 export default function Solutions({ showHeader = true }: { showHeader?: boolean }) {
@@ -44,7 +48,7 @@ export default function Solutions({ showHeader = true }: { showHeader?: boolean 
 
         <div className="grid md:grid-cols-2 gap-6">
           {SERVICES.map((s, i) => (
-            <Reveal key={s.title} delay={(i % 2) * 120}>
+            <Reveal key={s.title} delay={(i % 2) * 120} className={i === SERVICES.length - 1 ? 'md:col-span-2' : undefined}>
               <div className="group relative h-full flex gap-5 bg-white rounded-2xl p-7 ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] hover:shadow-[0_16px_48px_rgba(56,159,224,0.14)] hover:-translate-y-1 transition-all duration-300 overflow-hidden">
                 {/* Barra de acento que aparece al hover */}
                 <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#389fe0] to-[#1d65c5] scale-y-0 group-hover:scale-y-100 origin-top transition-transform duration-300" />
@@ -64,18 +68,6 @@ export default function Solutions({ showHeader = true }: { showHeader?: boolean 
           ))}
         </div>
 
-        <Reveal className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-6 bg-[#010101] rounded-2xl px-8 py-7">
-          <div className="text-center sm:text-left">
-            <p className="text-white font-bold text-lg tracking-tight">¿No sabes qué solución necesitas?</p>
-            <p className="text-white/50 text-sm mt-1">Simula tu sistema ideal en minutos, sin compromiso.</p>
-          </div>
-          <Link
-            href="/simulator"
-            className="shrink-0 inline-flex items-center gap-2 bg-[#389fe0] hover:bg-[#1d65c5] text-white font-semibold py-3.5 px-8 rounded-xl shadow-lg shadow-[#389fe0]/30 hover:-translate-y-0.5 transition-all duration-300"
-          >
-            Simula tu sistema ideal →
-          </Link>
-        </Reveal>
       </div>
     </section>
   );

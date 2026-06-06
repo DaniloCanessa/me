@@ -4,11 +4,25 @@ import ProductsManager from '@/components/admin/ProductsManager';
 
 export default async function ProductsPage() {
   const db = getSupabaseAdmin();
-  const { data } = await db
-    .from('products')
-    .select('*')
-    .order('category')
-    .order('sort_order', { ascending: true });
+
+  // Supabase devuelve máximo 1000 filas por request: paginamos para traer
+  // el catálogo completo (los solar_kit son la última categoría alfabética
+  // y quedaban fuera del corte cuando el catálogo superó las 1000 filas).
+  const PAGE_SIZE = 1000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await db
+      .from('products')
+      .select('*')
+      .order('category')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true }) // desempate estable para paginar sin duplicados
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page?.length) break;
+    data.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
 
   return (
     <div className="p-6">

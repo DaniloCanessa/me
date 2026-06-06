@@ -194,6 +194,62 @@ export function IconBuilding(props: IconProps) {
   );
 }
 
+export function IconUpload(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M12 3v12" />
+      <path d="m17 8-5-5-5 5" />
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    </svg>
+  );
+}
+
+export function IconBriefcase(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      <rect width="20" height="14" x="2" y="6" rx="2" />
+    </svg>
+  );
+}
+
+export function IconGraduationCap(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
+      <path d="M22 10v6" />
+      <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" />
+    </svg>
+  );
+}
+
+export function IconFactory(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="M17 18h1" />
+      <path d="M12 18h1" />
+      <path d="M7 18h1" />
+    </svg>
+  );
+}
+
+export function IconBuildings(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M10 22V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v18" />
+      <path d="M22 22V8a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v14" />
+      <path d="M2 22h20" />
+      <path d="M5 6h2" />
+      <path d="M5 10h2" />
+      <path d="M5 14h2" />
+      <path d="M16 10h2" />
+      <path d="M16 14h2" />
+      <path d="M16 18h2" />
+    </svg>
+  );
+}
+
 export function IconCar(props: IconProps) {
   return (
     <svg {...common} {...props}>

@@ -36,9 +36,13 @@ const INITIAL_STATE: WizardState = {
 interface Props {
   config: SimulatorConfig;
   catalog: SolarKit[];
+  /** true solo con sesión de admin: habilita el OCR de boletas (Opus 4.8). */
+  ocrEnabled?: boolean;
+  /** true cuando se renderiza dentro del backoffice (junto al sidebar): oculta el navbar público. */
+  embedded?: boolean;
 }
 
-export default function SimulatorClient({ config, catalog }: Props) {
+export default function SimulatorClient({ config, catalog, ocrEnabled = false, embedded = false }: Props) {
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
 
   function goTo(step: WizardStep) {
@@ -63,18 +67,20 @@ export default function SimulatorClient({ config, catalog }: Props) {
   const isFirstStep = state.step === STEP_ORDER[0];
 
   return (
-    <main className="min-h-screen bg-[#f4f8fb]">
-      {/* Barra de navegación */}
-      <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#b0cedd]/40 px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <Link href="/">
-            <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
-          </Link>
-          <span className="text-sm font-semibold bg-gradient-to-r from-[#389fe0] to-[#1d65c5] bg-clip-text text-transparent">
-            Simulador solar
-          </span>
-        </div>
-      </nav>
+    <main className={`${embedded ? 'min-h-full' : 'min-h-screen'} bg-[#f4f8fb]`}>
+      {/* Barra de navegación (solo versión pública — en el backoffice el sidebar hace de chrome) */}
+      {!embedded && (
+        <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#b0cedd]/40 px-4 py-3">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <Link href="/">
+              <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+            </Link>
+            <span className="text-sm font-semibold bg-gradient-to-r from-[#389fe0] to-[#1d65c5] bg-clip-text text-transparent">
+              Simulador solar
+            </span>
+          </div>
+        </nav>
+      )}
 
       {/* Barra de progreso */}
       <ProgressBar currentStep={state.step} />
@@ -118,6 +124,7 @@ export default function SimulatorClient({ config, catalog }: Props) {
           <StepSupply
             category={state.customerCategory!}
             initialData={state.supply}
+            contact={state.contact}
             onSubmit={(supply: SupplyData) => {
               update({ supply });
               goNext();
@@ -129,6 +136,7 @@ export default function SimulatorClient({ config, catalog }: Props) {
           <StepBills
             initialData={state.consumptionProfile}
             supply={state.supply!}
+            ocrEnabled={ocrEnabled}
             onSubmit={(consumptionProfile) => {
               update({ consumptionProfile });
               goNext();

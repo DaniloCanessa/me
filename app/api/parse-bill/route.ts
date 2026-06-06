@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { isAdminAuthenticated } from '@/lib/auth';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,16 @@ function buildPrompt(source: 'visual' | 'excel' = 'visual'): string {
 El texto adjunto proviene de un archivo Excel convertido a CSV. Las columnas pueden tener nombres variados según la distribuidora. Identifica los datos de consumo mensual y extrae TODA la información disponible en el siguiente formato JSON estricto:`
     : `Eres un asistente especializado en leer boletas eléctricas chilenas (Enel, CGE, Chilquinta, Frontel, Saesa, etc.).
 
+ANTES DE EXTRAER, considera:
+- La boleta puede ser una FOTO ROTADA 90° o 180° (texto de lado o invertido), arrugada o con poca luz. Oriéntate mentalmente y lee con cuidado.
+- Las boletas chilenas suelen tener 2 páginas. La página 2 casi siempre incluye un GRÁFICO DE BARRAS titulado "¿Cuál fue mi consumo en los últimos 13 meses?" (Enel) o similar. Cada barra tiene su valor en kWh impreso ENCIMA. Este gráfico es LA FUENTE PRINCIPAL del historial mensual — extrae TODAS las barras legibles, no solo el mes actual.
+- Para asignar mes a cada barra: debajo de CADA barra hay una etiqueta de mes en el eje X (ENE FEB MAR ABR MAY JUN JUL AGO SEP OCT NOV DIC). Empareja cada valor con la etiqueta que tiene DIRECTAMENTE debajo — NO cuentes posiciones de memoria, lee la etiqueta de cada barra. Método recomendado: primero transcribe la secuencia completa de pares etiqueta→valor tal como aparece de izquierda a derecha (ej: MAY→800, JUN→702, JUL→690, ...), y recién después conviértela a month/year.
+- Para asignar el año: la ÚLTIMA barra ("mes actual") corresponde al período de facturación — usa el "Periodo de lectura" o "Fecha de emisión" de la página 1 para fijar su año, y cuenta hacia atrás (cruzando el cambio de año si corresponde). VERIFICA la coherencia: el gráfico cubre 13 meses, por lo que la PRIMERA y la ÚLTIMA barra deben ser el MISMO mes (con un año de diferencia). Si tu secuencia no cumple esto, releíste mal alguna etiqueta — corrígela antes de responder.
+- VERIFICACIÓN CRUZADA del mes actual: el consumo del período aparece repetido en varios lugares ("Consumo total del periodo", "Electricidad Consumida (X kWh)", lecturas del medidor, última barra del gráfico). Deben coincidir.
+- Los meses históricos del gráfico solo tienen kWh — NO inventes montos en CLP para ellos. Solo el período actual tiene montos (total a pagar, detalle de cargos).
+
+REGLA CRÍTICA — NO INVENTES VALORES: si no puedes leer con claridad el número de una barra o un dato, OMITE ese mes/campo en lugar de adivinar. Es mucho peor entregar un valor inventado que entregar menos meses. Si tuviste que omitir barras ilegibles, indícalo en "notes" y baja "confidence" a "medium".
+
 Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el siguiente formato JSON estricto:`;
 
   return `${intro}
@@ -92,7 +103,7 @@ Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el s
 }
 
 Reglas importantes:
-- Incluye TODOS los períodos/meses visibles en los datos.
+- Incluye TODOS los períodos/meses visibles en los datos${source === 'excel' ? '' : ', incluyendo cada barra legible del gráfico de consumo histórico de 13 meses'}.
 - Los montos deben estar en CLP sin puntos de miles (ej: 45000, no 45.000). Si vienen con puntos de miles o comas decimales, conviértelos a entero.
 - Si ves fechas en formato "ene-24", "01/2024", "2024-01" u otros, interprétalas correctamente como month/year.
 - Si la columna de consumo tiene valores como "450 kWh" o "450,00", extrae solo el número.
@@ -153,6 +164,11 @@ function excelToText(buffer: ArrayBuffer): string {
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  // OCR solo para usuarios internos: evita que terceros consuman crédito Anthropic
+  if (!(await isAdminAuthenticated())) {
+    return Response.json({ ok: false, reason: 'error', message: 'No autorizado' }, { status: 401 });
+  }
+
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   const USE_MOCK = !ANTHROPIC_API_KEY;
   let formData: FormData;
@@ -218,7 +234,10 @@ export async function POST(request: Request) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        // Opus 4.8: máxima precisión en visión (gráficos de barras, fotos rotadas).
+        // Solo lo usan usuarios internos, así que el costo queda acotado.
+        // Override opcional vía OCR_MODEL (ej: 'claude-haiku-4-5' para pruebas baratas).
+        model: process.env.OCR_MODEL ?? 'claude-opus-4-8',
         max_tokens: 4096,
         messages,
       }),

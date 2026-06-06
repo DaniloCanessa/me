@@ -18,23 +18,22 @@ interface Props {
   businessResult?: SimulatorResult;
 }
 
-// ─── Paleta ───────────────────────────────────────────────────────────────────
+// ─── Paleta (identidad de marca: azules + negro) ─────────────────────────────
 
 const C = {
-  green:      '#16a34a',
-  greenLight: '#dcfce7',
-  greenMid:   '#bbf7d0',
-  emerald:    '#059669',
-  emeraldBg:  '#ecfdf5',
-  emeraldBdr: '#6ee7b7',
+  brand:      '#1d65c5',   // azul oscuro de marca — números y énfasis
+  accent:     '#389fe0',   // azul claro de marca — acentos y gráficos
+  accentSoft: '#eaf4fb',   // fondo azul muy suave
+  accentBdr:  '#b0cedd',   // borde azulado suave
+  cyan:       '#70caca',   // cian de marca — detalles sobre fondo oscuro
+  black:      '#010101',   // negro de marca — cabecera
   dark:       '#111827',
   gray:       '#6b7280',
   grayLight:  '#f9fafb',
   border:     '#e5e7eb',
-  blue:       '#2563eb',
-  amber:      '#d97706',
-  amberBg:    '#fffbeb',
-  amberBdr:   '#fde68a',
+  emerald:    '#059669',   // reservado solo para impacto ambiental
+  emeraldBg:  '#ecfdf5',
+  emeraldBdr: '#a7f3d0',
   white:      '#ffffff',
 };
 
@@ -46,8 +45,8 @@ function clp(n: number) {
   }).format(n);
 }
 function pct(n: number) { return `${Math.round(n)}%`; }
-function payback(y: number) {
-  return y >= 100 ? '> 25 años' : `${y % 1 === 0 ? y : y.toFixed(1)} años`;
+function payback(y: number, lifeYears = SOLAR_DEFAULTS.systemLifeYears) {
+  return y >= 100 ? `> ${lifeYears} años` : `${y % 1 === 0 ? y : y.toFixed(1)} años`;
 }
 
 // ─── Gráfico de consumo mensual (barras) ─────────────────────────────────────
@@ -73,7 +72,7 @@ function ConsumptionChart({ bills }: { bills: MonthlyBill[] }) {
         const barH = slot.kwh > 0 ? Math.max((slot.kwh / maxKwh) * chartH, 3) : 3;
         const x = i * slotW + (slotW - barW) / 2;
         const y = yTop + chartH - barH;
-        const color = slot.source === 'interpolated' ? '#d1d5db' : C.green;
+        const color = slot.source === 'interpolated' ? '#d1d5db' : C.brand;
         return (
           <g key={slot.month}>
             <rect x={x} y={y} width={barW} height={barH} fill={color} rx={2} />
@@ -140,9 +139,9 @@ function GenerationChart({ result }: { result: SimulatorResult }) {
           {m.monthName.slice(0, 3)}
         </text>
       ))}
-      <path d={pathD} fill="none" stroke={C.amber} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <path d={pathD} fill="none" stroke={C.accent} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       {monthly.map((m, i) => (
-        <circle key={m.month} cx={xAt(i)} cy={yAt(m.productionKWh)} r={2.5} fill={C.amber} />
+        <circle key={m.month} cx={xAt(i)} cy={yAt(m.productionKWh)} r={2.5} fill={C.accent} />
       ))}
     </svg>
   );
@@ -152,8 +151,8 @@ function GenerationChart({ result }: { result: SimulatorResult }) {
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div style={{ borderLeft: `4px solid ${C.green}`, paddingLeft: 12, marginBottom: 14 }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>{title}</div>
+    <div style={{ borderLeft: `4px solid ${C.accent}`, paddingLeft: 12, marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{title}</div>
       {subtitle && <div style={{ fontSize: 10, color: C.gray, marginTop: 2 }}>{subtitle}</div>}
     </div>
   );
@@ -161,11 +160,11 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
 
 // ─── Fila clave / valor ───────────────────────────────────────────────────────
 
-function KVRow({ label, value, green }: { label: string; value: string; green?: boolean }) {
+function KVRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
       <span style={{ color: C.gray, fontSize: 11 }}>{label}</span>
-      <span style={{ fontWeight: 600, fontSize: 11, color: green ? C.green : C.dark }}>{value}</span>
+      <span style={{ fontWeight: 600, fontSize: 11, color: accent ? C.brand : C.dark }}>{value}</span>
     </div>
   );
 }
@@ -196,6 +195,11 @@ export default function SimulationReportHtml({
   const recommended = businessResult ?? scenarios![recommendedScenario!]!;
   const { kit, batteryCapacityKWh, energyBalance, financial, environmental, region } = recommended;
 
+  // Parámetros vivos de la simulación (config de BD con fallback a constants)
+  const lifeYears    = recommended.input.systemLifeYears ?? SOLAR_DEFAULTS.systemLifeYears;
+  const injectionPct = Math.round((recommended.input.injectionValueFactor ?? SOLAR_DEFAULTS.injectionValueFactor) * 100);
+  const hasBattery   = batteryCapacityKWh > 0;
+
   const tariffAnalysis = runTariffAnalysis({
     tarifa:               supply.tarifa,
     avgMonthlyKWh:        profile.averageMonthlyKWh,
@@ -216,9 +220,9 @@ export default function SimulationReportHtml({
     `Con una PFV de ${kit.sizekWp} kW instalada en ${region.name},`,
     ` cubrirás el ${Math.round(energyBalance.coveragePercent)}% de tu consumo eléctrico mensual`,
     ` (promedio ${profile.averageMonthlyKWh} kWh/mes).`,
-    ` Recuperarás la inversión en aproximadamente ${payback(financial.paybackYears)}`,
+    ` Recuperarás la inversión en aproximadamente ${payback(financial.paybackYears, lifeYears)}`,
     ` y ahorrarás ${clp(financial.annualBenefitCLP)} al año durante los`,
-    ` ${SOLAR_DEFAULTS.systemLifeYears} años de vida útil del sistema.`,
+    ` ${lifeYears} años de vida útil del sistema.`,
   ].join('');
 
   const scenarioLabels: Record<string, string> = {
@@ -248,28 +252,30 @@ export default function SimulationReportHtml({
     >
 
       {/* ── Cabecera de marca ─────────────────────────────────────────────── */}
-      <div style={{ backgroundColor: C.green, borderRadius: 8, padding: '18px 22px', marginBottom: 28 }}>
+      <div style={{ backgroundColor: C.black, borderRadius: 10, padding: '20px 24px 18px', marginBottom: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ color: C.greenMid, fontSize: 10, marginBottom: 3 }}>
+            <div style={{ color: C.cyan, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 5 }}>
               Mercado Energy · Simulador Solar Chile
             </div>
-            <div style={{ color: C.white, fontSize: 22, fontWeight: 700 }}>
+            <div style={{ color: C.white, fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>
               Propuesta de sistema solar fotovoltaico
             </div>
-            <div style={{ color: C.greenLight, fontSize: 10, marginTop: 6 }}>
+            <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, marginTop: 6 }}>
               Generado el {date}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ color: C.greenLight, fontSize: 10 }}>
+            <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10 }}>
               {isBusiness ? 'Sistema dimensionado' : 'Escenario recomendado'}
             </div>
-            <div style={{ color: C.white, fontSize: 18, fontWeight: 700, marginTop: 2 }}>
+            <div style={{ color: C.accent, fontSize: 18, fontWeight: 700, marginTop: 2 }}>
               {isBusiness ? `PFV ${kit.sizekWp} kW` : scenarioLabels[recommendedScenario!]}
             </div>
           </div>
         </div>
+        {/* Línea de acento de marca */}
+        <div style={{ height: 3, borderRadius: 2, marginTop: 14, backgroundImage: `linear-gradient(90deg, ${C.accent}, ${C.cyan})` }} />
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -343,7 +349,7 @@ export default function SimulationReportHtml({
           <ConsumptionChart bills={profile.bills} />
           <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 12, height: 8, backgroundColor: C.green, borderRadius: 2 }} />
+              <div style={{ width: 12, height: 8, backgroundColor: C.brand, borderRadius: 2 }} />
               <span style={{ fontSize: 8, color: C.gray }}>Dato real</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -365,14 +371,14 @@ export default function SimulationReportHtml({
         />
 
         {/* Kit + KPIs */}
-        <div style={{ border: `2px solid ${C.green}`, borderRadius: 8, padding: 16, marginBottom: 14 }}>
+        <div style={{ border: `2px solid ${C.accent}`, borderRadius: 10, padding: 16, marginBottom: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
             <div>
               <div
                 style={{
-                  display: 'inline-block', backgroundColor: '#f0fdf4',
+                  display: 'inline-block', backgroundColor: C.accentSoft,
                   borderRadius: 4, padding: '2px 8px',
-                  color: C.green, fontSize: 9, fontWeight: 700, marginBottom: 6,
+                  color: C.brand, fontSize: 9, fontWeight: 700, marginBottom: 6,
                 }}
               >
                 Recomendado
@@ -385,21 +391,21 @@ export default function SimulationReportHtml({
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 18, fontWeight: 700 }}>{clp(financial.systemCostCLP)}</div>
-              <div style={{ fontSize: 9, color: C.gray }}>precio referencial</div>
+              <div style={{ fontSize: 9, color: C.gray }}>precio referencial + IVA</div>
             </div>
           </div>
 
           {/* KPIs en 4 columnas */}
           <div style={{ display: 'flex', gap: 8 }}>
             {[
-              { label: 'Cobertura solar',    value: pct(energyBalance.coveragePercent),      sub: 'de tu consumo cubierto' },
-              { label: 'Ahorro mensual',      value: clp(financial.monthlyBenefitCLP),        sub: 'autoconsumo + inyección' },
-              { label: 'Ahorro anual',        value: clp(financial.annualBenefitCLP),         sub: '' },
-              { label: 'Período de retorno', value: payback(financial.paybackYears),          sub: 'payback simple' },
+              { label: 'Cobertura solar',    value: pct(energyBalance.coveragePercent),       sub: 'de tu consumo cubierto' },
+              { label: 'Ahorro mensual',      value: clp(financial.monthlyBenefitCLP),         sub: hasBattery ? 'autoconsumo + inyección + batería' : 'autoconsumo + inyección' },
+              { label: 'Ahorro anual',        value: clp(financial.annualBenefitCLP),          sub: '' },
+              { label: 'Período de retorno', value: payback(financial.paybackYears, lifeYears), sub: 'payback simple' },
             ].map((kpi) => (
-              <div key={kpi.label} style={{ flex: 1, backgroundColor: C.grayLight, borderRadius: 6, padding: 9 }}>
+              <div key={kpi.label} style={{ flex: 1, backgroundColor: C.accentSoft, borderRadius: 8, padding: 9 }}>
                 <div style={{ fontSize: 8, color: C.gray, marginBottom: 3 }}>{kpi.label}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.green }}>{kpi.value}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.brand }}>{kpi.value}</div>
                 {kpi.sub && <div style={{ fontSize: 7.5, color: C.gray, marginTop: 1 }}>{kpi.sub}</div>}
               </div>
             ))}
@@ -409,9 +415,9 @@ export default function SimulationReportHtml({
         {/* Texto explicativo */}
         <div
           style={{
-            backgroundColor: C.emeraldBg, border: `1px solid ${C.emeraldBdr}`,
-            borderRadius: 6, padding: '10px 14px', marginBottom: 14,
-            fontSize: 11, color: '#065f46', lineHeight: 1.6,
+            backgroundColor: C.accentSoft, border: `1px solid ${C.accentBdr}`,
+            borderRadius: 8, padding: '10px 14px', marginBottom: 14,
+            fontSize: 11, color: '#14467e', lineHeight: 1.6,
           }}
         >
           {explanatoryText}
@@ -424,7 +430,7 @@ export default function SimulationReportHtml({
           </div>
           <GenerationChart result={recommended} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-            <div style={{ width: 20, height: 2, backgroundColor: C.amber }} />
+            <div style={{ width: 20, height: 2, backgroundColor: C.accent }} />
             <span style={{ fontSize: 8, color: C.gray }}>Producción estimada</span>
           </div>
         </div>
@@ -434,16 +440,19 @@ export default function SimulationReportHtml({
           <div style={{ fontSize: 9, fontWeight: 700, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>
             Desglose financiero
           </div>
-          <KVRow label="Ahorro por autoconsumo (anual)" value={clp(energyBalance.totalSelfConsumptionSavingsCLP)} green />
-          <KVRow label="Ingreso por inyección a la red (anual)" value={clp(energyBalance.totalInjectionIncomeCLP)} green />
+          <KVRow label="Ahorro por autoconsumo (anual)" value={clp(energyBalance.totalSelfConsumptionSavingsCLP)} accent />
+          <KVRow label="Ingreso por inyección a la red (anual)" value={clp(energyBalance.totalInjectionIncomeCLP)} accent />
+          {hasBattery && (
+            <KVRow label="Ahorro nocturno por batería (anual)" value={clp(energyBalance.totalBatteryDischargeSavingsCLP)} accent />
+          )}
           <KVRow label="Precio de inyección" value={`${financial.injectionValuePerKWhCLP} CLP/kWh`} />
           <div style={{ borderTop: `1px solid ${C.border}`, margin: '6px 0' }} />
-          <KVRow label="Beneficio total anual" value={clp(financial.annualBenefitCLP)} green />
-          <KVRow label={`ROI a ${SOLAR_DEFAULTS.systemLifeYears} años`} value={`${financial.roi25YearsPercent}%`} />
+          <KVRow label="Beneficio total anual" value={clp(financial.annualBenefitCLP)} accent />
+          <KVRow label={`ROI a ${lifeYears} años`} value={`${financial.roi25YearsPercent}%`} />
           <KVRow
-            label={`Ahorro total vida útil (${SOLAR_DEFAULTS.systemLifeYears} años)`}
-            value={clp(financial.annualBenefitCLP * SOLAR_DEFAULTS.systemLifeYears)}
-            green
+            label={`Ahorro total vida útil (${lifeYears} años)`}
+            value={clp(financial.annualBenefitCLP * lifeYears)}
+            accent
           />
         </div>
       </div>
@@ -464,14 +473,14 @@ export default function SimulationReportHtml({
               .filter((row) => row.result !== null)
               .map(({ key, result: r }) => {
                 const isRec = key === recommendedScenario;
-                const border = isRec ? `2px solid ${C.green}` : `1px solid ${C.border}`;
+                const border = isRec ? `2px solid ${C.accent}` : `1px solid ${C.border}`;
                 return (
                   <div
                     key={key}
                     style={{
-                      flex: 1, border, borderRadius: 8,
+                      flex: 1, border, borderRadius: 10,
                       padding: 12, position: 'relative',
-                      backgroundColor: isRec ? '#f0fdf4' : C.white,
+                      backgroundColor: isRec ? C.accentSoft : C.white,
                     }}
                   >
                     {isRec && (
@@ -479,7 +488,7 @@ export default function SimulationReportHtml({
                         style={{
                           position: 'absolute', top: -10, left: '50%',
                           transform: 'translateX(-50%)',
-                          backgroundColor: C.green, color: C.white,
+                          backgroundColor: C.brand, color: C.white,
                           fontSize: 8, fontWeight: 700, padding: '2px 10px', borderRadius: 10,
                           whiteSpace: 'nowrap',
                         }}
@@ -505,12 +514,12 @@ export default function SimulationReportHtml({
                         { label: 'Cobertura',      value: pct(r!.energyBalance.coveragePercent) },
                         { label: 'Ahorro mensual',  value: clp(r!.financial.monthlyBenefitCLP) },
                         { label: 'Ahorro anual',    value: clp(r!.financial.annualBenefitCLP) },
-                        { label: 'Payback',         value: payback(r!.financial.paybackYears) },
-                        { label: 'Precio ref.',     value: clp(r!.financial.systemCostCLP) },
+                        { label: 'Payback',         value: payback(r!.financial.paybackYears, lifeYears) },
+                        { label: 'Precio ref. + IVA', value: clp(r!.financial.systemCostCLP) },
                       ].map((row) => (
                         <div key={row.label} style={{ marginBottom: 4 }}>
                           <div style={{ fontSize: 8, color: C.gray }}>{row.label}</div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: isRec ? C.green : C.dark }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: isRec ? C.brand : C.dark }}>
                             {row.value}
                           </div>
                         </div>
@@ -544,7 +553,7 @@ export default function SimulationReportHtml({
               }}
             >
               <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: tariffAnalysis.tariffStatus === 'consider-change' ? '#92400e' : '#065f46' }}>
-                {tariffAnalysis.tariffStatus === 'consider-change' ? '💡 Optimización tarifaria' : '✅ Tarifa adecuada'}
+                {tariffAnalysis.tariffStatus === 'consider-change' ? 'Optimización tarifaria' : 'Tarifa adecuada'}
               </div>
               <div style={{ fontSize: 10, color: tariffAnalysis.tariffStatus === 'consider-change' ? '#78350f' : '#047857', lineHeight: 1.5 }}>
                 {tariffAnalysis.tariffMessage}
@@ -563,7 +572,7 @@ export default function SimulationReportHtml({
           {/* Gestión de horas de punta */}
           {tariffAnalysis.hasPeakCharges && (
             <div style={{ border: `1px solid #e9d5ff`, borderRadius: 6, padding: 12, marginBottom: 10, backgroundColor: '#faf5ff' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: '#6b21a8' }}>🔋 Gestión de horas de punta</div>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: '#6b21a8' }}>Gestión de horas de punta</div>
               <div style={{ fontSize: 10, color: '#7e22ce', lineHeight: 1.5 }}>{tariffAnalysis.peakManagementMessage}</div>
             </div>
           )}
@@ -571,7 +580,7 @@ export default function SimulationReportHtml({
           {/* Desplazamiento de cargas */}
           {tariffAnalysis.hasFlexibleEquipment && (
             <div style={{ border: `1px solid #bfdbfe`, borderRadius: 6, padding: 12, backgroundColor: '#eff6ff' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: '#1e40af' }}>⚙️ Desplazamiento de cargas</div>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: '#1e40af' }}>Desplazamiento de cargas</div>
               <div style={{ fontSize: 10, color: '#1d4ed8', lineHeight: 1.5 }}>{tariffAnalysis.loadShiftingMessage}</div>
             </div>
           )}
@@ -607,7 +616,8 @@ export default function SimulationReportHtml({
       {/* ── Nota metodológica ─────────────────────────────────────────────── */}
       <div style={{ fontSize: 8, color: '#9ca3af', lineHeight: 1.7 }}>
         * Simulación estimativa basada en irradiación histórica de {region.name}.
-        Precio de inyección = {SOLAR_DEFAULTS.injectionValueFactor * 100}% del kWh de compra (net billing, Ley 20.936).
+        Los precios indicados son netos y no incluyen IVA.
+        Precio de inyección = {injectionPct}% del kWh de compra (net billing, Art. 149 bis DFL 4 — Ley 21.118).
         Perfil de consumo: {SOLAR_DEFAULTS.dayConsumptionRatio * 100}% diurno / {SOLAR_DEFAULTS.nightConsumptionRatio * 100}% nocturno.
         Los valores reales dependen de la instalación específica, orientación del techo, sombreado y tarifa vigente.
       </div>

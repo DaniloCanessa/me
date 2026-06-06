@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Reveal from './Reveal';
+import ProjectsMap from './ProjectsMap';
 
 const PROJECTS = [
   {
@@ -8,6 +9,7 @@ const PROJECTS = [
     title: 'Sistema híbrido para zona rural sin red eléctrica',
     description: '3 inversores Victron 15 kVA, 32 baterías (160 kWh), 32 paneles 645 W y respaldo con generador JCB 90 kVA. Desarrollado para el Gobierno de Chile y la Municipalidad de Huara junto a ERNC Chile.',
     tags: ['Gobierno', 'Off-grid', 'Baterías'],
+    map: { x: 63.5, y: 9 },
   },
   {
     image: '/images/casa-carlos-alvarado.jpg',
@@ -15,6 +17,7 @@ const PROJECTS = [
     title: 'Solución integral residencial premium',
     description: '10 kW con 16 paneles, cargador de auto eléctrico y termo eléctrico de 330 litros. Una solución energética completa para el hogar.',
     tags: ['Residencial', 'Cargador EV', 'Termo eléctrico'],
+    map: { x: 62, y: 42 },
   },
   {
     image: '/images/panaderia-san-bernardo.jpg',
@@ -22,6 +25,7 @@ const PROJECTS = [
     title: 'Sistema fotovoltaico trifásico para panadería',
     description: 'Instalación de 10 kW trifásico para cubrir el consumo energético de una panadería comercial, reduciendo costos operativos.',
     tags: ['Comercial', 'Trifásico'],
+    map: { x: 60, y: 44 },
   },
   {
     image: '/images/proyecto-coscaya.jpg',
@@ -29,6 +33,7 @@ const PROJECTS = [
     title: 'Sistema híbrido + baterías + alumbrado',
     description: '70 kWh en baterías, habilitación eléctrica en 19 viviendas, distribución eléctrica y alumbrado público.',
     tags: ['Residencial', 'Baterías', 'Alumbrado'],
+    map: { x: 65, y: 9.5 },
   },
   {
     image: '/images/proyecto-caleta-los-bronces.jpg',
@@ -36,6 +41,7 @@ const PROJECTS = [
     title: 'Cámaras de refrigeración solar móviles',
     description: '2 salas modulares de refrigeración de 7 kWp cada una para comunidades pesqueras artesanales.',
     tags: ['Industrial', 'Refrigeración'],
+    map: { x: 58.5, y: 28.7 },
   },
   {
     image: '/images/proyecto-talca.jpg',
@@ -43,6 +49,7 @@ const PROJECTS = [
     title: 'Sistema fotovoltaico universitario',
     description: '5 instalaciones de 12,8 kWp en campus universitario, generación distribuida de energía limpia.',
     tags: ['Comercial', 'Educación'],
+    map: { x: 58.3, y: 46.7 },
   },
   {
     image: '/images/proyecto-rio-ibanez.jpg',
@@ -50,6 +57,7 @@ const PROJECTS = [
     title: 'Energía solar para estancias remotas',
     description: '27 kWp para 75 estancias en zona aislada, reemplazando generadores diésel.',
     tags: ['Rural', 'Off-grid'],
+    map: { x: 54.8, y: 73.5 },
   },
   {
     image: '/images/proyecto-lonquimay.jpg',
@@ -57,6 +65,7 @@ const PROJECTS = [
     title: 'Solución fotovoltaica rural',
     description: 'Sistema fotovoltaico para comunidades rurales en la cordillera de la Araucanía.',
     tags: ['Rural', 'Residencial'],
+    map: { x: 57, y: 54 },
   },
   {
     image: '/images/proyecto-quellon.jpg',
@@ -64,6 +73,7 @@ const PROJECTS = [
     title: 'Sistema solar en zona austral',
     description: 'Instalación fotovoltaica en la isla de Chiloé, adaptada a las condiciones climáticas del sur.',
     tags: ['Residencial', 'Sur'],
+    map: { x: 52, y: 66.5 },
   },
 ];
 
@@ -83,16 +93,17 @@ export default function Projects({ showHeader = true }: { showHeader?: boolean }
             )}
             <p className={`text-gray-500 leading-relaxed ${showHeader ? 'mt-5' : 'text-lg'}`}>
               Desde Arica hasta Magallanes, hemos instalado sistemas solares en hogares, empresas,
-              universidades, comunidades rurales y organismos públicos.
+              colegios, jardines infantiles, comunidades rurales y organismos públicos.
             </p>
           </Reveal>
-          <Reveal delay={120} className="rounded-2xl overflow-hidden border border-[#b0cedd]/40 shadow-[0_12px_40px_rgba(16,40,80,0.08)]">
-            <Image
-              src="/images/pais-con-proyectos.png"
-              alt="Proyectos Mercado Energy en Chile"
-              width={500}
-              height={600}
-              className="w-full h-auto object-contain bg-white p-4"
+          <Reveal delay={120} className="rounded-2xl border border-[#b0cedd]/40 shadow-[0_12px_40px_rgba(16,40,80,0.08)] bg-white">
+            <ProjectsMap
+              markers={PROJECTS.map((p) => ({
+                x: p.map.x,
+                y: p.map.y,
+                location: p.location,
+                title: p.title,
+              }))}
             />
           </Reveal>
         </div>

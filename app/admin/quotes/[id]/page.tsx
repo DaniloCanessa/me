@@ -5,12 +5,24 @@ import QuoteEditor from '@/components/admin/QuoteEditor';
 
 async function getProducts() {
   const db = getSupabaseAdmin();
-  const { data } = await db
-    .from('products')
-    .select('id, name, sku, category, costo_proveedor_clp, margen_pct, base_price_clp')
-    .eq('is_active', true)
-    .order('name');
-  return data ?? [];
+  // Supabase devuelve máximo 1000 filas por request: paginamos para que el
+  // dropdown del cotizador incluya el catálogo completo (>1000 productos).
+  const PAGE_SIZE = 1000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await db
+      .from('products')
+      .select('id, name, sku, category, costo_proveedor_clp, margen_pct, base_price_clp')
+      .eq('is_active', true)
+      .order('name')
+      .order('id', { ascending: true }) // desempate estable para paginar sin duplicados
+      .range(from, from + PAGE_SIZE - 1);
+    if (!page?.length) break;
+    all.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return all;
 }
 
 async function getInstallations(clientId: string | null) {

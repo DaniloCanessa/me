@@ -120,7 +120,7 @@ export default function PDFDownloadButton({
   const emailColor: Record<EmailStatus, string> = {
     idle:    '#6b7280',
     sending: '#6b7280',
-    sent:    '#16a34a',
+    sent:    '#1d65c5',
     error:   '#b45309',
   };
 
@@ -204,9 +204,9 @@ export default function PDFDownloadButton({
                   onClick={handleDownload}
                   disabled={downloading}
                   style={{
-                    fontSize: 12, fontWeight: 600, color: '#16a34a',
-                    border: '1px solid #16a34a', borderRadius: 8,
-                    padding: '6px 14px', backgroundColor: '#fff',
+                    fontSize: 12, fontWeight: 600, color: '#fff',
+                    border: '1px solid #389fe0', borderRadius: 8,
+                    padding: '6px 14px', backgroundColor: '#389fe0',
                     cursor: downloading ? 'not-allowed' : 'pointer',
                     opacity: downloading ? 0.5 : 1,
                   }}

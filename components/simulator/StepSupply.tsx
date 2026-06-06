@@ -2,31 +2,46 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import type { CustomerCategory, PropertyType, SupplyData, TarifaType } from '@/lib/types';
+import type { SVGProps } from 'react';
+import type { BusinessContact, CustomerCategory, PersonContact, PropertyType, SupplyData, TarifaType } from '@/lib/types';
+import {
+  IconHome,
+  IconBuilding,
+  IconBriefcase,
+  IconGraduationCap,
+  IconFactory,
+  IconBuildings,
+  IconSnowflake,
+  IconBarChart,
+  IconBattery,
+} from '@/components/landing/icons';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface StepSupplyProps {
   category: CustomerCategory;
   initialData: SupplyData | null;
+  /** Datos de contacto del paso 2 — usados para la solicitud de contacto en departamentos. */
+  contact?: PersonContact | BusinessContact | null;
   onSubmit: (data: SupplyData) => void;
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
+// Nota: el valor 'otro' sigue existiendo en PropertyType (leads antiguos), pero
+// ya no se ofrece como opción en el simulador.
 const PROPERTY_OPTIONS: {
   value: PropertyType;
   label: string;
-  icon: string;
+  Icon: (props: SVGProps<SVGSVGElement>) => React.ReactElement;
   for: CustomerCategory[];
 }[] = [
-  { value: 'casa',         label: 'Casa',         icon: '🏠', for: ['natural'] },
-  { value: 'departamento', label: 'Departamento',  icon: '🏢', for: ['natural'] },
-  { value: 'oficina',      label: 'Oficina',       icon: '🏛️', for: ['business'] },
-  { value: 'colegio',      label: 'Colegio',       icon: '🏫', for: ['business'] },
-  { value: 'industria',    label: 'Industria',     icon: '🏭', for: ['business'] },
-  { value: 'condominio',   label: 'Condominio',    icon: '🏘️', for: ['business'] },
-  { value: 'otro',         label: 'Otro',          icon: '📍', for: ['natural', 'business'] },
+  { value: 'casa',         label: 'Casa',          Icon: IconHome,          for: ['natural'] },
+  { value: 'departamento', label: 'Departamento',  Icon: IconBuilding,      for: ['natural'] },
+  { value: 'oficina',      label: 'Oficina',       Icon: IconBriefcase,     for: ['business'] },
+  { value: 'colegio',      label: 'Colegio',       Icon: IconGraduationCap, for: ['business'] },
+  { value: 'industria',    label: 'Industria',     Icon: IconFactory,       for: ['business'] },
+  { value: 'condominio',   label: 'Condominio',    Icon: IconBuildings,     for: ['business'] },
 ];
 
 const AMPERAJE_OPTIONS = [10, 15, 20, 25, 32, 40, 50, 63];
@@ -51,10 +66,38 @@ const TARIFA_AT: { value: TarifaType; label: string }[] = [
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function StepSupply({ category, initialData, onSubmit }: StepSupplyProps) {
+export default function StepSupply({ category, initialData, contact, onSubmit }: StepSupplyProps) {
   const [propertyType, setPropertyType] = useState<PropertyType | ''>(
     initialData?.propertyType ?? '',
   );
+
+  // Solicitud de contacto para departamentos (no instalamos paneles ahí)
+  const [contactRequest, setContactRequest] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  async function handleContactRequest() {
+    if (!contact || contactRequest === 'sending' || contactRequest === 'sent') return;
+    setContactRequest('sending');
+    try {
+      const name = 'name' in contact ? contact.name : contact.companyName;
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email: contact.email,
+          phone: contact.phone,
+          type: category,
+          message:
+            `Lead desde el simulador — vive en DEPARTAMENTO (no aplica instalación de paneles).\n` +
+            `Interesado/a en alternativas: climatización eficiente, asesoría energética y respaldo con baterías.\n` +
+            `Ubicación: ${contact.commune}, ${contact.city}.`,
+        }),
+      });
+      setContactRequest(res.ok ? 'sent' : 'error');
+    } catch {
+      setContactRequest('error');
+    }
+  }
 
   // Residencial
   const [amperajeA, setAmperajeA] = useState<number | ''>(initialData?.amperajeA ?? '');
@@ -87,10 +130,11 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
 
   const visibleProperties = PROPERTY_OPTIONS.filter((o) => o.for.includes(category));
   const isResidential = category === 'natural';
+  const isApartment = propertyType === 'departamento';
 
-  const canSubmit = isResidential
+  const canSubmit = !isApartment && (isResidential
     ? !!propertyType && amperajeA !== ''
-    : !!propertyType && potenciaContratadaKW !== '' && tarifa !== 'unknown';
+    : !!propertyType && potenciaContratadaKW !== '' && tarifa !== 'unknown');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -112,9 +156,9 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
 
   return (
     <div>
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-900">Tu suministro eléctrico</h1>
-        <p className="text-gray-500 mt-2 text-sm">
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl font-bold text-[#010101] tracking-tight">Tu suministro eléctrico</h1>
+        <p className="text-gray-500 mt-3">
           Cuéntanos sobre el lugar donde instalarías los paneles.
         </p>
       </div>
@@ -122,11 +166,11 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
 
         {/* Tipo de propiedad */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">
             ¿Qué tipo de propiedad es?<span className="text-red-400 ml-0.5">*</span>
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className={`grid grid-cols-2 gap-3 ${visibleProperties.length > 2 ? 'sm:grid-cols-4' : ''}`}>
             {visibleProperties.map((opt) => {
               const isSelected = propertyType === opt.value;
               return (
@@ -135,13 +179,22 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
                   type="button"
                   onClick={() => setPropertyType(opt.value)}
                   className={[
-                    'flex flex-col items-center gap-2 p-4 rounded-xl border-2 text-sm font-medium transition-all hover:border-[#389fe0]',
+                    'group flex flex-col items-center gap-3 p-5 rounded-2xl ring-1 text-sm font-semibold transition-all duration-300 hover:-translate-y-0.5',
                     isSelected
-                      ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
-                      : 'border-gray-200 text-gray-600 bg-white',
+                      ? 'ring-2 ring-[#389fe0] bg-[#389fe0]/5 text-[#1d65c5] shadow-[0_12px_32px_rgba(56,159,224,0.16)]'
+                      : 'ring-[#b0cedd]/40 text-gray-600 bg-white hover:shadow-[0_12px_32px_rgba(56,159,224,0.12)]',
                   ].join(' ')}
                 >
-                  <span className="text-2xl">{opt.icon}</span>
+                  <span
+                    className={[
+                      'w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-300',
+                      isSelected
+                        ? 'bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white shadow-lg shadow-[#389fe0]/25'
+                        : 'bg-[#dde3e9]/60 text-[#1d65c5] group-hover:bg-gradient-to-br group-hover:from-[#389fe0] group-hover:to-[#1d65c5] group-hover:text-white',
+                    ].join(' ')}
+                  >
+                    <opt.Icon className="w-5.5 h-5.5" />
+                  </span>
                   {opt.label}
                 </button>
               );
@@ -149,9 +202,83 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
           </div>
         </div>
 
+        {/* ── Aviso departamento: no instalamos paneles, ofrecemos alternativas ── */}
+        {isApartment && (
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-7">
+            <h2 className="text-lg font-bold text-[#010101] tracking-tight">
+              En departamentos no podemos instalar paneles solares
+            </h2>
+            <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+              La instalación fotovoltaica requiere techo propio, por lo que no aplica en un
+              departamento. Pero sí tenemos otras alternativas para reducir tu cuenta de luz:
+            </p>
+
+            <div className="grid sm:grid-cols-3 gap-4 mt-5">
+              {[
+                {
+                  Icon: IconSnowflake,
+                  title: 'Climatización eficiente',
+                  text: 'Equipos de alto rendimiento que bajan tu consumo sin sacrificar confort.',
+                },
+                {
+                  Icon: IconBattery,
+                  title: 'Respaldo con baterías',
+                  text: 'Sistema de baterías que mantiene tu departamento con energía ante cortes de luz.',
+                },
+                {
+                  Icon: IconBarChart,
+                  title: 'Asesoría energética',
+                  text: 'Analizamos tu tarifa y tus horarios de consumo para reducir el valor de tu boleta.',
+                },
+              ].map((alt) => (
+                <div key={alt.title} className="flex sm:flex-col gap-3.5 rounded-xl bg-[#dde3e9]/40 p-4">
+                  <span className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white flex items-center justify-center shadow-lg shadow-[#389fe0]/25">
+                    <alt.Icon className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-[#010101]">{alt.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{alt.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {contactRequest === 'sent' ? (
+              <div className="mt-6 rounded-xl bg-[#389fe0]/10 px-4 py-3.5 text-sm text-[#1d65c5] font-medium">
+                ✓ ¡Listo! Recibimos tu solicitud. Un especialista te contactará pronto
+                {contact?.email ? ` al correo ${contact.email}` : ''}.
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleContactRequest}
+                  disabled={contactRequest === 'sending'}
+                  className={[
+                    'inline-flex items-center justify-center gap-2 font-semibold py-3 px-7 rounded-xl text-sm transition-all duration-300',
+                    contactRequest === 'sending'
+                      ? 'bg-gray-100 text-gray-400 cursor-wait'
+                      : 'bg-[#389fe0] hover:bg-[#1d65c5] text-white shadow-lg shadow-[#389fe0]/30 hover:-translate-y-0.5',
+                  ].join(' ')}
+                >
+                  {contactRequest === 'sending' ? 'Enviando…' : 'Quiero que me contacten →'}
+                </button>
+                <p className="text-xs text-gray-400">
+                  Usaremos los datos que ingresaste en el paso anterior.
+                </p>
+              </div>
+            )}
+            {contactRequest === 'error' && (
+              <p className="mt-3 text-xs text-red-500">
+                No pudimos enviar tu solicitud. Inténtalo de nuevo o escríbenos a contacto@mercadoenergy.cl.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ── Amperaje del empalme (solo residencial) ── */}
-        {isResidential && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
+        {isResidential && !isApartment && (
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">
                 Amperaje del empalme<span className="text-red-400 ml-0.5">*</span>
@@ -204,7 +331,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
 
         {/* ── Potencia contratada (solo empresa) ── */}
         {!isResidential && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">
                 Potencia contratada<span className="text-red-400 ml-0.5">*</span>
@@ -267,7 +394,7 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
 
         {/* ── Tarifa eléctrica (empresa) ── */}
         {!isResidential && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">
                 Tarifa eléctrica<span className="text-red-400 ml-0.5">*</span>
@@ -348,8 +475,8 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
         )}
 
         {/* ── Tarifa eléctrica (residencial) ── */}
-        {isResidential && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
+        {isResidential && !isApartment && (
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">Tarifa eléctrica</h2>
               <p className="text-xs text-gray-400 mt-1">
@@ -370,7 +497,8 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
         )}
 
         {/* Opciones solares */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-5">
+        {!isApartment && (
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-5">
           <h2 className="text-sm font-semibold text-gray-700">Opciones de instalación</h2>
 
           <div className="flex items-start gap-3">
@@ -417,19 +545,22 @@ export default function StepSupply({ category, initialData, onSubmit }: StepSupp
             </div>
           )}
         </div>
+        )}
 
+        {!isApartment && (
         <button
           type="submit"
           disabled={!canSubmit}
           className={[
-            'w-full rounded-xl font-semibold py-3 text-sm transition-colors',
+            'w-full rounded-xl font-semibold py-3.5 text-sm transition-all duration-300',
             canSubmit
-              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
+              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white shadow-lg shadow-[#389fe0]/30 hover:-translate-y-0.5'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed',
           ].join(' ')}
         >
           Continuar →
         </button>
+        )}
       </form>
     </div>
   );

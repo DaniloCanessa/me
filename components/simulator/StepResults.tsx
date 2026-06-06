@@ -254,7 +254,7 @@ function CTABlock({
       <div className="bg-gray-800 rounded-xl p-3 mb-4 flex flex-col gap-1.5 text-sm">
         <div className="flex justify-between">
           <span className="text-gray-400">Inversión estimada</span>
-          <span className="font-semibold">{formatCLP(result.financial.systemCostCLP)}</span>
+          <span className="font-semibold">{formatCLP(result.financial.systemCostCLP)} <span className="text-gray-400 font-normal text-xs">+ IVA</span></span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-400">Ahorro en {SOLAR_DEFAULTS.systemLifeYears} años</span>
@@ -917,7 +917,7 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
             <p className="text-lg font-bold text-gray-900">
               {formatCLP(activeResult.financial.systemCostCLP)}
             </p>
-            <p className="text-xs text-gray-400">precio referencial</p>
+            <p className="text-xs text-gray-400">precio referencial + IVA</p>
           </div>
         </div>
       </div>

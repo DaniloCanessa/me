@@ -278,7 +278,7 @@ export default function NetBillingClient() {
       </div>
 
       <footer className="bg-[#010101] text-white/40 text-xs text-center py-6">
-        © 2026 Mercado Energy · Biznexus Group SPA · RUT 77.958.683-9
+        © 2026 Mercado Energy · Todos los derechos reservados
       </footer>
     </div>
   );

@@ -15,7 +15,7 @@ export default function SolucionesPage() {
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
             No solo instalamos paneles — diseñamos, ejecutamos y acompañamos cada proyecto:
-            solar, eólico, climatización y soporte.
+            solar, eólico, de climatización y soporte.
           </p>
         </div>
       </section>

@@ -14,7 +14,6 @@ export default function Footer() {
             </div>
             <p className="text-white/50 text-sm leading-relaxed max-w-sm">
               Soluciones energéticas fotovoltaicas para hogares y empresas en Chile.
-              Biznexus Group SPA · RUT 77.958.683-9
             </p>
             <div className="mt-6 space-y-2 text-sm text-white/50">
               <p>📧 <a href="mailto:contacto@mercadoenergy.cl" className="hover:text-[#389fe0] transition-colors">contacto@mercadoenergy.cl</a></p>
@@ -70,7 +69,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/30">
-          <p>© 2026 Mercado Energy · Biznexus Group SPA · Todos los derechos reservados</p>
+          <p>© 2026 Mercado Energy · Todos los derechos reservados</p>
           <p>Hecho en Chile 🇨🇱</p>
         </div>
       </div>

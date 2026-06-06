@@ -24,13 +24,13 @@ export default function HeroSection() {
           muted
           loop
           playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-40"
+          className="absolute inset-0 w-full h-full object-cover opacity-65"
         >
           <source src="/videos/video-poroma.mp4" type="video/mp4" />
         </video>
         {/* Capas de gradiente para profundidad y contraste */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#010101] via-[#010101]/60 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#010101] via-transparent to-[#010101]/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#010101]/85 via-[#010101]/35 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#010101]/80 via-transparent to-[#010101]/15" />
         <div className="absolute -top-1/3 -right-1/4 w-[40rem] h-[40rem] bg-[#1d65c5]/20 rounded-full blur-3xl" />
       </div>
 

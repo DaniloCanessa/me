@@ -29,7 +29,7 @@ export default function NosotrosPage() {
             Nosotros
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Conoce el equipo detrás de Mercado Energy y nuestra misión
+            Conoce el equipo detrás de Mercado Energy
           </p>
         </div>
       </section>

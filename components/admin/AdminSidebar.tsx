@@ -9,6 +9,7 @@ const NAV_MAIN = [
   { href: '/admin/clients',  label: 'Clientes',      icon: '👥' },
   { href: '/admin/quotes',   label: 'Cotizaciones',  icon: '📋' },
   { href: '/admin/projects', label: 'Proyectos',     icon: '🏗️' },
+  { href: '/admin/simulator', label: 'Simulador',    icon: '⚡' },
 ];
 
 const NAV_CONFIG = [

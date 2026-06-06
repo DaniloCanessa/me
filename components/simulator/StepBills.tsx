@@ -3,14 +3,17 @@
 import { useState, useMemo } from 'react';
 import type { ConsumptionProfile, MonthlyBill, SupplyData, TarifaType } from '@/lib/types';
 import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route';
-import { MONTH_NAMES, DISTRIBUTORS } from '@/lib/constants';
+import { MONTH_NAMES, DISTRIBUTORS, CHILE_BT1 } from '@/lib/constants';
 import BillOCRUpload from './BillOCRUpload';
+import { IconUpload } from '@/components/landing/icons';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface StepBillsProps {
   initialData: ConsumptionProfile | null;
   supply: SupplyData;
+  /** true solo para usuarios internos con sesión de admin: muestra el OCR de boletas. */
+  ocrEnabled?: boolean;
   onSubmit: (profile: ConsumptionProfile) => void;
   onUpdateSupply?: (partial: Pick<SupplyData, 'distribuidora' | 'tarifa'>) => void;
 }
@@ -34,7 +37,9 @@ interface RowValues {
 function generateMonthSlots(): MonthSlot[] {
   const now = new Date();
   const slots: MonthSlot[] = [];
-  for (let i = 0; i < 12; i++) {
+  // Parte desde el mes ANTERIOR al actual: el mes en curso aún no se factura,
+  // así no le pedimos al usuario una boleta que todavía no existe.
+  for (let i = 1; i <= 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const month = d.getMonth() + 1;
     const year = d.getFullYear();
@@ -69,6 +74,23 @@ function initRowsFromProfile(
   return map;
 }
 
+/**
+ * Precio estimado del kWh para convertir montos $ → kWh:
+ * promedio real de los meses que tienen ambos datos; si no hay, el referencial.
+ */
+function estimateKWhPrice(slots: MonthSlot[], rows: Record<string, RowValues>): number {
+  const prices: number[] = [];
+  slots.forEach((s) => {
+    const row = rows[s.key];
+    const kWh = parseFloat(row?.kWh);
+    const clp = parseFloat(row?.clp);
+    if (!isNaN(kWh) && kWh > 0 && !isNaN(clp) && clp > 0) prices.push(clp / kWh);
+  });
+  return prices.length > 0
+    ? prices.reduce((a, b) => a + b, 0) / prices.length
+    : CHILE_BT1.referenceKWhPriceCLP;
+}
+
 function buildProfile(
   slots: MonthSlot[],
   rows: Record<string, RowValues>,
@@ -81,13 +103,19 @@ function buildProfile(
   const distribuidora = supply.distribuidora || manualDistribuidora || undefined;
   const tarifa = supply.tarifa !== 'unknown' ? supply.tarifa : manualTarifa;
 
+  const estimatedPrice = estimateKWhPrice(slots, rows);
   const realBills: MonthlyBill[] = [];
 
   slots.forEach((s) => {
     const row = rows[s.key];
-    const kWh = parseFloat(row.kWh);
-    if (!row.kWh || isNaN(kWh) || kWh <= 0) return;
+    const kWhInput = parseFloat(row.kWh);
     const clp = row.clp ? parseFloat(row.clp) : undefined;
+    // kWh directo, o estimado desde el monto $ cuando solo se ingresó el monto
+    let kWh = !isNaN(kWhInput) && kWhInput > 0 ? kWhInput : undefined;
+    if (kWh === undefined && clp && clp > 0) {
+      kWh = Math.round(clp / estimatedPrice);
+    }
+    if (!kWh || kWh <= 0) return;
     const kWhPrice = clp && kWh > 0 ? Math.round(clp / kWh) : undefined;
     realBills.push({
       month: s.month,
@@ -164,7 +192,7 @@ const TARIFA_OPTIONS: { value: TarifaType; label: string }[] = [
 
 const SLOTS = generateMonthSlots();
 
-export default function StepBills({ initialData, supply, onSubmit, onUpdateSupply }: StepBillsProps) {
+export default function StepBills({ initialData, supply, ocrEnabled = false, onSubmit, onUpdateSupply }: StepBillsProps) {
   const [rows, setRows] = useState<Record<string, RowValues>>(
     () => initRowsFromProfile(SLOTS, initialData),
   );
@@ -233,15 +261,25 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
     }
   }
 
-  const { filledCount, liveAverage } = useMemo(() => {
+  const { filledCount, liveAverage, estimatedPrice } = useMemo(() => {
+    const price = estimateKWhPrice(SLOTS, rows);
+    // Un mes cuenta como ingresado con kWh O con monto $ (se estima el kWh desde el monto)
     const values = SLOTS
-      .map((s) => parseFloat(rows[s.key]?.kWh))
+      .map((s) => {
+        const row = rows[s.key];
+        const kWh = parseFloat(row?.kWh);
+        if (!isNaN(kWh) && kWh > 0) return kWh;
+        const clp = parseFloat(row?.clp);
+        if (!isNaN(clp) && clp > 0) return Math.round(clp / price);
+        return NaN;
+      })
       .filter((v) => !isNaN(v) && v > 0);
     return {
       filledCount: values.length,
       liveAverage: values.length > 0
         ? Math.round(values.reduce((a, b) => a + b, 0) / values.length)
         : null,
+      estimatedPrice: price,
     };
   }, [rows]);
 
@@ -269,17 +307,18 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
 
   return (
     <div>
-      <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-900">Tus boletas eléctricas</h1>
-        <p className="text-gray-500 mt-2 text-sm">
-          Ingresa el consumo en kWh de cada mes. Con más meses obtenemos una simulación más precisa.
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl font-bold text-[#010101] tracking-tight">Tus boletas eléctricas</h1>
+        <p className="text-gray-500 mt-3">
+          Ingresa el consumo en kWh <strong>o el monto en pesos</strong> de cada mes.
+          Con más meses obtenemos una simulación más precisa.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-        {/* OCR */}
-        {showOCR ? (
+        {/* OCR — solo usuarios internos con sesión de admin */}
+        {ocrEnabled && (showOCR ? (
           <BillOCRUpload
             availableSlotKeys={SLOTS.map((s) => s.key)}
             onConfirm={handleOCRConfirm}
@@ -290,9 +329,12 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
             <button
               type="button"
               onClick={() => { setShowOCR(true); setOcrMatchCount(null); }}
-              className="w-full rounded-2xl border-2 border-dashed border-[#b0cedd] bg-[#dde3e9]/50 hover:bg-[#b0cedd]/20 text-[#1d65c5] font-medium py-3 text-sm transition-colors flex items-center justify-center gap-2"
+              className="relative w-full rounded-2xl border-2 border-dashed border-[#b0cedd] bg-[#dde3e9]/50 hover:bg-[#b0cedd]/20 text-[#1d65c5] font-semibold py-3.5 text-sm transition-colors flex items-center justify-center gap-2"
             >
-              <span>📄</span> Subir boleta para autocompletar
+              <IconUpload className="w-4.5 h-4.5" /> Subir boleta para autocompletar
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-wider bg-[#010101] text-white/80 px-2 py-0.5 rounded-full">
+                Modo interno
+              </span>
             </button>
             {ocrMatchCount !== null && (
               <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-xl px-3 py-2 text-center">
@@ -300,10 +342,19 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
               </p>
             )}
           </div>
+        ))}
+
+        {/* Mensaje anti-abandono para usuarios públicos */}
+        {!ocrEnabled && (
+          <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-xl px-4 py-3 text-center leading-relaxed">
+            No necesitas los 12 meses: con <strong>2 o 3 meses</strong> basta — estimamos el resto
+            según la estación del año. Y si solo conoces el monto de tu boleta, ingrésalo y
+            nosotros calculamos el consumo.
+          </p>
         )}
 
         {/* Resumen en vivo */}
-        <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-3">
+        <div className="flex items-center justify-between bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] px-5 py-3">
           <div className="flex items-center gap-2">
             <span className={['text-2xl font-bold tabular-nums', filledCount === 12 ? 'text-[#389fe0]' : 'text-gray-800'].join(' ')}>
               {filledCount}
@@ -319,7 +370,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
         </div>
 
         {/* Tabla de meses */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] overflow-hidden">
           <div className="grid grid-cols-[1fr_120px_120px] gap-3 px-5 py-2.5 bg-gray-50 border-b border-gray-100">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mes</span>
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">kWh</span>
@@ -327,14 +378,16 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
           </div>
           {SLOTS.map((slot, idx) => {
             const row = rows[slot.key];
-            const isFilled = !!row.kWh && parseFloat(row.kWh) > 0;
+            const hasKWh = !!row.kWh && parseFloat(row.kWh) > 0;
+            const hasClp = !!row.clp && parseFloat(row.clp) > 0;
+            const isFilled = hasKWh || hasClp;
             return (
               <div
                 key={slot.key}
                 className={[
                   'grid grid-cols-[1fr_120px_120px] gap-3 items-center px-5 py-2.5',
                   idx < SLOTS.length - 1 ? 'border-b border-gray-50' : '',
-                  isFilled ? 'bg-[#dde3e9]/50/40' : '',
+                  isFilled ? 'bg-[#389fe0]/5' : '',
                 ].join(' ')}
               >
                 <span className={['text-sm', isFilled ? 'text-gray-800 font-medium' : 'text-gray-500'].join(' ')}>
@@ -344,15 +397,18 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
                   type="number" min="1" max="99999" step="1"
                   value={row.kWh}
                   onChange={(e) => setRow(slot.key, 'kWh', e.target.value)}
-                  placeholder="—"
+                  placeholder={hasClp && !hasKWh ? `≈ ${Math.round(parseFloat(row.clp) / estimatedPrice)}` : '—'}
                   aria-label={`kWh ${slot.label}`}
-                  className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
+                  className={[
+                    'w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition',
+                    hasClp && !hasKWh ? 'placeholder:text-[#389fe0] placeholder:font-medium' : 'placeholder:text-gray-300',
+                  ].join(' ')}
                 />
                 <input
                   type="number" min="1" step="1"
                   value={row.clp}
                   onChange={(e) => setRow(slot.key, 'clp', e.target.value)}
-                  placeholder="opcional"
+                  placeholder="$"
                   aria-label={`Monto CLP ${slot.label}`}
                   className="w-full text-right rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
                 />
@@ -363,7 +419,7 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
 
         {/* Distribuidora y tarifa manual (cuando no vino de OCR) */}
         {showManualFields && filledCount > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4">
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 flex flex-col gap-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">Datos de tu suministro</h2>
               <p className="text-xs text-gray-400 mt-0.5">Opcional — puedes encontrarlos en tu boleta.</p>
@@ -476,16 +532,17 @@ export default function StepBills({ initialData, supply, onSubmit, onUpdateSuppl
 
         <p className="text-xs text-gray-400 text-center px-4">
           El consumo en kWh aparece en tu boleta junto al período de medición.
-          El monto es la parte variable (sin cargos fijos) — opcional pero mejora el cálculo del precio por kWh.
+          Si solo conoces el monto en pesos, ingrésalo y calcularemos el consumo aproximado
+          {estimatedPrice ? ` (a $${Math.round(estimatedPrice)}/kWh)` : ''}.
         </p>
 
         <button
           type="submit"
           disabled={!canSubmit}
           className={[
-            'w-full rounded-xl font-semibold py-3 text-sm transition-colors',
+            'w-full rounded-xl font-semibold py-3.5 text-sm transition-all duration-300',
             canSubmit
-              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
+              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white shadow-lg shadow-[#389fe0]/30 hover:-translate-y-0.5'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed',
           ].join(' ')}
         >
