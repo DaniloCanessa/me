@@ -17,7 +17,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   battery:    'Baterías',
   business:   'Empresas',
   regulatory: 'Regulatorio',
+  whatsapp:   'WhatsApp',
+  social:     'Redes sociales',
 };
+
+// Categorías cuyos valores son texto libre (no números)
+const TEXT_CATEGORIES = new Set(['whatsapp', 'social']);
 
 function formatDate(iso: string | null) {
   if (!iso) return null;
@@ -25,6 +30,10 @@ function formatDate(iso: string | null) {
 }
 
 function formatValue(key: string, value: unknown): string {
+  if (key.startsWith('whatsapp.') || key.startsWith('social.')) {
+    const s = String(value ?? '');
+    return s || '— (oculta)'; // texto tal cual; vacío = red social oculta en el footer
+  }
   const n = Number(value);
   if (isNaN(n)) return String(value);
   if (key.endsWith('_clp')) {
@@ -73,7 +82,7 @@ export default function ConfigTable({ params }: { params: ConfigParam[] }) {
     });
   }
 
-  const categoryOrder = ['simulator', 'battery', 'business', 'regulatory'];
+  const categoryOrder = ['simulator', 'battery', 'business', 'regulatory', 'whatsapp', 'social'];
   const sortedCategories = [
     ...categoryOrder.filter((c) => grouped[c]),
     ...Object.keys(grouped).filter((c) => !categoryOrder.includes(c)),
@@ -105,6 +114,7 @@ export default function ConfigTable({ params }: { params: ConfigParam[] }) {
                 const isEditing = editingId === p.id;
                 const isSaved   = savedKey === p.key;
                 const isError   = errorKey === p.key;
+                const isTextParam = TEXT_CATEGORIES.has(p.category ?? '');
 
                 return (
                   <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/40 transition-colors">
@@ -114,14 +124,14 @@ export default function ConfigTable({ params }: { params: ConfigParam[] }) {
                     <td className="px-5 py-3.5 text-gray-600 text-xs max-w-xs">
                       {p.description ?? '—'}
                     </td>
-                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                    <td className={`px-5 py-3.5 text-right ${isTextParam ? 'break-words max-w-sm' : 'whitespace-nowrap'}`}>
                       {isEditing ? (
                         <input
-                          type="number"
-                          step="any"
+                          type={isTextParam ? 'text' : 'number'}
+                          step={isTextParam ? undefined : 'any'}
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
-                          className="w-28 text-right border border-[#389fe0] rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/20"
+                          className={`${isTextParam ? 'w-72 text-left' : 'w-28 text-right'} border border-[#389fe0] rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/20`}
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter')  saveEdit(p.id, p.key);

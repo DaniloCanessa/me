@@ -1,6 +1,7 @@
 import Navbar from '@/components/landing/Navbar';
 import AboutUs from '@/components/landing/AboutUs';
 import Footer from '@/components/landing/Footer';
+import WhatsAppButton from '@/components/landing/WhatsAppButton';
 import Reveal from '@/components/landing/Reveal';
 import { IconTarget, IconBadgeCheck } from '@/components/landing/icons';
 
@@ -64,6 +65,7 @@ export default function NosotrosPage() {
       </section>
 
       <Footer />
+      <WhatsAppButton />
     </main>
   );
 }

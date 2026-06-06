@@ -1,6 +1,7 @@
 import Navbar from '@/components/landing/Navbar';
 import Projects from '@/components/landing/Projects';
 import Footer from '@/components/landing/Footer';
+import WhatsAppButton from '@/components/landing/WhatsAppButton';
 
 export default function ProyectosPage() {
   return (
@@ -23,6 +24,7 @@ export default function ProyectosPage() {
       <Projects showHeader={false} />
 
       <Footer />
+      <WhatsAppButton />
     </main>
   );
 }

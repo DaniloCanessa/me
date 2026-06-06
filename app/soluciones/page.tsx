@@ -1,6 +1,7 @@
 import Navbar from '@/components/landing/Navbar';
 import Solutions from '@/components/landing/Solutions';
 import Footer from '@/components/landing/Footer';
+import WhatsAppButton from '@/components/landing/WhatsAppButton';
 
 export default function SolucionesPage() {
   return (
@@ -24,6 +25,7 @@ export default function SolucionesPage() {
       <Solutions showHeader={false} />
 
       <Footer />
+      <WhatsAppButton />
     </main>
   );
 }

@@ -35,11 +35,11 @@ export default function Navbar({ variant = 'solid' }: NavbarProps) {
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <Link href="/" className="shrink-0">
           <Image
-            src="/images/logotipo.png"
+            src={isTransparent ? '/images/mercadoenergy-blanco.png' : '/images/logotipo.png'}
             alt="Mercado Energy"
             width={300}
-            height={90}
-            className={isTransparent ? 'h-16 md:h-20 w-auto' : 'h-12 md:h-14 w-auto'}
+            height={isTransparent ? 91 : 90}
+            className={isTransparent ? 'h-24 md:h-28 w-auto' : 'h-16 md:h-20 w-auto'}
           />
         </Link>
 

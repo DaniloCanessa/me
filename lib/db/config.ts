@@ -57,4 +57,77 @@ export async function getSimConfig(): Promise<SimulatorConfig> {
   }
 }
 
+export interface WhatsAppConfig {
+  number: string;   // código país + número, sin "+"
+  message: string;  // mensaje pre-escrito del click-to-chat
+}
+
+const WHATSAPP_DEFAULTS: WhatsAppConfig = {
+  number: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '56912345678',
+  message: 'Hola, me gustaría cotizar un proyecto de energía solar.',
+};
+
+export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from('config_parameters')
+      .select('key, value')
+      .in('key', ['whatsapp.number', 'whatsapp.default_message']);
+
+    if (error || !data?.length) return WHATSAPP_DEFAULTS;
+
+    const map: Record<string, string> = {};
+    for (const row of data) map[row.key] = String(row.value);
+
+    return {
+      number:  map['whatsapp.number']          || WHATSAPP_DEFAULTS.number,
+      message: map['whatsapp.default_message'] || WHATSAPP_DEFAULTS.message,
+    };
+  } catch {
+    return WHATSAPP_DEFAULTS;
+  }
+}
+
+// URLs de redes sociales del footer. Cadena vacía = red oculta.
+export interface SocialConfig {
+  instagram: string;
+  facebook: string;
+  youtube: string;
+  tiktok: string;
+}
+
+const SOCIAL_KEYS: Record<keyof SocialConfig, string> = {
+  instagram: 'social.instagram',
+  facebook:  'social.facebook',
+  youtube:   'social.youtube',
+  tiktok:    'social.tiktok',
+};
+
+const SOCIAL_DEFAULTS: SocialConfig = { instagram: '', facebook: '', youtube: '', tiktok: '' };
+
+export async function getSocialConfig(): Promise<SocialConfig> {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from('config_parameters')
+      .select('key, value')
+      .in('key', Object.values(SOCIAL_KEYS));
+
+    if (error || !data?.length) return SOCIAL_DEFAULTS;
+
+    const map: Record<string, string> = {};
+    for (const row of data) map[row.key] = String(row.value ?? '');
+
+    return {
+      instagram: map[SOCIAL_KEYS.instagram] ?? '',
+      facebook:  map[SOCIAL_KEYS.facebook]  ?? '',
+      youtube:   map[SOCIAL_KEYS.youtube]   ?? '',
+      tiktok:    map[SOCIAL_KEYS.tiktok]    ?? '',
+    };
+  } catch {
+    return SOCIAL_DEFAULTS;
+  }
+}
+
 export type { SimulatorConfig };

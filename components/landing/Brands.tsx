@@ -4,6 +4,7 @@ const BRANDS = [
   { name: 'Jinko Solar', file: 'jinko.png', wordmark: true },
   { name: 'LONGi', file: 'longi.png', wordmark: true },
   { name: 'SMA', file: 'sma.jpg', wordmark: true },
+  { name: 'Solis', file: 'solis.png', wordmark: true },
   { name: 'Huawei', file: 'huawei.png' },
   { name: 'Canadian Solar', file: 'canadian-solar.png' },
   { name: 'Victron Energy', file: 'victron.png' },

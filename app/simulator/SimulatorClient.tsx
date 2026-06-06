@@ -73,7 +73,7 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
         <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#b0cedd]/40 px-4 py-3">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
             <Link href="/">
-              <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+              <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-16 md:h-20 w-auto" />
             </Link>
             <span className="text-sm font-semibold bg-gradient-to-r from-[#389fe0] to-[#1d65c5] bg-clip-text text-transparent">
               Simulador solar

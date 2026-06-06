@@ -5,7 +5,7 @@ import './globals.css';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 
 export const metadata: Metadata = {
-  title: 'Mercado Energy — Simulador Solar Chile',
+  title: 'Mercado Energy — Energía limpia y sustentable',
   description: 'Simula tu ahorro con energía fotovoltaica según tu región y consumo en Chile.',
 };
 

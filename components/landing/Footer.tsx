@@ -1,7 +1,18 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { getSocialConfig } from '@/lib/db/config';
+import { IconInstagram, IconFacebook, IconYouTube, IconTikTok } from './icons';
 
-export default function Footer() {
+export default async function Footer() {
+  // URLs configurables en /admin/config (categoría Redes sociales); vacía = oculta
+  const social = await getSocialConfig();
+  const socialLinks = [
+    { name: 'Instagram', href: social.instagram, Icon: IconInstagram },
+    { name: 'Facebook',  href: social.facebook,  Icon: IconFacebook },
+    { name: 'YouTube',   href: social.youtube,   Icon: IconYouTube },
+    { name: 'TikTok',    href: social.tiktok,    Icon: IconTikTok },
+  ].filter((s) => s.href);
+
   return (
     <footer id="contacto" className="bg-[#010101] text-white">
       <div className="max-w-6xl mx-auto px-6 py-16">
@@ -9,9 +20,7 @@ export default function Footer() {
 
           {/* Logo + descripción */}
           <div className="md:col-span-2">
-            <div className="inline-block bg-white/25 backdrop-blur-sm rounded-xl px-4 py-3 mb-4">
-              <Image src="/images/logotipo-2.png" alt="Mercado Energy" width={560} height={168} className="h-[9rem] w-auto" />
-            </div>
+            <Image src="/images/me-blanco.png" alt="Mercado Energy" width={395} height={406} className="h-36 w-auto mb-4" />
             <p className="text-white/50 text-sm leading-relaxed max-w-sm">
               Soluciones energéticas fotovoltaicas para hogares y empresas en Chile.
             </p>
@@ -19,6 +28,24 @@ export default function Footer() {
               <p>📧 <a href="mailto:contacto@mercadoenergy.cl" className="hover:text-[#389fe0] transition-colors">contacto@mercadoenergy.cl</a></p>
               <p>📍 Miguel León Prado 134, Santiago</p>
             </div>
+
+            {/* Redes sociales */}
+            {socialLinks.length > 0 && (
+              <div className="flex gap-3 mt-6">
+                {socialLinks.map(({ name, href, Icon }) => (
+                  <a
+                    key={name}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={name}
+                    className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-[#389fe0] hover:border-[#389fe0]/40 transition-colors flex items-center justify-center"
+                  >
+                    <Icon className="w-5 h-5" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Navegación */}

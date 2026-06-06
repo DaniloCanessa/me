@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { IconMail, IconPin } from './icons';
+import { IconMail, IconPin, IconPhone } from './icons';
 
 export default function ContactSection({ showEyebrow = true }: { showEyebrow?: boolean }) {
   const [type, setType] = useState<'natural' | 'business'>('natural');
@@ -45,6 +45,7 @@ export default function ContactSection({ showEyebrow = true }: { showEyebrow?: b
               {[
                 { Icon: IconMail, label: 'Email', value: 'contacto@mercadoenergy.cl', href: 'mailto:contacto@mercadoenergy.cl' },
                 { Icon: IconPin, label: 'Oficina', value: 'Miguel León Prado 134, Santiago', href: null },
+                { Icon: IconPhone, label: 'Teléfono', value: '+56 9 6654 6276', href: 'tel:+56966546276' },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-[#389fe0]/10 text-[#1d65c5] flex items-center justify-center shrink-0">
