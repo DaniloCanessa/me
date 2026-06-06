@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import type { Tender, TenderKeyword, TenderStatus } from '@/lib/types';
+import type { Tender, TenderKeyword, TenderRecipient, TenderStatus } from '@/lib/types';
 import {
   syncTendersNow,
   updateTenderStatus,
@@ -9,6 +9,9 @@ import {
   addTenderKeyword,
   toggleTenderKeyword,
   deleteTenderKeyword,
+  addTenderRecipient,
+  toggleTenderRecipient,
+  deleteTenderRecipient,
 } from '@/app/admin/licitaciones/actions';
 
 // ─── Constantes UI ────────────────────────────────────────────────────────────
@@ -56,12 +59,16 @@ function formatCLP(n: number) {
 export default function TendersManager({
   tenders,
   keywords,
+  recipients,
 }: {
   tenders: Tender[];
   keywords: TenderKeyword[];
+  recipients: TenderRecipient[];
 }) {
   const [filter, setFilter] = useState<TenderStatus | 'todas'>('todas');
   const [newKeyword, setNewKeyword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [isSyncing, startSync] = useTransition();
   const [isPending, startTransition] = useTransition();
@@ -89,6 +96,17 @@ export default function TendersManager({
     startTransition(async () => {
       await addTenderKeyword(newKeyword);
       setNewKeyword('');
+    });
+  }
+
+  function handleAddEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEmail.trim()) return;
+    setEmailError(null);
+    startTransition(async () => {
+      const r = await addTenderRecipient(newEmail);
+      if (r.ok) setNewEmail('');
+      else setEmailError(r.message ?? 'Error');
     });
   }
 
@@ -185,6 +203,72 @@ export default function TendersManager({
           {keywords.length === 0 && (
             <p className="text-xs text-gray-400">
               No hay palabras clave — ejecuta el SQL de <code>supabase/tenders.sql</code> para crear el seed inicial.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Correos de notificación ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Correos de notificación</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Reciben el email cuando aparecen licitaciones nuevas · click para activar/desactivar
+            </p>
+          </div>
+          <form onSubmit={handleAddEmail} className="flex gap-2 items-start">
+            <div>
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => { setNewEmail(e.target.value); setEmailError(null); }}
+                placeholder="correo@empresa.cl"
+                className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition w-56"
+              />
+              {emailError && <p className="text-[11px] text-red-500 mt-1">{emailError}</p>}
+            </div>
+            <button
+              type="submit"
+              disabled={isPending || !newEmail.trim()}
+              className="px-3 py-1.5 rounded-xl text-sm font-semibold bg-[#389fe0] hover:bg-[#1d65c5] text-white disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
+            >
+              + Agregar
+            </button>
+          </form>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {recipients.map((r) => (
+            <span
+              key={r.id}
+              className={[
+                'group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors',
+                r.is_active
+                  ? 'bg-[#389fe0]/10 text-[#1d65c5] hover:bg-[#389fe0]/20'
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200',
+              ].join(' ')}
+              onClick={() => startTransition(async () => { await toggleTenderRecipient(r.id, !r.is_active); })}
+              title={r.is_active ? 'Click para desactivar' : 'Click para activar'}
+            >
+              ✉ {r.email}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`¿Eliminar el correo ${r.email}?`)) {
+                    startTransition(async () => { await deleteTenderRecipient(r.id); });
+                  }
+                }}
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity leading-none"
+                aria-label={`Eliminar ${r.email}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {recipients.length === 0 && (
+            <p className="text-xs text-gray-400">
+              Sin correos configurados — se usará <code>LEAD_RECIPIENT_EMAIL</code> como respaldo.
             </p>
           )}
         </div>

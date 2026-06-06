@@ -36,6 +36,34 @@ export async function markAllTendersSeen() {
   return { ok: true };
 }
 
+// ─── Correos de notificación parametrizables ─────────────────────────────────
+
+export async function addTenderRecipient(email: string) {
+  const clean = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return { ok: false, message: 'Email inválido' };
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_recipients').insert({ email: clean });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+export async function toggleTenderRecipient(id: string, isActive: boolean) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_recipients').update({ is_active: isActive }).eq('id', id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+export async function deleteTenderRecipient(id: string) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_recipients').delete().eq('id', id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
 // ─── Palabras clave parametrizables ──────────────────────────────────────────
 
 export async function addTenderKeyword(keyword: string) {

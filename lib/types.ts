@@ -28,6 +28,13 @@ export interface TenderKeyword {
   created_at: string;
 }
 
+export interface TenderRecipient {
+  id: string;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 // ─── Usuarios ─────────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'user';

@@ -1,13 +1,14 @@
-import { getTenders, getTenderKeywords } from '@/lib/db/tenders';
+import { getTenders, getTenderKeywords, getTenderRecipients } from '@/lib/db/tenders';
 import TendersManager from '@/components/admin/TendersManager';
 
 // Licitaciones de Mercado Público que calzan con los servicios de Mercado Energy.
 // La sincronización corre a diario por cron (/api/cron/tenders) y también
 // manualmente desde el botón "Sincronizar ahora".
 export default async function LicitacionesPage() {
-  const [tenders, keywords] = await Promise.all([
+  const [tenders, keywords, recipients] = await Promise.all([
     getTenders(),
     getTenderKeywords(),
+    getTenderRecipients(),
   ]);
 
   return (
@@ -19,7 +20,7 @@ export default async function LicitacionesPage() {
           las palabras clave del filtro son configurables abajo.
         </p>
       </div>
-      <TendersManager tenders={tenders} keywords={keywords} />
+      <TendersManager tenders={tenders} keywords={keywords} recipients={recipients} />
     </div>
   );
 }

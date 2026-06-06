@@ -217,8 +217,20 @@ export async function syncTenders(): Promise<SyncResult> {
 
 async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
-  const recipient = process.env.LEAD_RECIPIENT_EMAIL;
-  if (!apiKey || !recipient) return false;
+  if (!apiKey) return false;
+
+  // Destinatarios parametrizables (tabla tender_recipients, editable en
+  // /admin/licitaciones). Fallback a LEAD_RECIPIENT_EMAIL si no hay activos.
+  const db = getSupabaseAdmin();
+  const { data: recRows } = await db
+    .from('tender_recipients')
+    .select('email')
+    .eq('is_active', true);
+  let recipients = (recRows ?? []).map((r: { email: string }) => r.email);
+  if (recipients.length === 0 && process.env.LEAD_RECIPIENT_EMAIL) {
+    recipients = [process.env.LEAD_RECIPIENT_EMAIL];
+  }
+  if (recipients.length === 0) return false;
 
   const { Resend } = await import('resend');
   const resend = new Resend(apiKey);
@@ -262,7 +274,7 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
   try {
     await resend.emails.send({
       from: 'Mercado Energy <onboarding@resend.dev>',
-      to: [recipient],
+      to: recipients,
       subject: `${tenders.length} licitaci${tenders.length === 1 ? 'ón nueva' : 'ones nuevas'} — Mercado Público`,
       html,
     });
