@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 6 de junio 2026 (sesión 20 — botón WhatsApp, redes sociales parametrizables y branding)
+> Última actualización: 6 de junio 2026 (sesión 21 — IVA por compra en cuenta corriente y botón WhatsApp destacado)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app
 
@@ -8,7 +8,7 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 a 20 completadas, commiteadas y desplegadas** (últimos commits: `3959e36`, `d7d68c4`, `226e488`, `1ed376d`).
+**Sesiones 17 a 21 completadas, commiteadas y desplegadas** (últimos commits: `1ed376d`, `48f92f9`, `aa3e1a7`).
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
 
@@ -20,8 +20,9 @@
 3. `/admin/products` → categoría "Kit Solar" visible con los 14 kits
 4. Informe PDF → diseño azul de marca con etiqueta "+ IVA"
 5. `/admin/licitaciones` → "Sincronizar ahora" funciona con el ticket definitivo
-6. Botón flotante de WhatsApp → abre chat con +56 9 6654 6276 (sesión 20)
+6. Botón flotante de WhatsApp → abre chat con +56 9 6654 6276, con halo pulsante (sesiones 20-21)
 7. Favicon del rayo + título "Energía limpia y sustentable" en la pestaña (sesión 20)
+8. `/admin/projects` → cuenta corriente con compras separadas y selector "IVA del precio" (sesión 21; verificado en local contra caso real)
 
 **Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
@@ -70,6 +71,19 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 21 (6 junio 2026) — IVA por compra en cuenta corriente y WhatsApp destacado (commits `48f92f9`, `aa3e1a7`):**
+
+- **Bug reportado (proyecto "Instalación aire acondicionado"):** 3 compras ($168.067 / $3.047.535 / $373.433 netos) aparecían como 2 líneas en la cuenta corriente y el subtotal daba $4.270.952 en vez de $4.200.000. Causas: (1) compras sin folio se fusionaban entre sí (llave de agrupación caía en "Sin proveedor-Sin folio-fecha"); (2) el sistema aplicaba ×1.19 a TODAS las compras, sin forma de indicar que un monto ya incluía IVA
+- **Campo `con_iva` en `project_purchases`** (`supabase/project_purchases_con_iva.sql`, ejecutado): `false` = neto (se aplica ×1.19, comportamiento histórico), `true` = el monto ya incluye IVA. Tipo `ProjectPurchase` actualizado
+- **Agrupación corregida en cuenta corriente:** solo se agrupan compras que comparten **folio real** (misma factura); sin folio, cada compra es su propia línea
+- **Selector "IVA del precio"** (Neto s/IVA / Incluye IVA) en `PurchaseForm` y `PurchaseEditForm`, con etiquetas dinámicas de precio/total. Badge ámbar "c/IVA" en las filas de compras con IVA incluido
+- **Botón "Editar" en compras asignadas a ítems** (antes solo se podían eliminar; `PurchaseEditForm` ganó prop `colSpan` para reuso en ambas tablas)
+- **Coherencia neto vs neto:** la tabla de compras por ítem ahora compara montos netos contra el costo cotizado (antes el footer mezclaba comprado c/IVA vs costo neto). Helpers `purchaseConIva()` / `purchaseSinIva()` usados en `totalComprado`, `compradoSinIva` y cuenta corriente
+- `addProjectPurchase`/`updateProjectPurchase` leen `con_iva` del form; `importCostsAsPurchases` y compra masiva insertan `con_iva: false` (costos de catálogo son netos)
+- Eliminados los `console.log` de debug de la cuenta corriente (quedaban de la sesión 14)
+- **Verificado por el usuario con el caso real:** las 3 compras aparecen separadas y el subtotal da $4.200.000 ✓
+- **Botón WhatsApp más destacado** (`WhatsAppButton.tsx`): halo verde pulsante cada 2s (`animate-ping`, respeta reduced-motion), tamaño 56→64px, sombra más intensa + anillo blanco para contraste sobre fondos oscuros
 
 **Desarrollos sesión 20 (6 junio 2026) — Botón WhatsApp, redes sociales parametrizables y branding (commit `1ed376d`):**
 
