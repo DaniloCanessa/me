@@ -133,6 +133,7 @@ export type ProjectPurchase = {
   precio_unitario_sin_iva: number;
   costo_referencia_sin_iva: number | null;
   monto_clp: number;
+  con_iva: boolean; // true = monto_clp ya incluye IVA; false = neto (se aplica ×1.19)
   fecha: string;
   notas: string | null;
   created_at: string;

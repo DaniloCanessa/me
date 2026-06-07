@@ -188,6 +188,7 @@ export async function importCostsAsPurchases(projectId: string) {
     precio_unitario_sin_iva: item.costo_proveedor_clp,
     costo_referencia_sin_iva: null,
     monto_clp: item.quantity * item.costo_proveedor_clp,
+    con_iva: false, // costos de cotización son netos
     fecha: new Date().toISOString().split('T')[0],
     notas: `Importado desde cotización: ${item.description}`,
   }));
@@ -252,6 +253,7 @@ export async function addProjectPurchase(projectId: string, formData: FormData) 
     precio_unitario_sin_iva: precioUnitario,
     costo_referencia_sin_iva: costoReferencia,
     monto_clp:               montoTotal,
+    con_iva:                 formData.get('con_iva') === 'true',
     fecha:                   formData.get('fecha') as string,
     notas:                   (formData.get('notas') as string) || null,
   });
@@ -268,6 +270,7 @@ export async function addProjectPurchaseBulk(projectId: string, lines: Array<{
   cantidad_comprada: number;
   precio_unitario_sin_iva: number;
   monto_clp: number;
+  con_iva: boolean;
   fecha: string;
   notas: string | null;
 }>) {
@@ -298,6 +301,7 @@ export async function updateProjectPurchase(projectId: string, purchaseId: strin
       precio_unitario_sin_iva: precioUnitario,
       costo_referencia_sin_iva: costoReferencia,
       monto_clp:               montoTotal,
+      con_iva:                 formData.get('con_iva') === 'true',
       fecha:                   formData.get('fecha') as string,
       notas:                   (formData.get('notas') as string) || null,
     })

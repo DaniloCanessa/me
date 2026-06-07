@@ -90,6 +90,7 @@ function PurchaseForm({
   const [cantidad, setCantidad] = useState(1);
   const [precioUnitario, setPrecioUnitario] = useState(0);
   const [costoReferencia, setCostoReferencia] = useState(0);
+  const [conIva, setConIva] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(defaultItemId || '');
   const totalLinea = Math.round(cantidad * precioUnitario);
   const showCostoReferencia = selectedItemId === ''; // Solo cuando "Sin ítem específico"
@@ -156,8 +157,18 @@ function PurchaseForm({
         </div>
       )}
 
+      <div className="w-28">
+        <label className="text-xs text-gray-500 mb-1 block">IVA del precio</label>
+        <select name="con_iva" value={String(conIva)}
+          onChange={e => setConIva(e.target.value === 'true')}
+          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
+          <option value="false">Neto (s/IVA)</option>
+          <option value="true">Incluye IVA</option>
+        </select>
+      </div>
+
       <div className="w-32">
-        <label className="text-xs text-gray-500 mb-1 block">Precio unit. s/IVA</label>
+        <label className="text-xs text-gray-500 mb-1 block">Precio unit. {conIva ? 'c/IVA' : 's/IVA'}</label>
         <input name="precio_unitario_sin_iva" type="number" required min={0}
           value={precioUnitario > 0 ? precioUnitario : ''}
           onChange={e => setPrecioUnitario(parseFloat(e.target.value) || 0)}
@@ -166,7 +177,7 @@ function PurchaseForm({
 
       {totalLinea > 0 && (
         <div className="w-32">
-          <label className="text-xs text-gray-500 mb-1 block">Total s/IVA</label>
+          <label className="text-xs text-gray-500 mb-1 block">Total {conIva ? 'c/IVA' : 's/IVA'}</label>
           <div className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600 tabular-nums">
             {clp(totalLinea)}
           </div>
@@ -290,7 +301,10 @@ export default function ProjectDetail({
     const conIva = esCosteExistente ? false : c.con_iva;
     return s + (conIva ? c.monto_clp : Math.round(c.monto_clp * 1.19));
   }, 0); // con IVA
-  const totalComprado  = purchases.reduce((s, p) => s + Math.round(p.monto_clp * 1.19), 0); // con IVA aplicado
+  // Monto de una compra con IVA: si con_iva ya viene incluido se usa tal cual; si no, se aplica ×1.19
+  const purchaseConIva = (p: ProjectPurchase) => (p.con_iva ? p.monto_clp : Math.round(p.monto_clp * 1.19));
+  const purchaseSinIva = (p: ProjectPurchase) => (p.con_iva ? Math.round(p.monto_clp / 1.19) : p.monto_clp);
+  const totalComprado  = purchases.reduce((s, p) => s + purchaseConIva(p), 0); // con IVA
   const totalCobrado   = payments.reduce((s, p) => s + p.monto_clp, 0);      // c/IVA
   const porCobrar      = revenue - totalCobrado;
   const cobradoPct     = revenue > 0 ? (totalCobrado / revenue) * 100 : 0;
@@ -311,7 +325,7 @@ export default function ProjectDetail({
     const conIva = esCosteExistente ? false : c.con_iva;
     return s + (conIva ? Math.round(c.monto_clp / 1.19) : c.monto_clp);
   }, 0); // neto
-  const compradoSinIva = Math.round(totalComprado / IVA);
+  const compradoSinIva = purchases.reduce((s, p) => s + purchaseSinIva(p), 0);
   const profitSinIva   = revenueSinIva - costBaseSinIva - costExtraSinIva;
   const marginSinIvaPct= revenueSinIva > 0 ? (profitSinIva / revenueSinIva) * 100 : 0;
   const cobradoSinIva  = Math.round(totalCobrado / IVA);
@@ -511,6 +525,7 @@ export default function ProjectDetail({
       precio_unitario_sin_iva: precioUnitario,
       costo_referencia_sin_iva: costoReferencia,
       monto_clp:               montoTotal,
+      con_iva:                 fd.get('con_iva') === 'true',
       fecha:                   fd.get('fecha') as string,
       notas:                  (fd.get('notas') as string) || null,
       created_at:             new Date().toISOString(),
@@ -562,6 +577,7 @@ export default function ProjectDetail({
       precio_unitario_sin_iva: precioUnitario,
       costo_referencia_sin_iva: costoReferencia,
       monto_clp: montoTotal,
+      con_iva: fd.get('con_iva') === 'true',
       fecha: fd.get('fecha') as string,
       notas: (fd.get('notas') as string) || null,
     } : p));
@@ -680,6 +696,7 @@ export default function ProjectDetail({
           cantidad_comprada:       cantidad,
           precio_unitario_sin_iva: precioUnitario,
           monto_clp:               montoTotal,
+          con_iva:                 false, // compra masiva usa costos netos del catálogo
           fecha:                   multiFecha,
           notas:                   null as string | null,
         };
@@ -1017,9 +1034,9 @@ export default function ProjectDetail({
                       const cantidadComprada = itemPurchases.reduce((s, p) => s + (p.cantidad_comprada || 0), 0);
                       const avancePct = cantidadCotizada > 0 ? Math.min((cantidadComprada / cantidadCotizada) * 100, 100) : 0;
 
-                      // Cálculos por MONTO (performance financiero)
+                      // Cálculos por MONTO (performance financiero) — todo en neto para comparar contra costo cotizado
                       const costoCotizado = item.costo_proveedor_clp * item.quantity;
-                      const montoComprado = itemPurchases.reduce((s, p) => s + p.monto_clp, 0);
+                      const montoComprado = itemPurchases.reduce((s, p) => s + purchaseSinIva(p), 0);
                       const diferenciaMonto = montoComprado - costoCotizado;
 
                       const isExpanded = expandedItems.has(item.id);
@@ -1077,6 +1094,16 @@ export default function ProjectDetail({
                               )}
 
                               {itemPurchases.map(purchase => (
+                                editingPurchase?.id === purchase.id ? (
+                                  <PurchaseEditForm
+                                    key={purchase.id}
+                                    purchase={purchase}
+                                    colSpan={6}
+                                    onSubmit={handleEditPurchase}
+                                    onCancel={() => setEditingPurchase(null)}
+                                    isPending={isPurchasePending}
+                                  />
+                                ) : (
                                 <tr key={purchase.id} className="bg-gray-50/40 border-b border-gray-100/60">
                                   <td className="pl-10 pr-4 py-2.5 text-xs text-gray-600" colSpan={2}>
                                     <span className="text-gray-300 mr-2">└</span>
@@ -1100,20 +1127,30 @@ export default function ProjectDetail({
                                   </td>
                                   <td className="px-4 py-2.5 text-right text-xs text-gray-500">
                                     {purchase.cantidad_comprada || 1} × {clp(purchase.precio_unitario_sin_iva || 0)}
+                                    {purchase.con_iva && <span className="ml-1 text-amber-600 font-medium">c/IVA</span>}
                                   </td>
                                   <td className="px-4 py-2.5 text-right text-xs font-semibold text-gray-800">
                                     {clp(purchase.monto_clp)}
                                   </td>
                                   <td></td>
                                   <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
-                                    <button
-                                      onClick={() => handleDeletePurchase(purchase)}
-                                      className="text-xs text-red-400 hover:text-red-600"
-                                    >
-                                      ×
-                                    </button>
+                                    <div className="flex gap-3 justify-end">
+                                      <button
+                                        onClick={() => setEditingPurchase(purchase)}
+                                        className="text-xs text-[#389fe0] hover:underline"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeletePurchase(purchase)}
+                                        className="text-xs text-red-400 hover:text-red-600"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
+                                )
                               ))}
 
                               {addingForItem === item.id && (
@@ -1139,13 +1176,13 @@ export default function ProjectDetail({
                     <tr className="border-t-2 border-gray-200 bg-gray-50">
                       <td className="px-4 py-3 text-sm font-semibold text-gray-700">TOTAL</td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-500">{clp(costBase)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-gray-900">{clp(totalComprado)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-gray-900">{clp(compradoSinIva)}</td>
                       <td className={`px-4 py-3 text-right font-bold ${
-                        totalComprado - costBase > 0 ? 'text-red-600' : totalComprado - costBase < 0 ? 'text-green-600' : 'text-gray-500'
+                        compradoSinIva - costBase > 0 ? 'text-red-600' : compradoSinIva - costBase < 0 ? 'text-green-600' : 'text-gray-500'
                       }`}>
-                        {totalComprado - costBase > 0
-                          ? `+${clp(totalComprado - costBase)} exceso`
-                          : totalComprado - costBase < 0 ? `-${clp(Math.abs(totalComprado - costBase))} ahorro` : '—'}
+                        {compradoSinIva - costBase > 0
+                          ? `+${clp(compradoSinIva - costBase)} exceso`
+                          : compradoSinIva - costBase < 0 ? `-${clp(Math.abs(compradoSinIva - costBase))} ahorro` : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className="text-xs font-medium text-gray-500">Promedio por cantidad</span>
@@ -1189,6 +1226,7 @@ export default function ProjectDetail({
                             <br />
                             <span className="text-gray-400 text-xs">
                               {purchase.cantidad_comprada || 1} × {clp(purchase.precio_unitario_sin_iva || 0)}
+                              {purchase.con_iva && <span className="ml-1 text-amber-600 font-medium">c/IVA</span>}
                               {purchase.costo_referencia_sin_iva && (
                                 <>
                                   {' '}
@@ -1713,11 +1751,14 @@ export default function ProjectDetail({
 
         {/* ═══ CUENTA CORRIENTE ═════════════════════════════════════════════ */}
         {tab === 'cuenta' && (() => {
-          // Agrupar compras por factura (mismo proveedor + folio + fecha + tipo)
+          // Agrupar compras por factura SOLO cuando hay folio real (mismo tipo + proveedor + folio + fecha).
+          // Compras sin folio se muestran individualmente — antes se fusionaban entre sí y "desaparecían" líneas.
           const groupedPurchases = purchases
             .filter(p => !p.id.startsWith('temp-'))
             .reduce((groups, purchase) => {
-              const key = `${purchase.tipo}-${purchase.proveedor || 'Sin proveedor'}-${purchase.folio || 'Sin folio'}-${purchase.fecha}`;
+              const key = purchase.folio
+                ? `${purchase.tipo}-${purchase.proveedor || 'Sin proveedor'}-${purchase.folio}-${purchase.fecha}`
+                : purchase.id;
               if (!groups[key]) {
                 groups[key] = {
                   ...purchase,
@@ -1726,10 +1767,8 @@ export default function ProjectDetail({
                 };
               }
 
-              // Convertir a valor con IVA para cuenta corriente
-              // Las compras se guardan sin IVA (precio_unitario_sin_iva × cantidad)
-              const montoConIva = Math.round(purchase.monto_clp * 1.19); // Aplicar IVA
-              groups[key].monto_total += montoConIva;
+              // Monto con IVA: respeta el campo con_iva de cada compra
+              groups[key].monto_total += purchaseConIva(purchase);
               groups[key].items_count += 1;
               return groups;
             }, {} as Record<string, any>);
@@ -1765,26 +1804,13 @@ export default function ProjectDetail({
               const conIva = esCosteExistente ? false : c.con_iva;
               const montoConIva = conIva ? c.monto_clp : Math.round(c.monto_clp * 1.19);
 
-              // DEBUG: Mostrar cálculo detallado
-              console.log(`🔍 CÁLCULO DETALLADO para ${c.descripcion}:`);
-              console.log('  - monto_clp:', c.monto_clp);
-              console.log('  - con_iva original:', c.con_iva);
-              console.log('  - conIva calculado:', conIva);
-              console.log('  - ¿Aplicar IVA?', !conIva);
-              console.log('  - montoConIva final:', montoConIva);
-              console.log('  - Cálculo: ', conIva ? `${c.monto_clp} (sin cambio)` : `${c.monto_clp} × 1.19 = ${Math.round(c.monto_clp * 1.19)}`);
-
-              // DEBUG CRÍTICO: ¿Qué valor se está REALMENTE usando?
-              const valorFinalUsado = montoConIva;
-              console.log('🚨 VALOR FINAL USADO EN CUENTA CORRIENTE:', valorFinalUsado);
-
               return {
                 id: c.id, fecha: c.created_at.slice(0, 10),
                 concepto: c.descripcion,
                 tipo: 'gasto' as const,
                 badge: CATEGORIA_LABELS[c.categoria] ?? c.categoria,
                 badgeColor: 'bg-red-50 text-red-600',
-                monto: montoConIva, // ✅ Ahora siempre con IVA
+                monto: montoConIva, // siempre con IVA
               };
             }),
           ].sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -1997,20 +2023,23 @@ function PurchaseEditForm({
   onSubmit,
   onCancel,
   isPending,
+  colSpan = 2,
 }: {
   purchase: ProjectPurchase;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   isPending: boolean;
+  colSpan?: number;
 }) {
   const [cantidad, setCantidad] = useState(purchase.cantidad_comprada || 1);
   const [precioUnitario, setPrecioUnitario] = useState(purchase.precio_unitario_sin_iva || 0);
   const [costoReferencia, setCostoReferencia] = useState(purchase.costo_referencia_sin_iva || 0);
+  const [conIva, setConIva] = useState(purchase.con_iva ?? false);
   const totalLinea = Math.round(cantidad * precioUnitario);
 
   return (
     <tr className="border-b border-blue-100 bg-blue-50/30">
-      <td colSpan={2} className="px-4 py-3">
+      <td colSpan={colSpan} className="px-4 py-3">
         <form onSubmit={onSubmit} className="flex flex-wrap gap-3 items-end">
           <input type="hidden" name="purchase_id" value={purchase.id} />
 
@@ -2051,8 +2080,18 @@ function PurchaseEditForm({
               className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
           </div>
 
+          <div className="w-28">
+            <label className="text-xs text-gray-500 mb-1 block">IVA del precio</label>
+            <select name="con_iva" value={String(conIva)}
+              onChange={e => setConIva(e.target.value === 'true')}
+              className="w-full rounded-xl border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
+              <option value="false">Neto (s/IVA)</option>
+              <option value="true">Incluye IVA</option>
+            </select>
+          </div>
+
           <div className="w-32">
-            <label className="text-xs text-gray-500 mb-1 block">Precio unit. s/IVA</label>
+            <label className="text-xs text-gray-500 mb-1 block">Precio unit. {conIva ? 'c/IVA' : 's/IVA'}</label>
             <input name="precio_unitario_sin_iva" type="number" required min={0}
               value={precioUnitario > 0 ? precioUnitario : ''}
               onChange={e => setPrecioUnitario(parseFloat(e.target.value) || 0)}
@@ -2061,7 +2100,7 @@ function PurchaseEditForm({
 
           {totalLinea > 0 && (
             <div className="w-32">
-              <label className="text-xs text-gray-500 mb-1 block">Total s/IVA</label>
+              <label className="text-xs text-gray-500 mb-1 block">Total {conIva ? 'c/IVA' : 's/IVA'}</label>
               <div className="w-full rounded-xl border border-gray-100 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 tabular-nums">
                 {clp(totalLinea)}
               </div>
