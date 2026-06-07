@@ -45,7 +45,7 @@ export default function HeroSection() {
 
             <p className="hero-in text-lg text-white/65 mb-10 leading-relaxed max-w-xl" style={{ animationDelay: '0.32s' }}>
               Diseñamos sistemas solares a medida para hogares y empresas en Chile.
-              Simula tu ahorro en minutos — sin compromiso.
+              Simula tu ahorro en minutos.
             </p>
 
             <div className="hero-in flex flex-col sm:flex-row gap-4" style={{ animationDelay: '0.44s' }}>

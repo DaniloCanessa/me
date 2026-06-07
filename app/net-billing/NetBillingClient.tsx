@@ -14,7 +14,7 @@ export default function NetBillingClient() {
       <nav className="bg-[#010101] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+            <Image src="/images/mercadoenergy-blanco.png" alt="Mercado Energy" width={320} height={96} className="h-20 w-auto" />
           </Link>
           <Link href="/" className="text-sm text-white/60 hover:text-white transition-colors">
             ← Volver al inicio

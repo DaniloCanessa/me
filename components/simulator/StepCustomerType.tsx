@@ -34,9 +34,9 @@ export default function StepCustomerType({ selected, onSelect }: StepCustomerTyp
   return (
     <div>
       <div className="mb-10 text-center">
-        <h1 className="text-3xl font-bold text-[#010101] tracking-tight">¿Quién eres?</h1>
+        <h1 className="text-3xl font-bold text-[#010101] tracking-tight">¿Qué proyecto quieres simular?</h1>
         <p className="text-gray-500 mt-3">
-          Selecciona tu perfil para personalizar la simulación.
+          Selecciona el tipo para personalizar la simulación.
         </p>
       </div>
 

@@ -38,7 +38,6 @@ export default function ContactSection({ showEyebrow = true }: { showEyebrow?: b
             </h2>
             <p className="text-gray-500 leading-relaxed mb-10">
               Cuéntanos sobre tu consumo y te contactaremos con una propuesta a medida.
-              Visita técnica gratuita, sin compromiso.
             </p>
 
             <div className="space-y-5">

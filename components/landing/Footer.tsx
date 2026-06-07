@@ -54,10 +54,10 @@ export default async function Footer() {
             <ul className="space-y-2 text-sm text-white/50">
               <li><Link href="/simulator" className="hover:text-[#389fe0] transition-colors">Simulador solar</Link></li>
               <li><Link href="/net-billing" className="hover:text-[#389fe0] transition-colors">¿Qué es Net Billing?</Link></li>
-              <li><a href="#soluciones" className="hover:text-[#389fe0] transition-colors">Soluciones</a></li>
-              <li><a href="#proyectos" className="hover:text-[#389fe0] transition-colors">Proyectos</a></li>
-              <li><a href="#nosotros" className="hover:text-[#389fe0] transition-colors">Quiénes somos</a></li>
-              <li><a href="#contacto-form" className="hover:text-[#389fe0] transition-colors">Contacto</a></li>
+              <li><Link href="/soluciones" className="hover:text-[#389fe0] transition-colors">Soluciones</Link></li>
+              <li><Link href="/proyectos" className="hover:text-[#389fe0] transition-colors">Proyectos</Link></li>
+              <li><Link href="/nosotros" className="hover:text-[#389fe0] transition-colors">Quiénes somos</Link></li>
+              <li><Link href="/contacto" className="hover:text-[#389fe0] transition-colors">Contacto</Link></li>
             </ul>
           </div>
 
