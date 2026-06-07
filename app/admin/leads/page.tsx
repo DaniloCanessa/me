@@ -71,8 +71,6 @@ export default async function AdminLeadsPage({
   const { status: filterStatus, region: filterRegion, tipo: filterTipo, view: filterView, followup: filterFollowup } = await searchParams;
   const today = new Date().toISOString().slice(0, 10);
   const db = getSupabaseAdmin();
-  const users = await getUsers();
-  const usersMap = Object.fromEntries(users.map(u => [u.id, u.name]));
 
   let query = db
     .from('leads')
@@ -86,7 +84,24 @@ export default async function AdminLeadsPage({
     query = query.lte('follow_up_date', today).not('status', 'in', '("won","lost")');
   }
 
-  const { data: leads, error } = await query;
+  // Las 5 consultas son independientes — se ejecutan en paralelo
+  const [users, { data: leads, error }, counts, { data: regionRows }, { data: leadQuotes }] = await Promise.all([
+    getUsers(),
+    query,
+    db.from('leads').select('status'),
+    db
+      .from('leads')
+      .select('region_name')
+      .not('region_name', 'is', null)
+      .order('region_name'),
+    db
+      .from('quotes')
+      .select('id, quote_number, status, total_clp, created_at, lead_id')
+      .not('lead_id', 'is', null)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const usersMap = Object.fromEntries(users.map(u => [u.id, u.name]));
 
   if (error) {
     return (
@@ -96,16 +111,10 @@ export default async function AdminLeadsPage({
     );
   }
 
-  const counts = await db.from('leads').select('status');
   const allLeads = counts.data ?? [];
   const countByStatus = (s: string) => allLeads.filter((l) => l.status === s).length;
 
   // Regiones distintas para el filtro
-  const { data: regionRows } = await db
-    .from('leads')
-    .select('region_name')
-    .not('region_name', 'is', null)
-    .order('region_name');
   const regions = [...new Set((regionRows ?? []).map(r => r.region_name as string))];
 
   // Helpers para construir hrefs preservando filtros activos
@@ -132,12 +141,6 @@ export default async function AdminLeadsPage({
   }
 
   // Cotizaciones por lead
-  const { data: leadQuotes } = await db
-    .from('quotes')
-    .select('id, quote_number, status, total_clp, created_at, lead_id')
-    .not('lead_id', 'is', null)
-    .order('created_at', { ascending: false });
-
   const quotesMap = (leadQuotes ?? []).reduce<Record<string, QuoteSummary[]>>((acc, q) => {
     if (!q.lead_id) return acc;
     (acc[q.lead_id] ??= []).push(q as QuoteSummary);

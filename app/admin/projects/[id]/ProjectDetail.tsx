@@ -414,15 +414,6 @@ export default function ProjectDetail({
       conIvaFinal = true;
     }
 
-    // DEBUG: Mostrar qué se está guardando
-    console.log('🔍 DEBUG COSTO:', {
-      lastCostField,
-      costSinIva,
-      costConIva,
-      montoFinal,
-      conIvaFinal
-    });
-
     // Agregar valores calculados al FormData
     fd.set('monto_clp', String(montoFinal));
     fd.set('con_iva', String(conIvaFinal));

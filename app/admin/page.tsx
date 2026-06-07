@@ -48,8 +48,8 @@ export default async function AdminDashboard({
   const today = now.toISOString().slice(0, 10);
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // Usuarios activos para el filtro
-  const { data: users } = await db
+  // Usuarios activos para el filtro (se resuelve junto al resto en el Promise.all)
+  const usersQ = db
     .from('users')
     .select('id, name')
     .eq('is_active', true)
@@ -95,9 +95,10 @@ export default async function AdminDashboard({
     { data: projects },
     { data: acceptedThisMonth },
     { data: followups },
+    { data: users },
   ] = await Promise.all([
     leadsKpiQ, quotesKpiQ, projectsKpiQ,
-    leadsQ, quotesQ, projectsQ, acceptedQ, followupsQ,
+    leadsQ, quotesQ, projectsQ, acceptedQ, followupsQ, usersQ,
   ]);
 
   const ingresosDelMes = (acceptedThisMonth ?? []).reduce((s: number, q: { total_clp: number }) => s + (q.total_clp ?? 0), 0);
