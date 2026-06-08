@@ -24,7 +24,7 @@ const STEPS = [
 
 export default function HowItWorks() {
   return (
-    <section className="py-28 bg-white">
+    <section className="pt-28 pb-16 bg-white">
       <div className="max-w-6xl mx-auto px-6">
         <Reveal className="text-center mb-20">
           <p className="text-xs font-semibold text-[#389fe0] uppercase tracking-[0.2em] mb-4">Proceso</p>

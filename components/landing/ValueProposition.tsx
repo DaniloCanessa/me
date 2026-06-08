@@ -43,7 +43,7 @@ const VALUES = [
 
 export default function ValueProposition() {
   return (
-    <section className="py-28 bg-gradient-to-b from-white to-[#dde3e9]/40">
+    <section className="pt-16 pb-28 bg-gradient-to-b from-white to-[#dde3e9]/40">
       <div className="max-w-6xl mx-auto px-6">
         <Reveal className="text-center mb-16">
           <p className="text-xs font-semibold text-[#389fe0] uppercase tracking-[0.2em] mb-4">Por qué elegirnos</p>

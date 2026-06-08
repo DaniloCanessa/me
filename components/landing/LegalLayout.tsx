@@ -13,7 +13,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
       <nav className="bg-[#010101] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <Link href="/">
-            <Image src="/images/logotipo.png" alt="Mercado Energy" width={160} height={48} className="h-10 w-auto" />
+            <Image src="/images/mercadoenergy-blanco.png" alt="Mercado Energy" width={320} height={96} className="h-20 w-auto" />
           </Link>
           <Link href="/" className="text-sm text-white/60 hover:text-white transition-colors">
             ← Volver al inicio
@@ -25,7 +25,7 @@ export default function LegalLayout({ title, lastUpdated, children }: LegalLayou
         <div className="bg-white rounded-2xl border border-[#b0cedd]/30 p-8 md:p-12">
           <p className="text-xs text-[#389fe0] font-semibold uppercase tracking-widest mb-3">Legal</p>
           <h1 className="text-3xl md:text-4xl font-bold text-[#010101] mb-3">{title}</h1>
-          <p className="text-sm text-gray-400 mb-10 pb-10 border-b border-gray-100">
+          <p className="text-sm text-gray-400 mb-4 pb-4 border-b border-gray-100">
             Última actualización: {lastUpdated}
           </p>
 
