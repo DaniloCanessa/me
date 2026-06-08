@@ -1,14 +1,16 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 6 de junio 2026 (sesión 21 — IVA por compra en cuenta corriente y botón WhatsApp destacado)
+> Última actualización: 7 de junio 2026 (sesión 22 — SEO completo para cambio de dominio, optimizaciones y ajustes de UI)
 > Repositorio: https://github.com/DaniloCanessa/me
-> Producción: https://mercado-energy.vercel.app
+> Producción: https://mercado-energy.vercel.app (dominio definitivo en preparación: www.mercadoenergy.cl)
 
 ---
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 a 21 completadas, commiteadas y desplegadas** (últimos commits: `1ed376d`, `48f92f9`, `aa3e1a7`).
+**Sesiones 17 a 22 completadas, commiteadas y desplegadas** (últimos commits: `aa3e1a7`, `f01d144`, `aed56a4`, `13d9491`, `0677673`, `13c1a99`).
+
+**🔜 CAMBIO DE DOMINIO EN CURSO (lo más importante al reabrir):** se va a apuntar el dominio de NIC Chile a Vercel para que este proyecto reemplace el sitio actual de Mercado Energy. El SEO ya está implementado y desplegado para `www.mercadoenergy.cl` (canónico). **Acciones del usuario pendientes:** (1) alta del dominio `www.mercadoenergy.cl` + apex en Vercel y cargar los DNS en NIC Chile; (2) verificar en Google Search Console + Bing y enviar el sitemap; (3) redirección 301 de `mercado-energy.vercel.app` → dominio nuevo. **Pendiente conmigo:** el usuario debe pasar las **URLs del sitio viejo que posicionan en Google** para crear redirecciones 301 y no perder ranking (si las rutas coinciden con las nuestras, no hace falta nada).
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
 
@@ -27,6 +29,9 @@
 **Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
 **Pendientes (media prioridad):**
+- **Redirecciones 301 del sitio viejo** (cuando el usuario pase las URLs que posicionan en Google) — se implementarían en `next.config`/`vercel.ts` o `proxy.ts`
+- Comprimir fotos pesadas de proyectos (`casa-carlos-alvarado.jpg` 9 MB, `poroma-img.jpg` 3,6 MB, `panaderia-san-bernardo.jpg` 3 MB) — ffmpeg quedó instalado en el sistema; `next/image` ya las optimiza al servir pero el origen es pesado
+- Conteo de leads en `/admin/leads` trae todas las filas y cortaría en 1.000 (mismo límite Supabase de sesión 18); hoy no afecta, cambiar a `count` exacto cuando crezca
 - Emojis de avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) → íconos SVG (requiere correr el wizard completo para verificar cada aviso)
 - Debuggear y arreglar importación de costos como compras (`importCostsAsPurchases()`)
 - Precio de kWh dinámico por distribuidora/tarifa (hoy usa $220 fijo cuando no hay monto en boleta; los meses con solo monto $ usan el precio real promedio del usuario si existe)
@@ -71,6 +76,33 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 22 (7 junio 2026) — SEO para cambio de dominio, optimizaciones y ajustes de UI (commits `f01d144`, `aed56a4`, `13d9491`, `0677673`, `13c1a99`):**
+
+- **SEO completo (preparación cambio de dominio a `www.mercadoenergy.cl`, commit `13c1a99`):**
+  - `lib/seo.ts`: constantes `SITE_URL`/`SITE_NAME`/`OG_IMAGE` + helper `pageMetadata({title, description, path})` que arma título, descripción, canónica, Open Graph y Twitter card
+  - `app/layout.tsx`: `metadataBase`, plantilla de títulos `%s — Mercado Energy`, robots index, OG/Twitter por defecto y **JSON-LD `LocalBusiness`** con datos reales (Biznexus Group SpA, Miguel León Prado 134 Santiago, tel +56 9 6654 6276, email)
+  - `app/robots.ts`: permite público, bloquea `/admin` `/lab` `/api`, apunta al sitemap + host
+  - `app/sitemap.ts`: 10 páginas públicas con prioridades
+  - Metadata propia por página (home, simulador, soluciones, proyectos, nosotros, contacto, net-billing y las 3 legales). Las legales y net-billing migradas al helper (antes tenían el sufijo hardcodeado → con la plantilla se duplicaba)
+  - `noindex` en `/admin` (layout) y `/lab/bill-parser`
+  - **Imagen OG** `public/og-image.jpg` (1200×630, 141 KB): foto del proyecto Poroma + capa oscura + logo blanco, generada con System.Drawing
+  - Verificado en local: robots.txt, sitemap.xml, títulos con plantilla, canónicas, OG, Twitter y JSON-LD correctos
+- **Optimizaciones de rendimiento (commits `f01d144`, `aed56a4`):**
+  - **Video del hero 4K → 1080p** (`video-poroma.mp4`): 41 MB → 14 MB (−66%), sin audio, faststart, con ffmpeg (instalado vía winget). Calidad visualmente idéntica al 65% de opacidad
+  - `/admin/leads`: 5 consultas secuenciales a Supabase → 1 `Promise.all`
+  - Dashboard admin: consulta de usuarios integrada al `Promise.all` existente
+  - Eliminado `console.log` de debug en formulario de costos de proyectos
+  - Eliminado `components/SimulatorResults.tsx` (componente legacy sin imports)
+- **Ajustes de UI (commits `13d9491`, `0677673`):**
+  - Botón WhatsApp más destacado: halo verde pulsante cada 2s (`animate-ping`, respeta reduced-motion), 56→64px, sombra intensa + anillo blanco
+  - net-billing y páginas legales: logo a versión blanca (`mercadoenergy-blanco.png`) sobre el nav negro, tamaño al doble (h-10 → h-20)
+  - Footer: enlaces Soluciones/Proyectos/Quiénes somos/Contacto apuntaban a anclas rotas (`#soluciones`, etc.) de secciones que dejaron de estar en el home en sesión 17 → ahora `Link` a las páginas reales
+  - Hero: eliminado "— sin compromiso"; ContactSection: eliminado "Visita técnica gratuita, sin compromiso."
+  - Simulador Paso 1: título "¿Quién eres?" → "¿Qué proyecto quieres simular?"
+  - Menos espacio entre secciones: home (HowItWorks↔ValueProposition 14rem→8rem) y /nosotros (AboutUs↔"Nuestro propósito" 13rem→7rem)
+  - Menos espacio bajo "Última actualización" en páginas legales
+  - Páginas `/soluciones` `/proyectos` `/nosotros` `/contacto` ya existían como independientes desde sesión 17
 
 **Desarrollos sesión 21 (6 junio 2026) — IVA por compra en cuenta corriente y WhatsApp destacado (commits `48f92f9`, `aa3e1a7`):**
 
@@ -286,8 +318,10 @@ ALTER TABLE project_purchases ADD COLUMN IF NOT EXISTS costo_referencia_sin_iva 
 ```
 mercado-energy/
 ├── app/
-│   ├── layout.tsx                  # Metadata global, font Geist, lang="es"
-│   ├── page.tsx                    # Home (acortado sesión 17): Hero, HowItWorks, ValueProposition, Brands, ContactSection, Footer
+│   ├── layout.tsx                  # (sesión 22) metadataBase, plantilla de títulos, OG/Twitter, robots, JSON-LD LocalBusiness; font Geist, lang="es"
+│   ├── robots.ts                   # (sesión 22) robots.txt: público indexable, bloquea /admin /lab /api, apunta al sitemap
+│   ├── sitemap.ts                  # (sesión 22) sitemap.xml: 10 páginas públicas con prioridades
+│   ├── page.tsx                    # Home (acortado sesión 17): Hero, HowItWorks, ValueProposition, Brands, ContactSection, Footer + metadata SEO
 │   ├── icon.png                    # Favicon (logotipo-2.png — Next.js lo detecta automáticamente)
 │   ├── soluciones/page.tsx         # (sesión 17) Página Soluciones: Navbar + título + <Solutions showHeader={false}>
 │   ├── proyectos/page.tsx          # (sesión 17) Página Proyectos: Navbar + título + <Projects showHeader={false}>
@@ -369,6 +403,7 @@ mercado-energy/
 │       └── ProgressBar.tsx         # Barra de progreso de 7 pasos (colores de marca)
 │
 └── lib/
+    ├── seo.ts                      # (sesión 22) SITE_URL/SITE_NAME/OG_IMAGE + helper pageMetadata() para metadata por página
     ├── auth.ts                     # (sesión 18) isAdminAuthenticated(): valida JWT de cookie admin_token (server-side)
     ├── mercadopublico.ts           # (sesión 19) Cliente API ChileCompra + syncTenders() + email de notificación
     ├── types.ts                    # Interfaces TypeScript (incluye SimulatorConfig, SimulatorInput extendido)
