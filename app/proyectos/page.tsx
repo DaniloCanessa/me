@@ -2,6 +2,14 @@ import Navbar from '@/components/landing/Navbar';
 import Projects from '@/components/landing/Projects';
 import Footer from '@/components/landing/Footer';
 import WhatsAppButton from '@/components/landing/WhatsAppButton';
+import { pageMetadata } from '@/lib/seo';
+
+export const metadata = pageMetadata({
+  title: 'Proyectos de energía solar en Chile',
+  description:
+    'Más de 200 proyectos fotovoltaicos instalados en +25 localidades de Chile: hogares, empresas, colegios y comunidades rurales.',
+  path: '/proyectos',
+});
 
 export default function ProyectosPage() {
   return (

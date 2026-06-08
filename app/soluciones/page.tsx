@@ -2,6 +2,14 @@ import Navbar from '@/components/landing/Navbar';
 import Solutions from '@/components/landing/Solutions';
 import Footer from '@/components/landing/Footer';
 import WhatsAppButton from '@/components/landing/WhatsAppButton';
+import { pageMetadata } from '@/lib/seo';
+
+export const metadata = pageMetadata({
+  title: 'Soluciones en energía solar, eólica y climatización',
+  description:
+    'Energía solar fotovoltaica, eólica, climatización eficiente y consultoría energética para hogares y empresas en todo Chile.',
+  path: '/soluciones',
+});
 
 export default function SolucionesPage() {
   return (

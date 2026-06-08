@@ -1,6 +1,9 @@
 import BillParser from '@/components/lab/BillParser';
 
-export const metadata = { title: 'Lab — Lector de Boletas · Mercado Energy' };
+export const metadata = {
+  title: 'Lab — Lector de Boletas',
+  robots: { index: false, follow: false },
+};
 
 export default function BillParserPage() {
   return (

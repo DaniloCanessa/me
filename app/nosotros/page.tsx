@@ -4,6 +4,14 @@ import Footer from '@/components/landing/Footer';
 import WhatsAppButton from '@/components/landing/WhatsAppButton';
 import Reveal from '@/components/landing/Reveal';
 import { IconTarget, IconBadgeCheck } from '@/components/landing/icons';
+import { pageMetadata } from '@/lib/seo';
+
+export const metadata = pageMetadata({
+  title: 'Quiénes somos',
+  description:
+    'Conoce a Mercado Energy: soluciones energéticas integrales, eficientes y sustentables para Chile. Nuestra misión, visión y equipo.',
+  path: '/nosotros',
+});
 
 const PURPOSE = [
   {
@@ -39,7 +47,7 @@ export default function NosotrosPage() {
       <AboutUs />
 
       {/* Misión y Visión */}
-      <section className="py-24 bg-gradient-to-b from-white to-[#dde3e9]/30">
+      <section className="pt-14 pb-24 bg-gradient-to-b from-white to-[#dde3e9]/30">
         <div className="max-w-6xl mx-auto px-6">
           <Reveal className="text-center mb-14 max-w-2xl mx-auto">
             <p className="text-xs font-semibold text-[#389fe0] uppercase tracking-[0.2em] mb-4">Nuestro propósito</p>

@@ -1,6 +1,12 @@
 import LegalLayout from '@/components/landing/LegalLayout';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Política de Privacidad — Mercado Energy' };
+export const metadata = pageMetadata({
+  title: 'Política de privacidad',
+  description:
+    'Política de privacidad y tratamiento de datos personales de Mercado Energy, conforme a la Ley N° 21.719.',
+  path: '/privacidad',
+});
 
 export default function PrivacidadPage() {
   return (

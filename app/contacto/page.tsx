@@ -2,6 +2,14 @@ import Navbar from '@/components/landing/Navbar';
 import ContactSection from '@/components/landing/ContactSection';
 import Footer from '@/components/landing/Footer';
 import WhatsAppButton from '@/components/landing/WhatsAppButton';
+import { pageMetadata } from '@/lib/seo';
+
+export const metadata = pageMetadata({
+  title: 'Contacto',
+  description:
+    'Conversemos sobre tu proyecto solar. Cuéntanos tu consumo y te contactamos con una propuesta a medida. Cobertura en todo Chile.',
+  path: '/contacto',
+});
 
 export default function ContactoPage() {
   return (

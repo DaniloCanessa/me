@@ -2,6 +2,9 @@ import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 
+// El backoffice nunca debe indexarse en buscadores.
+export const metadata = { robots: { index: false, follow: false } };
+
 interface JwtPayload {
   sub: string;
   name: string;

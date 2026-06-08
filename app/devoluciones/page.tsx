@@ -1,6 +1,12 @@
 import LegalLayout from '@/components/landing/LegalLayout';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Política de Devoluciones — Mercado Energy' };
+export const metadata = pageMetadata({
+  title: 'Política de devoluciones',
+  description:
+    'Política de devoluciones y garantías de Mercado Energy conforme a la Ley del Consumidor (Ley N° 19.496).',
+  path: '/devoluciones',
+});
 
 export default function DevolucionesPage() {
   return (

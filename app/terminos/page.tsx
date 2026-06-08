@@ -1,6 +1,11 @@
 import LegalLayout from '@/components/landing/LegalLayout';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata = { title: 'Términos y Condiciones — Mercado Energy' };
+export const metadata = pageMetadata({
+  title: 'Términos y condiciones',
+  description: 'Términos y condiciones de uso de los servicios de Mercado Energy.',
+  path: '/terminos',
+});
 
 export default function TerminosPage() {
   return (
