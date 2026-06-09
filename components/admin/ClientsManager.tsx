@@ -149,7 +149,59 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Tarjetas (móvil) */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {filtered.map((c) => {
+              const quoteHref  = `/admin/quotes/new?client_id=${c.id}`;
+              const detailHref = `/admin/clients/${c.id}`;
+              return (
+                <div
+                  key={c.id}
+                  className={`p-4 ${fromQuotes ? 'cursor-pointer' : ''}`}
+                  onClick={fromQuotes ? () => (window.location.href = quoteHref) : undefined}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Link
+                        href={fromQuotes ? quoteHref : detailHref}
+                        className="font-medium text-gray-900 hover:text-[#389fe0]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.nombre}
+                      </Link>
+                      {c.empresa && <p className="text-xs text-gray-400">{c.empresa}</p>}
+                      {c.rut && <p className="text-xs text-gray-300 font-mono">{c.rut}</p>}
+                    </div>
+                    <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
+                      c.source === 'simulador' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {SOURCE_LABELS[c.source] ?? c.source}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {c.email && <p className="truncate">{c.email}</p>}
+                    <div className="flex flex-wrap gap-x-3">
+                      {c.telefono && <span>{c.telefono}</span>}
+                      {c.ciudad && <span>{c.ciudad}</span>}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-right">
+                    {fromQuotes ? (
+                      <span className="text-xs text-[#389fe0] font-medium">Seleccionar →</span>
+                    ) : (
+                      <Link href={quoteHref} className="text-xs text-[#389fe0] font-medium" onClick={(e) => e.stopPropagation()}>
+                        + Cotizar
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tabla (escritorio) */}
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-left">
@@ -217,6 +269,7 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </>

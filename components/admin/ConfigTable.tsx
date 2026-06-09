@@ -99,7 +99,54 @@ export default function ConfigTable({ params }: { params: ConfigParam[] }) {
             </h2>
           </div>
 
-          <table className="w-full text-sm">
+          {/* Tarjetas (móvil) */}
+          <div className="md:hidden divide-y divide-gray-50">
+            {grouped[cat].map((p) => {
+              const isEditing = editingId === p.id;
+              const isSaved   = savedKey === p.key;
+              const isError   = errorKey === p.key;
+              const isTextParam = TEXT_CATEGORIES.has(p.category ?? '');
+              return (
+                <div key={p.id} className="px-5 py-3.5">
+                  <p className="font-mono text-xs text-gray-500 break-all">{p.key}</p>
+                  {p.description && <p className="text-xs text-gray-400 mt-0.5">{p.description}</p>}
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    {isEditing ? (
+                      <input
+                        type={isTextParam ? 'text' : 'number'}
+                        step={isTextParam ? undefined : 'any'}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="flex-1 min-w-0 border border-[#389fe0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/20"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter')  saveEdit(p.id, p.key);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                      />
+                    ) : (
+                      <span className={`font-semibold tabular-nums ${isSaved ? 'text-green-600' : isError ? 'text-red-600' : 'text-gray-900'}`}>
+                        {formatValue(p.key, p.value)}
+                        {isSaved && <span className="ml-1.5 text-xs font-normal">✓</span>}
+                        {isError && <span className="ml-1.5 text-xs font-normal">✗</span>}
+                      </span>
+                    )}
+                    {isEditing ? (
+                      <span className="flex gap-2 shrink-0">
+                        <button onClick={() => saveEdit(p.id, p.key)} disabled={isPending}
+                          className="text-xs text-white bg-[#389fe0] hover:bg-[#1d65c5] px-3 py-1.5 rounded-lg disabled:opacity-50">Guardar</button>
+                        <button onClick={cancelEdit} className="text-xs text-gray-400 px-2 py-1.5">Cancelar</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => startEdit(p)} className="shrink-0 text-xs text-[#389fe0] font-medium">Editar</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <table className="hidden md:table w-full text-sm">
             <thead>
               <tr className="border-b border-gray-50 text-left">
                 <th className="px-5 py-2.5 text-xs font-medium text-gray-400">Parámetro</th>

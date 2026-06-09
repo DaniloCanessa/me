@@ -385,7 +385,7 @@ export default function ProductsManager({ products }: { products: Product[] }) {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
         <div className="flex gap-1.5">
           {(['all', 'in', 'out'] as const).map((s) => (
             <button key={s} onClick={() => setFilterStock(s)}
@@ -405,11 +405,26 @@ export default function ProductsManager({ products }: { products: Product[] }) {
         </button>
       </div>
 
-      {/* Layout: sidebar izquierdo + tabla */}
-      <div className="flex gap-4 items-start">
+      {/* Selector de categoría (móvil) */}
+      <div className="md:hidden mb-3">
+        <select
+          value={filterCat}
+          onChange={(e) => setFilterCat(e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-[#389fe0]"
+        >
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {(cat === 'all' ? 'Todas las categorías' : (CATEGORY_LABELS[cat] ?? cat))} ({countCat(cat)})
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Sidebar de categorías */}
-        <div className="w-48 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Layout: sidebar izquierdo + tabla */}
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+
+        {/* Sidebar de categorías (escritorio) */}
+        <div className="hidden md:block w-48 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-3 py-2.5 border-b border-gray-100">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Categoría</p>
           </div>
@@ -439,7 +454,51 @@ export default function ProductsManager({ products }: { products: Product[] }) {
             <p className="text-sm text-gray-400">No hay productos con estos filtros.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Tarjetas (móvil) */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {filtered.map((p) => (
+              <div key={p.id} className={`p-4 ${!p.is_active ? 'opacity-50' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">{p.name}</p>
+                    <p className="text-xs font-mono text-gray-400 mt-0.5">{p.sku}</p>
+                    {p.proveedor && <p className="text-xs text-gray-500">{p.proveedor}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleToggle(p.id, p.is_active)}
+                    disabled={isPending}
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {p.is_active ? 'Activo' : 'Inactivo'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
+                  <span>{CATEGORY_LABELS[p.category] ?? p.category}</span>
+                  <span>{CUSTOMER_LABELS[p.customer_type] ?? p.customer_type}</span>
+                  <span>Stock: {p.stock}</span>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="font-semibold text-gray-900 tabular-nums">{clp(p.base_price_clp)}</p>
+                  <div className="flex gap-4">
+                    <button onClick={() => openEdit(p)} className="text-xs text-[#389fe0] font-medium">Editar</button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      disabled={deletingId === p.id || isPending}
+                      className="text-xs text-red-400 hover:text-red-600 font-medium disabled:opacity-40"
+                    >
+                      {deletingId === p.id ? '…' : 'Eliminar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabla (escritorio) */}
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-left">
@@ -535,6 +594,7 @@ export default function ProductsManager({ products }: { products: Product[] }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
         </div>
 

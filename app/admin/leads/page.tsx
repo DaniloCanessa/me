@@ -204,7 +204,53 @@ export default async function AdminLeadsPage({
               <p className="text-sm text-gray-400">No hay leads{filterStatus && filterStatus !== 'all' ? ` con estado "${STATUS_LABELS[filterStatus as LeadStatus] ?? filterStatus}"` : ''}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Tarjetas (móvil) */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {(leads as Lead[]).map((lead) => (
+                <div key={lead.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <a href={`/admin/leads/${lead.id}`} className="font-medium text-gray-900 hover:text-[#389fe0]">
+                        {lead.name ?? '—'}
+                      </a>
+                      <a href={`mailto:${lead.email}`} className="block text-xs text-green-600 truncate">{lead.email}</a>
+                      {lead.phone && <p className="text-xs text-gray-400">{lead.phone}</p>}
+                      {lead.assigned_to && usersMap[lead.assigned_to] && (
+                        <p className="text-xs text-blue-500 mt-0.5">{usersMap[lead.assigned_to]}</p>
+                      )}
+                    </div>
+                    <StatusSelect id={lead.id} status={lead.status} action={updateStatus} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-xs text-gray-500">
+                    <span>{dateLabel(lead.created_at)}</span>
+                    {lead.region_name && <span>{lead.region_name}</span>}
+                    {lead.avg_monthly_kwh != null && <span>{lead.avg_monthly_kwh} kWh/mes</span>}
+                    {lead.kit_size_kwp && <span>{lead.kit_size_kwp} kWp</span>}
+                    {lead.monthly_benefit_clp != null && (
+                      <span className="text-green-700 font-medium">{clp(lead.monthly_benefit_clp)}/mes</span>
+                    )}
+                  </div>
+
+                  {lead.follow_up_date && (
+                    <p className={`mt-1 text-xs ${lead.follow_up_date < today ? 'text-red-600 font-semibold' : 'text-amber-600'}`}>
+                      {lead.follow_up_date < today ? '⚠ ' : '📅 '}Seguimiento: {dateLabel(lead.follow_up_date)}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between mt-2">
+                    {(quotesMap[lead.id]?.length ?? 0) > 0 ? (
+                      <span className="text-[11px] text-[#389fe0] font-medium">{quotesMap[lead.id].length} cot.</span>
+                    ) : <span />}
+                    <LeadDetail lead={lead} quotes={quotesMap[lead.id] ?? []} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabla (escritorio) */}
+            <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
@@ -278,6 +324,7 @@ export default async function AdminLeadsPage({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>}
       </div>

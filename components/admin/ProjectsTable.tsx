@@ -98,7 +98,47 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
           <p className="text-xs text-gray-400 mt-1">Los proyectos se crean desde una cotización aceptada.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Tarjetas (móvil) */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {projects.map(p => (
+            <div key={p.id} className="p-4 flex gap-3">
+              <input
+                type="checkbox"
+                checked={selectedProjects.has(p.id)}
+                onChange={() => toggleSelection(p.id)}
+                className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <Link href={`/admin/projects/${p.id}`} className="font-medium text-gray-900 hover:text-[#389fe0]">
+                    {p.nombre}
+                  </Link>
+                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ${ESTADO_COLORS[p.estado] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {ESTADO_LABELS[p.estado] ?? p.estado}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mt-0.5">{p.client_name}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-400">
+                  {p.quote_number && <span className="font-mono">{p.quote_number}</span>}
+                  <span>Inicio {dateShort(p.fecha_inicio)}</span>
+                  <span>Término {dateShort(p.fecha_termino)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDeleteSingle(p.id, p.nombre)}
+                disabled={isDeleting || deletingSingle === p.id}
+                className="self-start px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                title={`Eliminar proyecto: ${p.nombre}`}
+              >
+                {deletingSingle === p.id ? '...' : '🗑️'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabla (escritorio) */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -162,6 +202,7 @@ export function ProjectsTable({ projects }: ProjectsTableProps) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

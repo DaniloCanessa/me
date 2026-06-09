@@ -85,7 +85,43 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
           <p className="text-sm text-gray-400">No hay cotizaciones en esta categoría.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Tarjetas (móvil) */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {quotes.map((q) => {
+            const st = STATUS[q.status] ?? { label: q.status, color: 'bg-gray-100 text-gray-600' };
+            const isSelected = selected.has(q.id);
+            return (
+              <div key={q.id} className={`p-4 flex gap-3 ${isSelected ? 'bg-red-50/40' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggle(q.id)}
+                  className="mt-1 rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/admin/quotes/${q.id}`} className="font-mono text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium">
+                      {q.quote_number}
+                    </Link>
+                    <span className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${st.color}`}>
+                      {st.label}
+                    </span>
+                  </div>
+                  <p className="font-medium text-gray-900 mt-0.5">{q.client_name}</p>
+                  {q.client_email && <p className="text-xs text-gray-400 truncate">{q.client_email}</p>}
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="text-xs text-gray-400">{dateStr(q.created_at)}</span>
+                    <span className="text-sm font-semibold text-gray-900 tabular-nums">{clp(q.total_clp)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tabla (escritorio) */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-left">
@@ -145,6 +181,7 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
