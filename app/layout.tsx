@@ -1,9 +1,14 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '@/lib/seo';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
+
+export const viewport: Viewport = {
+  themeColor: '#1d65c5',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -71,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

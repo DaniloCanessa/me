@@ -18,12 +18,23 @@ const NAV_CONFIG = [
   { href: '/admin/config',   label: 'Configuración', icon: '⚙️' },
 ];
 
-function NavItem({ href, label, icon }: { href: string; label: string; icon: string }) {
+function NavItem({
+  href,
+  label,
+  icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const active = pathname.startsWith(href);
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
         active
           ? 'bg-[#389fe0]/10 text-[#1d65c5]'
@@ -39,12 +50,14 @@ function NavItem({ href, label, icon }: { href: string; label: string; icon: str
 export default function AdminSidebar({
   userName,
   userRole,
+  onNavigate,
 }: {
   userName: string;
   userRole: string;
+  onNavigate?: () => void;
 }) {
   return (
-    <aside className="w-56 shrink-0 bg-white border-r border-gray-100 flex flex-col">
+    <aside className="w-56 h-full shrink-0 bg-white border-r border-gray-100 flex flex-col">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-gray-100">
         <Link href="/admin">
@@ -66,14 +79,14 @@ export default function AdminSidebar({
           CRM
         </p>
         {NAV_MAIN.map((item) => (
-          <NavItem key={item.href} {...item} />
+          <NavItem key={item.href} {...item} onNavigate={onNavigate} />
         ))}
 
         <p className="px-3 mt-4 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
           Configuración
         </p>
         {NAV_CONFIG.map((item) => (
-          <NavItem key={item.href} {...item} />
+          <NavItem key={item.href} {...item} onNavigate={onNavigate} />
         ))}
 
         {userRole === 'admin' && (
@@ -81,7 +94,7 @@ export default function AdminSidebar({
             <p className="px-3 mt-4 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
               Sistema
             </p>
-            <NavItem href="/admin/users" label="Usuarios" icon="🔑" />
+            <NavItem href="/admin/users" label="Usuarios" icon="🔑" onNavigate={onNavigate} />
           </>
         )}
       </nav>
