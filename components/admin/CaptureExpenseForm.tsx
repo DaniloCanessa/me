@@ -92,7 +92,7 @@ export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Proyecto</label>
           <select value={projectSel} onChange={(e) => setProjectSel(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]">
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]">
             <option value="">— Decidir al revisar —</option>
             <option value="__sin__">Sin proyecto (gasto general)</option>
             <optgroup label="Proyectos">
@@ -107,7 +107,7 @@ export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Nota (opcional)</label>
           <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Ej: materiales eléctricos"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#389fe0]" />
         </div>
       </div>
 

@@ -203,7 +203,7 @@ function ReviewModal({
     start(async () => { await deleteExpenseCapture(capture.id); onDone(); });
   }
 
-  const inputCls = 'w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] disabled:bg-gray-50';
+  const inputCls = 'w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#389fe0] disabled:bg-gray-50 disabled:text-gray-600';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto py-6 px-4" onClick={onClose}>
