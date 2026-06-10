@@ -14,15 +14,15 @@
 
 **📱 APP MÓVIL (PWA) — Fases 1 y 2 LISTAS Y DESPLEGADAS (sesión 23):** el sitio es ahora una PWA instalable para uso interno. Se instala desde el navegador del celular entrando a `/admin` → "Agregar a pantalla de inicio"; queda con ícono "me" (rayo + círculo) y abre en pantalla completa en el login del admin. El backoffice completo es responsive (listas como tarjetas, detalles con scroll/apilado).
 
-**🧾 CAPTURA DE GASTOS YA CONSTRUIDA Y DESPLEGADA (sesión 24):** bandeja en `/admin/gastos` — capturar boleta (cámara/galería) → revisar con OCR → aprobar. Con proyecto crea una compra (entra a la cuenta corriente); **sin proyecto** queda como gasto general. Ver detalle en el bloque de la sesión 24. **Verificación funcional end-to-end pendiente en dispositivo del usuario.**
+**🧾 CAPTURA DE GASTOS YA CONSTRUIDA Y DESPLEGADA (sesión 24):** bandeja en `/admin/gastos` — capturar boleta (cámara/galería) → revisar con OCR → aprobar. Con proyecto crea una compra (entra a la cuenta corriente); **sin proyecto** queda como gasto general. Ver detalle en el bloque de la sesión 24. **Verificado end-to-end por el usuario desde el celular: captura → OCR real → aprobación.**
 
-**Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
+**Estado de Vercel:** **el único proyecto válido es `mercado-energy`** (URL `https://mercado-energy.vercel.app`), que tiene TODAS las variables de entorno. **(sesión 24)** Se eliminó un proyecto Vercel **duplicado** llamado `me` que se auto-importó del mismo repo `DaniloCanessa/me`, desplegaba en paralelo y solo tenía 4 variables (sin las de Supabase → roto) — causaba confusión. Si Vercel vuelve a crear un duplicado al reimportar, **conservar siempre `mercado-energy`**. Variables en production: las históricas + **`MERCADO_PUBLICO_TICKET`** + **`CRON_SECRET`** + **`ANTHROPIC_API_KEY`** (cargada en sesión 24; antes faltaba — ver nota de OCR en verificación).
 
 **Licitaciones operativo end-to-end:** tablas creadas en Supabase, primera sincronización real exitosa (2.435 publicaciones → 21 calzaron → email enviado), ticket definitivo verificado, cron diario activo a las 08:00 de Chile.
 
 **Verificación post-deploy pendiente (producción):**
 1. `/simulator` público → sin botón de subir boleta, ingreso flexible kWh/monto $
-2. `/admin/simulator` → OCR con badge "Modo interno" funcionando con Opus 4.8
+2. OCR con Opus 4.8 (`/admin/simulator` boletas de luz + captura de gastos) — **corregido en sesión 24: hasta entonces corría en MODO DEMO** porque `ANTHROPIC_API_KEY` nunca estuvo cargada en Vercel (devolvía datos de ejemplo fijos). Ya cargada → OCR de gastos verificado leyendo boletas reales; el del simulador usa la misma key (verificar cuando se use)
 3. `/admin/products` → categoría "Kit Solar" visible con los 14 kits
 4. Informe PDF → diseño azul de marca con etiqueta "+ IVA"
 5. `/admin/licitaciones` → "Sincronizar ahora" funciona con el ticket definitivo
@@ -92,7 +92,8 @@ La landing page está completamente construida con identidad visual de marca. El
 - **Aprobar (`app/admin/gastos/actions.ts`):** **con proyecto** → inserta un `project_purchase` (cantidad 1, precio = total, `con_iva` del toggle) que entra a la cuenta corriente del proyecto + enlaza `purchase_id`; **sin proyecto** → queda `aprobado` con `sin_proyecto=true` (no toca ninguna obra). Eliminar borra también la imagen del Storage. Aprobación **abierta** (cualquier usuario con sesión, no solo admin — decisión del usuario)
 - **`lib/auth.ts`:** nuevo `getAdminUser()` (payload del JWT) para `captured_by`/`reviewed_by`. Ítem **🧾 Gastos** agregado al `AdminSidebar`
 - **Enlace "ver boleta" desde el proyecto (commit `874fc1a`):** se cruza `expense_captures.purchase_id` con las compras del proyecto (en `app/admin/projects/[id]/page.tsx`, prop `receiptUrls`) y se muestra un 📎 a la imagen (URL firmada) en las filas de compras (por ítem y sin ítem) y en los movimientos de la cuenta corriente. Sin cambios de esquema; solo aparece en compras nacidas de un gasto capturado
-- **Verificado:** `tsc` limpio + build OK; el usuario ejecutó la migración en Supabase. **Prueba funcional end-to-end pendiente en su dispositivo**
+- **Verificado:** `tsc` limpio + build OK; el usuario ejecutó la migración en Supabase. **Probado end-to-end desde el celular: captura → OCR real → aprobación.**
+- **OCR activado en producción (post-deploy, sesión 24):** el OCR (gastos y boletas de luz) corría en **modo demo** porque `ANTHROPIC_API_KEY` nunca había estado en Vercel. Se creó la key en Anthropic, se cargó en Vercel (Production) y en `.env.local`, y se **eliminó el proyecto Vercel duplicado `me`** (incompleto) dejando solo `mercado-energy`. Se agregó un aviso en la UI cuando el OCR está en modo demo (commit `7b13f3b`) y compresión de la foto en el navegador antes de subir, para no exceder el límite de los Server Actions (commit `ddeac02`). También: botón Cancelar en la captura (`e805448`) y texto oscuro en los campos para contraste en móvil (`f82531b`)
 - **Pendiente v2:** auto-match de ítems de la boleta vs lista de compra; boletas multi-ítem; link de captura público/tokenizado para terceros; badge de pendientes + notificación; vista de gastos generales
 
 **Desarrollos sesión 23 (9 junio 2026) — Redirecciones 301 del sitio antiguo, PWA (app móvil) y backoffice responsive (commits `c0bb683`, `3c21cfc`, `9088990`, `360a378`):**
