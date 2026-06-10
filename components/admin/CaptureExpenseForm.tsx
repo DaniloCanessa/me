@@ -6,6 +6,32 @@ import { createExpenseCapture } from '@/app/admin/gastos/actions';
 
 type ProjectOpt = { id: string; nombre: string };
 
+// Comprime la foto en el navegador: la achica a máx. 1600 px y la reencoda a
+// JPEG. Las fotos de celular pesan varios MB y excederían el límite de los
+// Server Actions; comprimida queda <1 MB y el OCR la lee igual de bien.
+// Los PDF u otros formatos se dejan tal cual.
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxDim = 1600;
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.72));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
 export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[] }) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -31,22 +57,28 @@ export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[
     setPreviewUrl(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
   }
 
-  function submit() {
+  async function submit() {
     if (!file) { setError('Primero toma o elige una foto de la boleta'); return; }
+    setError(null);
+    const toUpload = await compressImage(file);
     const fd = new FormData();
-    fd.set('file', file);
+    fd.set('file', toUpload);
     fd.set('project_select', projectSel);
     fd.set('notas', notas);
     start(async () => {
-      const res = await createExpenseCapture(fd);
-      if (res?.error) { setError(res.error); return; }
-      // Listo para cargar otra
-      pick(null);
-      setNotas('');
-      setProjectSel('');
-      if (cameraRef.current) cameraRef.current.value = '';
-      if (galleryRef.current) galleryRef.current.value = '';
-      setDoneCount((n) => n + 1);
+      try {
+        const res = await createExpenseCapture(fd);
+        if (res?.error) { setError(res.error); return; }
+        // Listo para cargar otra
+        pick(null);
+        setNotas('');
+        setProjectSel('');
+        if (cameraRef.current) cameraRef.current.value = '';
+        if (galleryRef.current) galleryRef.current.value = '';
+        setDoneCount((n) => n + 1);
+      } catch (e) {
+        setError('No se pudo enviar: ' + (e instanceof Error ? e.message : 'error inesperado'));
+      }
     });
   }
 
