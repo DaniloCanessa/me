@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { createExpenseCapture } from '@/app/admin/gastos/actions';
 
 type ProjectOpt = { id: string; nombre: string };
@@ -14,8 +15,14 @@ export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[
   const [doneCount, setDoneCount] = useState(0);
   const [isPending, start] = useTransition();
 
+  const router = useRouter();
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+
+  function cancel() {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+    else router.push('/admin/gastos');
+  }
 
   function pick(f: File | null) {
     setError(null);
@@ -113,10 +120,16 @@ export default function CaptureExpenseForm({ projects }: { projects: ProjectOpt[
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button onClick={submit} disabled={isPending || !file}
-        className="bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white rounded-xl py-3 text-sm font-semibold transition-colors">
-        {isPending ? 'Enviando…' : 'Enviar a revisión'}
-      </button>
+      <div className="flex gap-3">
+        <button type="button" onClick={cancel} disabled={isPending}
+          className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl py-3 text-sm font-medium transition-colors disabled:opacity-50">
+          Cancelar
+        </button>
+        <button onClick={submit} disabled={isPending || !file}
+          className="flex-1 bg-[#389fe0] hover:bg-[#1d65c5] disabled:opacity-50 text-white rounded-xl py-3 text-sm font-semibold transition-colors">
+          {isPending ? 'Enviando…' : 'Enviar a revisión'}
+        </button>
+      </div>
     </div>
   );
 }
