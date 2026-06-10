@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 7 de junio 2026 (sesión 22 — SEO completo para cambio de dominio, optimizaciones y ajustes de UI)
+> Última actualización: 9 de junio 2026 (sesión 23 — redirecciones 301 del sitio antiguo, PWA instalable y backoffice responsive en móvil)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app (dominio definitivo en preparación: www.mercadoenergy.cl)
 
@@ -8,9 +8,11 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 a 22 completadas, commiteadas y desplegadas** (últimos commits: `aa3e1a7`, `f01d144`, `aed56a4`, `13d9491`, `0677673`, `13c1a99`).
+**Sesiones 17 a 23 completadas, commiteadas y desplegadas** (commits sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle).
 
-**🔜 CAMBIO DE DOMINIO EN CURSO (lo más importante al reabrir):** se va a apuntar el dominio de NIC Chile a Vercel para que este proyecto reemplace el sitio actual de Mercado Energy. El SEO ya está implementado y desplegado para `www.mercadoenergy.cl` (canónico). **Acciones del usuario pendientes:** (1) alta del dominio `www.mercadoenergy.cl` + apex en Vercel y cargar los DNS en NIC Chile; (2) verificar en Google Search Console + Bing y enviar el sitemap; (3) redirección 301 de `mercado-energy.vercel.app` → dominio nuevo. **Pendiente conmigo:** el usuario debe pasar las **URLs del sitio viejo que posicionan en Google** para crear redirecciones 301 y no perder ranking (si las rutas coinciden con las nuestras, no hace falta nada).
+**🔜 CAMBIO DE DOMINIO EN CURSO (lo más importante al reabrir):** se va a apuntar el dominio de NIC Chile a Vercel para que este proyecto reemplace el sitio actual de Mercado Energy. El SEO ya está implementado y desplegado para `www.mercadoenergy.cl` (canónico). **Acciones del usuario pendientes:** (1) alta del dominio `www.mercadoenergy.cl` + apex en Vercel y cargar los DNS en NIC Chile; (2) verificar en Google Search Console + Bing y enviar el sitemap; (3) redirección 301 de `mercado-energy.vercel.app` → dominio nuevo. **Redirecciones 301 YA IMPLEMENTADAS Y DESPLEGADAS (sesión 23, commit `c0bb683`):** navegué el sitemap del sitio viejo (154 URLs, era una tienda e-commerce) y armé las 301 en `next.config.ts` — institucionales 1:1 + las ~145 fichas de producto a `/soluciones` por categoría (catch-all). Se activan cuando el dominio nuevo sirva este proyecto. Si el usuario detecta URLs viejas de alto tráfico que merecen un destino más específico, se ajustan puntualmente.
+
+**📱 APP MÓVIL (PWA) — Fases 1 y 2 LISTAS Y DESPLEGADAS (sesión 23):** el sitio es ahora una PWA instalable para uso interno. Se instala desde el navegador del celular entrando a `/admin` → "Agregar a pantalla de inicio"; queda con ícono "me" (rayo + círculo) y abre en pantalla completa en el login del admin. El backoffice completo es responsive (listas como tarjetas, detalles con scroll/apilado). **🔜 Siguiente feature grande (diseñado, sin construir): captura de gastos** — ver decisiones en el bloque de la sesión 23 más abajo.
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
 
@@ -29,7 +31,7 @@
 **Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
 **Pendientes (media prioridad):**
-- **Redirecciones 301 del sitio viejo** (cuando el usuario pase las URLs que posicionan en Google) — se implementarían en `next.config`/`vercel.ts` o `proxy.ts`
+- **Flujo de captura de gastos** (diseñado en sesión 23, sin construir): link de captura en el CRM + OCR de boletas de compra + bandeja de aprobación. Requiere SQL nuevo en Supabase y un extractor OCR nuevo (`/api/parse-receipt`) — el OCR actual (`/api/parse-bill`) es solo para boletas de luz. Ver decisiones detalladas en el bloque de la sesión 23
 - Comprimir fotos pesadas de proyectos (`casa-carlos-alvarado.jpg` 9 MB, `poroma-img.jpg` 3,6 MB, `panaderia-san-bernardo.jpg` 3 MB) — ffmpeg quedó instalado en el sistema; `next/image` ya las optimiza al servir pero el origen es pesado
 - Conteo de leads en `/admin/leads` trae todas las filas y cortaría en 1.000 (mismo límite Supabase de sesión 18); hoy no afecta, cambiar a `count` exacto cuando crezca
 - Emojis de avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) → íconos SVG (requiere correr el wizard completo para verificar cada aviso)
@@ -76,6 +78,28 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 23 (9 junio 2026) — Redirecciones 301 del sitio antiguo, PWA (app móvil) y backoffice responsive (commits `c0bb683`, `3c21cfc`, `9088990`, `360a378`):**
+
+- **Redirecciones 301 del sitio antiguo (`next.config.ts`, commit `c0bb683`):** se navegó el sitemap del sitio actual (`www.mercadoenergy.cl`, 154 URLs, era una tienda e-commerce). Función `redirects()` con `statusCode: 301` literal (no `permanent: true`, que en Next.js emite 308 — la doc en `node_modules/next/dist/docs` lo confirma):
+  - Institucionales 1:1: `/nosostros`→`/nosotros`, `/contact`→`/contacto`, `/servicios`→`/soluciones`, `/terminos-y-condiciones`→`/terminos`, `/politica-de-privacidad`→`/privacidad`, `/politica-de-reembolso`→`/devoluciones`, `/forma-de-pago`→`/net-billing`, `/blog` y `/entrada-del-blog`→`/`
+  - ~145 fichas de producto (solar, climatización, calefont/termos, piscinas, accesorios) → `/soluciones` con reglas de prefijo/comodín por categoría (decisión del usuario: catch-all a `/soluciones`)
+  - Verificado con dev server real (curl): todas devuelven 301 al destino correcto; las páginas propias siguen en 200. **Se activan cuando el dominio nuevo sirva este proyecto**
+- **PWA instalable — Fase 1 de la app móvil (commits `c0bb683` + `3c21cfc` ícono):**
+  - `app/manifest.ts` (convención Next 16): `name "Mercado Energy"`, `short_name "me"`, `start_url /admin`, `scope /`, `display standalone`, `theme_color #1d65c5`
+  - `public/sw.js` (service worker mínimo, sin offline aún) + `components/ServiceWorkerRegister.tsx` (registro en cliente, montado en `app/layout.tsx`). Headers de `/sw.js` (content-type + no-cache) y `viewport.themeColor` en el layout raíz
+  - Íconos generados con `sharp` desde el logo (rayo + círculo + "me"): `public/icons/icon-192/512/maskable-512.png` + `app/apple-icon.png`
+  - **Backoffice con drawer móvil:** `components/admin/AdminShell.tsx` (nuevo) — en escritorio el sidebar es fijo (igual que antes); en móvil es un drawer off-canvas con barra superior + hamburguesa, se cierra al navegar. `AdminSidebar` ganó prop `onNavigate` + altura completa. `app/admin/layout.tsx` ahora usa `AdminShell`
+  - **Push notifications**: pendiente para Fase 3 (sumar listeners `push`/`notificationclick` al SW + VAPID). **Se evita Serwist** (offline) porque requiere webpack y el proyecto usa Turbopack
+- **Backoffice responsive Fase 2 — tablas a tarjetas (commit `9088990` listas, `360a378` detalle):**
+  - Patrón: tabla en escritorio (`hidden md:table`) + tarjetas apiladas en móvil (`md:hidden`), compartiendo estado y handlers. **Listas:** Proyectos (`ProjectsTable`), Cotizaciones (`QuotesTable`), Leads (con `StatusSelect` + drawer `LeadDetail`), Productos (`ProductsManager`, sidebar de categorías → `<select>` en móvil), Clientes (`ClientsManager`), Config (`ConfigTable`, edición inline conservada), Usuarios (`UsersManager`)
+  - **Detalle:** `ProjectDetail` — sus 8 tablas financieras (ítems, compras por ítem, compras sin ítem, factura multi-ítem, costos, pagos, cuenta corriente, cotización original) envueltas en scroll horizontal con ancho mínimo (mejor que tarjetas para grillas de comparación por columna) + padding lateral reducido en móvil. `LeadCRM` — barra de tabs con scroll horizontal. `QuoteEditor` — layout de 2 columnas se apila en móvil, panel a ancho completo (la tabla ya tenía scroll). Licitaciones — solo padding (ya usaba tarjetas). El **dashboard ya era responsive** (grids + listas tipo tarjeta)
+  - Verificado: `tsc --noEmit` limpio + `npm run build` OK en cada tramo. Prueba visual del admin autenticado queda pendiente en dispositivo (no hay sesión admin por terminal)
+- **Feature de captura de gastos — DISEÑADO, sin construir (decisiones del usuario para retomar):**
+  - **Hallazgo clave:** el OCR actual (`/api/parse-bill`, Opus 4.8) es solo para **boletas de electricidad** (distribuidora, tarifa, gráfico 13 meses). Para gastos hay que crear un extractor nuevo (`/api/parse-receipt`) para **boletas/facturas de compra** (proveedor, RUT, folio, fecha, neto, IVA, total), reusando la infraestructura existente (auth interno, Anthropic, imagen/PDF)
+  - **Entrada:** cámara **o** galería (`<input capture>` / selección de archivo) — la foto puede llegar por WhatsApp de un tercero no familiarizado con el sistema
+  - **Arquitectura acordada:** separar **captura** (cualquiera: foto + proyecto, baja fricción) de **clasificación** (admin completa proyecto/ítem/IVA y aprueba) → bandeja "gastos por revisar". **Link de captura en el CRM desde el inicio** (el usuario sumará otro usuario pronto). La **aprobación no queda amarrada solo al admin** (que otra persona pueda aprobar; nada burocrático). Más adelante: sección de **usuarios con perfiles/roles**
+  - **Flujo:** imagen → OCR automático → seleccionar proyecto → ítem único o de la lista de compra → confirmar datos pre-llenados → guardar (`addProjectPurchase`, ya soporta el selector Neto/Incluye IVA de la sesión 21). Mapea a `project_purchases` (existente). **v2:** auto-match de ítems de la boleta contra la lista de compra del proyecto; boletas multi-ítem en una pasada
 
 **Desarrollos sesión 22 (7 junio 2026) — SEO para cambio de dominio, optimizaciones y ajustes de UI (commits `f01d144`, `aed56a4`, `13d9491`, `0677673`, `13c1a99`):**
 
