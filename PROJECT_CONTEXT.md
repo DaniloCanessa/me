@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 9 de junio 2026 (sesión 23 — redirecciones 301 del sitio antiguo, PWA instalable y backoffice responsive en móvil)
+> Última actualización: 9 de junio 2026 (sesión 24 — flujo de captura de gastos: boletas de compra con OCR y bandeja de aprobación)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: https://mercado-energy.vercel.app (dominio definitivo en preparación: www.mercadoenergy.cl)
 
@@ -8,11 +8,13 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 a 23 completadas, commiteadas y desplegadas** (commits sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle).
+**Sesiones 17 a 24 completadas, commiteadas y desplegadas.** Sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle. **Sesión 24:** `2aad819` flujo de captura de gastos (requiere la migración `supabase/expense_captures.sql`, ya ejecutada por el usuario).
 
 **🔜 CAMBIO DE DOMINIO EN CURSO (lo más importante al reabrir):** se va a apuntar el dominio de NIC Chile a Vercel para que este proyecto reemplace el sitio actual de Mercado Energy. El SEO ya está implementado y desplegado para `www.mercadoenergy.cl` (canónico). **Acciones del usuario pendientes:** (1) alta del dominio `www.mercadoenergy.cl` + apex en Vercel y cargar los DNS en NIC Chile; (2) verificar en Google Search Console + Bing y enviar el sitemap; (3) redirección 301 de `mercado-energy.vercel.app` → dominio nuevo. **Redirecciones 301 YA IMPLEMENTADAS Y DESPLEGADAS (sesión 23, commit `c0bb683`):** navegué el sitemap del sitio viejo (154 URLs, era una tienda e-commerce) y armé las 301 en `next.config.ts` — institucionales 1:1 + las ~145 fichas de producto a `/soluciones` por categoría (catch-all). Se activan cuando el dominio nuevo sirva este proyecto. Si el usuario detecta URLs viejas de alto tráfico que merecen un destino más específico, se ajustan puntualmente.
 
-**📱 APP MÓVIL (PWA) — Fases 1 y 2 LISTAS Y DESPLEGADAS (sesión 23):** el sitio es ahora una PWA instalable para uso interno. Se instala desde el navegador del celular entrando a `/admin` → "Agregar a pantalla de inicio"; queda con ícono "me" (rayo + círculo) y abre en pantalla completa en el login del admin. El backoffice completo es responsive (listas como tarjetas, detalles con scroll/apilado). **🔜 Siguiente feature grande (diseñado, sin construir): captura de gastos** — ver decisiones en el bloque de la sesión 23 más abajo.
+**📱 APP MÓVIL (PWA) — Fases 1 y 2 LISTAS Y DESPLEGADAS (sesión 23):** el sitio es ahora una PWA instalable para uso interno. Se instala desde el navegador del celular entrando a `/admin` → "Agregar a pantalla de inicio"; queda con ícono "me" (rayo + círculo) y abre en pantalla completa en el login del admin. El backoffice completo es responsive (listas como tarjetas, detalles con scroll/apilado).
+
+**🧾 CAPTURA DE GASTOS YA CONSTRUIDA Y DESPLEGADA (sesión 24):** bandeja en `/admin/gastos` — capturar boleta (cámara/galería) → revisar con OCR → aprobar. Con proyecto crea una compra (entra a la cuenta corriente); **sin proyecto** queda como gasto general. Ver detalle en el bloque de la sesión 24. **Verificación funcional end-to-end pendiente en dispositivo del usuario.**
 
 **Estado de Vercel:** proyecto vinculado a `danilo-canessas-projects/mercado-energy`, URL de producción `https://mercado-energy.vercel.app`. Variables de entorno en production: las históricas + **`MERCADO_PUBLICO_TICKET`** (ticket definitivo de ChileCompra, cargado) y **`CRON_SECRET`** (protege el cron de licitaciones).
 
@@ -31,7 +33,7 @@
 **Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
 **Pendientes (media prioridad):**
-- **Flujo de captura de gastos** (diseñado en sesión 23, sin construir): link de captura en el CRM + OCR de boletas de compra + bandeja de aprobación. Requiere SQL nuevo en Supabase y un extractor OCR nuevo (`/api/parse-receipt`) — el OCR actual (`/api/parse-bill`) es solo para boletas de luz. Ver decisiones detalladas en el bloque de la sesión 23
+- **Captura de gastos v2** (la v1 ya está desplegada en sesión 24): auto-match de ítems de la boleta contra la lista de compra del proyecto; boletas multi-ítem en una pasada; link de captura público (tokenizado, sin login) para terceros; badge de pendientes + notificación en el sidebar; vista/total de gastos generales (sin proyecto)
 - Comprimir fotos pesadas de proyectos (`casa-carlos-alvarado.jpg` 9 MB, `poroma-img.jpg` 3,6 MB, `panaderia-san-bernardo.jpg` 3 MB) — ffmpeg quedó instalado en el sistema; `next/image` ya las optimiza al servir pero el origen es pesado
 - Conteo de leads en `/admin/leads` trae todas las filas y cortaría en 1.000 (mismo límite Supabase de sesión 18); hoy no afecta, cambiar a `count` exacto cuando crezca
 - Emojis de avisos condicionales del Paso 7 del simulador (⚠️ 🔋 ⚙️ 💡 ❓ ℹ️ 🔴 ⚡) → íconos SVG (requiere correr el wizard completo para verificar cada aviso)
@@ -78,6 +80,19 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 24 (9 junio 2026) — Flujo de captura de gastos: boletas de compra con OCR y bandeja de aprobación (commit `2aad819` + migración `supabase/expense_captures.sql`):**
+
+- **Modelo:** tabla `expense_captures` (la bandeja) + bucket privado de Storage `receipts` (ambos creados en la misma migración). Cada boleta vive con su estado (`pendiente`/`aprobado`/`rechazado`), datos de la boleta (proveedor, rut, tipo, folio, fecha, neto, iva, total, `con_iva`) y `project_id` **nullable** (NULL = sin proyecto / gasto general de la empresa). Trazabilidad: `captured_by`, `reviewed_by`, `reviewed_at`, `purchase_id`, `ocr_status`, `ocr_json`
+- **Captura ≠ clasificación:** la captura es tonta (foto + proyecto opcional + nota); el **OCR corre al revisar**, no al capturar → se mantiene interno (admin) y el link de captura podrá abrirse a terceros más adelante sin exponerlo
+- **OCR nuevo `app/api/parse-receipt/route.ts`:** extractor para **boletas/facturas de compra chilenas** (emisor: razón social + RUT, tipo, folio, fecha, neto, IVA, total, si el total incluye IVA). Admin-only, Opus 4.8 (override `OCR_MODEL`), mock sin API key. Acepta archivo directo **o** una ruta del Storage (para la revisión). Es DISTINTO de `/api/parse-bill` (boletas de luz)
+- **`lib/db/expenses.ts`:** tipo `ExpenseCapture` + lecturas (`getExpenseCaptures`, `getExpenseCapture`, `countPendingExpenses`) + Storage (`uploadReceiptImage`, `getReceiptSignedUrl` con URL firmada 1 h). Bucket **privado**, todo server-side con la service role, sin políticas RLS
+- **Captura (`/admin/gastos/capturar` + `CaptureExpenseForm`):** dos botones **"Tomar foto"** (`<input capture="environment">`) y **"Elegir de galería"** (`accept image/*,application/pdf`). Selector de proyecto con 3 opciones: "Decidir al revisar", "Sin proyecto (gasto general)", o un proyecto vigente. Permite cargar varias seguidas
+- **Bandeja (`/admin/gastos` + `GastosManager`):** grilla de tarjetas filtrable por estado, con miniatura (URL firmada). Al abrir una: modal con la imagen, botón **"Procesar OCR"** (llama a `/api/parse-receipt`, rellena y persiste vía `saveExpenseCapture`), campos editables, selector de proyecto + ítem (cargado on-demand con `getProjectItemsForExpense`), toggle "el total incluye IVA", y **Aprobar / Rechazar / Eliminar**
+- **Aprobar (`app/admin/gastos/actions.ts`):** **con proyecto** → inserta un `project_purchase` (cantidad 1, precio = total, `con_iva` del toggle) que entra a la cuenta corriente del proyecto + enlaza `purchase_id`; **sin proyecto** → queda `aprobado` con `sin_proyecto=true` (no toca ninguna obra). Eliminar borra también la imagen del Storage. Aprobación **abierta** (cualquier usuario con sesión, no solo admin — decisión del usuario)
+- **`lib/auth.ts`:** nuevo `getAdminUser()` (payload del JWT) para `captured_by`/`reviewed_by`. Ítem **🧾 Gastos** agregado al `AdminSidebar`
+- **Verificado:** `tsc` limpio + build OK; el usuario ejecutó la migración en Supabase. **Prueba funcional end-to-end pendiente en su dispositivo**
+- **Pendiente v2:** auto-match de ítems de la boleta vs lista de compra; boletas multi-ítem; link de captura público/tokenizado para terceros; badge de pendientes + notificación; vista de gastos generales
 
 **Desarrollos sesión 23 (9 junio 2026) — Redirecciones 301 del sitio antiguo, PWA (app móvil) y backoffice responsive (commits `c0bb683`, `3c21cfc`, `9088990`, `360a378`):**
 
