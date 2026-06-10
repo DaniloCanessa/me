@@ -133,6 +133,7 @@ function ReviewModal({
   const [d, setD] = useState<Draft>(() => draftFrom(capture));
   const [items, setItems] = useState<Array<{ id: string; description: string }>>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMock, setOcrMock] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, start] = useTransition();
   const readOnly = capture.status !== 'pendiente';
@@ -156,6 +157,7 @@ function ReviewModal({
       const res = await fetch('/api/parse-receipt', { method: 'POST', body: fd });
       const json = await res.json();
       if (!json.ok) { setError(json.message ?? 'No se pudo leer la boleta'); return; }
+      setOcrMock(!!json.mock);
       const x = json.data as {
         proveedor?: string; rut?: string; tipo?: string; folio?: string; fecha?: string;
         neto?: number; iva?: number; total?: number; incluyeIva?: boolean;
@@ -232,6 +234,11 @@ function ReviewModal({
                 className="rounded-xl border border-[#389fe0] text-[#1d65c5] hover:bg-[#389fe0]/5 disabled:opacity-50 py-2 text-sm font-semibold transition-colors">
                 {ocrLoading ? 'Leyendo la boleta…' : '⚙️ Procesar OCR (rellenar datos)'}
               </button>
+            )}
+            {ocrMock && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ⚠ OCR en <b>modo demo</b>: falta <code>ANTHROPIC_API_KEY</code> en el entorno. Los datos mostrados son de ejemplo, no de tu boleta.
+              </p>
             )}
           </div>
 
