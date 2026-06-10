@@ -237,6 +237,7 @@ export default function ProjectDetail({
   payments: initPayments,
   purchases: initPurchases,
   quoteItems,
+  receiptUrls = {},
 }: {
   project:    ProjectRow;
   items:      ProjectItem[];
@@ -244,6 +245,7 @@ export default function ProjectDetail({
   payments:   ProjectPayment[];
   purchases:  ProjectPurchase[];
   quoteItems: QuoteItem[];
+  receiptUrls?: Record<string, string>;
 }) {
   const router = useRouter();
   const [tab, setTab]               = useState<Tab>('resumen');
@@ -1125,7 +1127,11 @@ export default function ProjectDetail({
                                   </td>
                                   <td></td>
                                   <td className="px-4 py-2.5 text-right" onClick={e => e.stopPropagation()}>
-                                    <div className="flex gap-3 justify-end">
+                                    <div className="flex gap-3 justify-end items-center">
+                                      {receiptUrls[purchase.id] && (
+                                        <a href={receiptUrls[purchase.id]} target="_blank" rel="noopener noreferrer"
+                                          className="text-xs text-gray-400 hover:text-[#389fe0]" title="Ver boleta">📎</a>
+                                      )}
                                       <button
                                         onClick={() => setEditingPurchase(purchase)}
                                         className="text-xs text-[#389fe0] hover:underline"
@@ -1239,7 +1245,11 @@ export default function ProjectDetail({
                           </td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{clp(purchase.monto_clp)}</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex gap-3 justify-end">
+                            <div className="flex gap-3 justify-end items-center">
+                              {receiptUrls[purchase.id] && (
+                                <a href={receiptUrls[purchase.id]} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-gray-400 hover:text-[#389fe0]" title="Ver boleta">📎</a>
+                              )}
                               <button onClick={() => setEditingPurchase(purchase)}
                                 className="text-xs text-[#389fe0] hover:underline">Editar</button>
                               <button onClick={() => handleDeletePurchase(purchase)}
@@ -1872,6 +1882,10 @@ export default function ProjectDetail({
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${m.badgeColor}`}>{m.badge}</span>
                                   <span className="text-sm text-gray-700">{m.concepto}</span>
+                                  {receiptUrls[m.id] && (
+                                    <a href={receiptUrls[m.id]} target="_blank" rel="noopener noreferrer"
+                                      className="text-xs text-[#389fe0] hover:underline">📎 boleta</a>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-right">
