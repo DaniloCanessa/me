@@ -750,7 +750,7 @@ export default function ProjectDetail({
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
+      <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-screen-2xl mx-auto">
           <a href="/admin/projects" className="text-xs text-gray-400 hover:text-gray-600 mb-3 inline-block">← Proyectos</a>
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -773,7 +773,7 @@ export default function ProjectDetail({
       </div>
 
       {/* ── KPIs financieros ───────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
+      <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4">
         <div className="max-w-screen-2xl mx-auto grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           {([
             { label: 'Ingresos',           ci: revenue,       si: revenueSinIva,  isPct: false, color: 'text-gray-900' },
@@ -822,7 +822,7 @@ export default function ProjectDetail({
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-screen-2xl mx-auto px-6 flex gap-0 overflow-x-auto">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 flex gap-0 overflow-x-auto">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -834,7 +834,7 @@ export default function ProjectDetail({
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-6 py-6">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
 
         {/* ═══ RESUMEN ══════════════════════════════════════════════════════ */}
         {tab === 'resumen' && (
@@ -893,7 +893,7 @@ export default function ProjectDetail({
               {items.length === 0 && !showAddItem ? (
                 <p className="text-sm text-gray-400 text-center py-10">Sin ítems. Agrega o importa desde la cotización original.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Descripción</th>
@@ -930,7 +930,7 @@ export default function ProjectDetail({
                       <ItemForm item={null} onSubmit={handleUpsertItem} onCancel={() => setShowAddItem(false)} isPending={isItemPending} />
                     )}
                   </tbody>
-                </table>
+                </table></div>
               )}
 
               {items.length > 0 && (
@@ -1005,7 +1005,7 @@ export default function ProjectDetail({
                   Sin ítems. Agrega ítems al proyecto primero.
                 </p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Ítem</th>
@@ -1181,7 +1181,7 @@ export default function ProjectDetail({
                       <td></td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               )}
             </div>
 
@@ -1191,7 +1191,7 @@ export default function ProjectDetail({
                 <div className="px-5 py-3 border-b border-gray-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sin ítem asignado</p>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <tbody>
                     {purchases.filter(p => !p.project_item_id).map(purchase => (
                       editingPurchase?.id === purchase.id ? (
@@ -1250,7 +1250,7 @@ export default function ProjectDetail({
                       )
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             )}
           </div>
@@ -1343,7 +1343,7 @@ export default function ProjectDetail({
                       ☑ Seleccionar ítems con monto pendiente →
                     </button>
                   </div>
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                         <th className="text-center px-2 py-2.5 font-medium w-10">
@@ -1446,7 +1446,7 @@ export default function ProjectDetail({
                         <td className="px-3 py-3 text-right text-sm font-bold text-[#1d65c5] tabular-nums">{clp(totalMulti)}</td>
                       </tr>
                     </tfoot>
-                  </table>
+                  </table></div>
                 </div>
 
                 {/* Footer */}
@@ -1573,7 +1573,7 @@ export default function ProjectDetail({
               {costs.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-10">Sin costos adicionales registrados.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Descripción</th>
@@ -1626,7 +1626,7 @@ export default function ProjectDetail({
                       <td></td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               )}
             </div>
           </div>
@@ -1692,7 +1692,7 @@ export default function ProjectDetail({
               {payments.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-10">Sin pagos registrados.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Fecha</th>
@@ -1734,7 +1734,7 @@ export default function ProjectDetail({
                       </tr>
                     )}
                   </tfoot>
-                </table>
+                </table></div>
               )}
             </div>
           </div>
@@ -1847,7 +1847,7 @@ export default function ProjectDetail({
                 {movements.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-10">Sin movimientos registrados aún.</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                         <th className="text-left px-5 py-2 font-medium">Fecha</th>
@@ -1910,7 +1910,7 @@ export default function ProjectDetail({
                         </td>
                       </tr>
                     </tfoot>
-                  </table>
+                  </table></div>
                 )}
               </div>
             </div>
@@ -1966,7 +1966,7 @@ export default function ProjectDetail({
               <p className="text-sm text-gray-400 text-center py-10">Sin cotización vinculada.</p>
             ) : (
               <>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm min-w-[620px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
                       <th className="text-left px-4 py-2 font-medium">Descripción</th>
@@ -1995,7 +1995,7 @@ export default function ProjectDetail({
                       </td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               </>
             )}
           </div>

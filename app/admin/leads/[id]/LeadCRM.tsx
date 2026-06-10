@@ -276,7 +276,7 @@ export default function LeadCRM({
 
       {/* ── Tab nav ────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-6 flex gap-0">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex gap-0 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
@@ -294,7 +294,7 @@ export default function LeadCRM({
       </div>
 
       {/* ── Tab content ────────────────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-6 py-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
         {/* ═══ SIMULACIÓN ═══════════════════════════════════════════════════ */}
         {tab === 'simulacion' && (

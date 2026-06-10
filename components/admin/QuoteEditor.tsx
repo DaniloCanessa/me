@@ -640,7 +640,7 @@ export default function QuoteEditor({
         </div>
       </div>
 
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         {/* Columna principal: tabla de ítems */}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
           {/* Tabla */}
@@ -765,7 +765,7 @@ export default function QuoteEditor({
             </button>
           </div>
         )}
-        {showPanel && <div className="shrink-0 w-72 flex flex-col gap-4">
+        {showPanel && <div className="shrink-0 w-full lg:w-72 flex flex-col gap-4">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-semibold text-gray-900">Datos de la cotización</p>
