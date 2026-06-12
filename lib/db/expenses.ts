@@ -3,6 +3,19 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 export type ExpenseStatus = 'pendiente' | 'aprobado' | 'rechazado';
 export type OcrStatus = 'pendiente' | 'ok' | 'error';
 
+// Categorías para gastos generales (overhead de la empresa, sin proyecto).
+export const GENERAL_EXPENSE_CATEGORIES = [
+  'Arriendo',
+  'Sueldos',
+  'Honorarios',
+  'Servicios básicos',
+  'Marketing',
+  'Transporte',
+  'Oficina',
+  'Impuestos',
+  'Otros',
+] as const;
+
 // Una boleta/factura capturada en la bandeja de gastos.
 export type ExpenseCapture = {
   id: string;
@@ -15,6 +28,7 @@ export type ExpenseCapture = {
   proveedor: string | null;
   rut: string | null;
   tipo: string | null;
+  categoria: string | null;   // para gastos generales (sin proyecto)
   folio: string | null;
   fecha: string | null;
   neto: number | null;

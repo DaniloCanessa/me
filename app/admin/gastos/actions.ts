@@ -55,6 +55,55 @@ export async function createExpenseCapture(formData: FormData) {
   return { ok: true };
 }
 
+// ─── Gasto general manual (sin proyecto, aprobado directo) ────────────────────
+
+export async function createGeneralExpense(formData: FormData) {
+  const monto = numOrNull(formData.get('total'));
+  if (!monto || monto <= 0) return { error: 'Ingresa un monto válido' };
+
+  const categoria = (formData.get('categoria') as string) || 'Otros';
+  const fecha = (formData.get('fecha') as string) || new Date().toISOString().slice(0, 10);
+  const conIva = formData.get('con_iva') === 'true';
+  const proveedor = (formData.get('proveedor') as string) || null;
+  const notas = (formData.get('notas') as string) || null;
+
+  // Foto opcional (muchos gastos generales no tienen boleta para fotografiar).
+  let image_path: string | null = null;
+  const file = formData.get('file') as File | null;
+  if (file && file.size > 0) {
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      image_path = await uploadReceiptImage(await file.arrayBuffer(), ext, file.type || 'image/jpeg');
+    } catch { /* la foto es opcional: si falla la subida, seguimos sin imagen */ }
+  }
+
+  const user = await getAdminUser();
+  const db = getSupabaseAdmin();
+  const now = new Date().toISOString();
+
+  const { error } = await db.from('expense_captures').insert({
+    image_path,
+    status:       'aprobado',
+    sin_proyecto: true,
+    project_id:   null,
+    categoria,
+    tipo:         'gasto_general',
+    total:        monto,
+    con_iva:      conIva,
+    fecha,
+    proveedor,
+    notas,
+    captured_by:  user?.name ?? user?.email ?? 'desconocido',
+    reviewed_by:  user?.name ?? user?.email ?? null,
+    reviewed_at:  now,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath('/admin/gastos');
+  revalidatePath('/admin/finanzas');
+  return { ok: true };
+}
+
 // ─── Guardar edición / resultado del OCR (sin cambiar estado) ─────────────────
 
 export async function saveExpenseCapture(id: string, formData: FormData) {

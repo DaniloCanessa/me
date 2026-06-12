@@ -10,6 +10,7 @@ const NAV_MAIN = [
   { href: '/admin/quotes',   label: 'Cotizaciones',  icon: '📋' },
   { href: '/admin/projects', label: 'Proyectos',     icon: '🏗️' },
   { href: '/admin/gastos',   label: 'Gastos',        icon: '🧾' },
+  { href: '/admin/finanzas', label: 'Finanzas',      icon: '📊' },
   { href: '/admin/licitaciones', label: 'Licitaciones', icon: '🏛️' },
   { href: '/admin/simulator', label: 'Simulador',    icon: '⚡' },
 ];
