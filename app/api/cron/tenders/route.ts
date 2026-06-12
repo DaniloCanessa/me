@@ -1,4 +1,4 @@
-import { syncTenders } from '@/lib/mercadopublico';
+import { syncTenders, sendTestTenderNotification } from '@/lib/mercadopublico';
 import { isAdminAuthenticated } from '@/lib/auth';
 
 export const maxDuration = 300; // la sincronización puede tardar (rate limit ~1 req/s)
@@ -14,6 +14,14 @@ export async function GET(request: Request) {
 
   if (!isCron && !(await isAdminAuthenticated())) {
     return Response.json({ ok: false, message: 'No autorizado' }, { status: 401 });
+  }
+
+  // Modo prueba (?test): envía un correo con las últimas licitaciones para
+  // verificar el envío, sin tocar la lógica diaria. Solo admin.
+  if (new URL(request.url).searchParams.get('test') !== null) {
+    const result = await sendTestTenderNotification();
+    console.log('[cron/tenders] TEST', JSON.stringify(result));
+    return Response.json(result);
   }
 
   try {

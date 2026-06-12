@@ -284,3 +284,25 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
     return false;
   }
 }
+
+// Envía un correo de PRUEBA con las últimas licitaciones guardadas, por el
+// mismo camino real de notificación. Sirve para verificar el envío end-to-end
+// sin esperar a que aparezcan nuevas. La lógica diaria NO cambia.
+export async function sendTestTenderNotification(): Promise<{ ok: boolean; sent: number; reason?: string }> {
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from('tenders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(3);
+  const tenders = (data ?? []) as Tender[];
+  if (tenders.length === 0) {
+    return { ok: false, sent: 0, reason: 'No hay licitaciones en la base para la prueba.' };
+  }
+  const ok = await notifyNewTenders(tenders);
+  return {
+    ok,
+    sent: ok ? tenders.length : 0,
+    reason: ok ? undefined : 'Resend no envió — revisa RESEND_API_KEY o los destinatarios en /admin/licitaciones.',
+  };
+}
