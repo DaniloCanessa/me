@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
+  const rl = rateLimit(`forgot:${clientIp(request)}`, 5, 60 * 60 * 1000);
+  if (!rl.ok) return tooMany(rl.retryAfter);
+
   const { email } = await request.json() as { email?: string };
   if (!email) return NextResponse.json({ error: 'Email requerido' }, { status: 400 });
 

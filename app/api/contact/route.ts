@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
 
 interface ContactPayload {
   name: string;
@@ -10,6 +11,9 @@ interface ContactPayload {
 }
 
 export async function POST(request: Request) {
+  const rl = rateLimit(`contact:${clientIp(request)}`, 10, 60 * 60 * 1000);
+  if (!rl.ok) return tooMany(rl.retryAfter);
+
   const resend = new Resend(process.env.RESEND_API_KEY);
   const recipient = process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com';
 

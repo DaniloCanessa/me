@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import bcrypt from 'bcryptjs';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
+  // Anti fuerza-bruta: máx. 10 intentos por IP cada 15 min.
+  const rl = rateLimit(`login:${clientIp(request)}`, 10, 15 * 60 * 1000);
+  if (!rl.ok) return tooMany(rl.retryAfter);
+
   const { email, password } = await request.json() as { email?: string; password?: string };
 
   if (!email || !password) {
@@ -40,7 +45,7 @@ export async function POST(request: Request) {
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime('12h')
     .sign(secret);
 
   const response = NextResponse.json({ ok: true, name: user.name, role: user.role });
@@ -49,7 +54,7 @@ export async function POST(request: Request) {
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path:     '/',
-    maxAge:   60 * 60 * 24 * 7,
+    maxAge:   60 * 60 * 12,
   });
   return response;
 }

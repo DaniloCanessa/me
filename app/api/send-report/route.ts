@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  // Ruta pública (el simulador la usa para enviar el informe al cliente).
+  // Sin protección sería un relay de correo: se limita por IP y se acotan
+  // formato/tamaño para evitar abuso como spam desde el dominio.
+  const rl = rateLimit(`send-report:${clientIp(req)}`, 5, 60 * 60 * 1000);
+  if (!rl.ok) return tooMany(rl.retryAfter);
+
   const { Resend } = await import('resend');
   const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -10,6 +17,12 @@ export async function POST(req: NextRequest) {
     clientEmail: string;
     clientName: string;
   };
+
+  const emailOk = typeof clientEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail);
+  if (!emailOk) return NextResponse.json({ error: 'Email inválido' }, { status: 400 });
+  if (typeof pdfBase64 !== 'string' || pdfBase64.length > 7_000_000) {
+    return NextResponse.json({ error: 'Adjunto inválido o demasiado grande' }, { status: 413 });
+  }
 
   const { error } = await resend.emails.send({
     from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',

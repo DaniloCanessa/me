@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
 
 // ─── Tipos del payload ────────────────────────────────────────────────────────
 
@@ -240,6 +241,9 @@ function buildClientEmailHtml(lead: LeadPayload): string {
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  const rl = rateLimit(`leads:${clientIp(request)}`, 30, 60 * 60 * 1000);
+  if (!rl.ok) return tooMany(rl.retryAfter);
+
   const resend = new Resend(process.env.RESEND_API_KEY);
   const recipient = process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com';
 
