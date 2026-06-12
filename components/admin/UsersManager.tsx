@@ -6,6 +6,7 @@ import {
   createUser, updateUser, resetPassword,
   toggleUserActive, deleteUser,
 } from '@/app/admin/users/actions';
+import { PASSWORD_RULES } from '@/lib/password';
 
 const PROTECTED_EMAIL = 'danilo.canessa@gmail.com';
 
@@ -94,8 +95,9 @@ function UserModal({
               <label className="block">
                 <span className="text-xs text-gray-500 mb-1 block">Contraseña *</span>
                 <input name="password" type="password" required minLength={8}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Contraseña"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+                <span className="text-[11px] text-gray-400 mt-1 block">{PASSWORD_RULES}</span>
               </label>
             )}
             <div className="flex gap-3 pt-1">
@@ -121,8 +123,9 @@ function UserModal({
             <label className="block">
               <span className="text-xs text-gray-500 mb-1 block">Nueva contraseña *</span>
               <input name="password" type="password" required minLength={8}
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Nueva contraseña"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+              <span className="text-[11px] text-gray-400 mt-1 block">{PASSWORD_RULES}</span>
             </label>
             <div className="flex gap-3 pt-1">
               <button type="button" onClick={onClose}

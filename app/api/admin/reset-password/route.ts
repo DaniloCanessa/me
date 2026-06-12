@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { validatePassword } from '@/lib/password';
 
 export async function POST(request: Request) {
   const { token, password } = await request.json() as { token?: string; password?: string };
 
-  if (!token || !password || password.length < 8) {
+  if (!token || typeof password !== 'string') {
     return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 });
   }
+  const pwErr = validatePassword(password);
+  if (pwErr) return NextResponse.json({ error: pwErr }, { status: 400 });
 
   const db = getSupabaseAdmin();
   const { data: user } = await db

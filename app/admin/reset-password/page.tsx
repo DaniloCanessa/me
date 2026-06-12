@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { PASSWORD_RULES } from '@/lib/password';
 
 function ResetPasswordForm() {
   const params = useSearchParams();
@@ -65,7 +66,7 @@ function ResetPasswordForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <input
         type="password"
-        placeholder="Nueva contraseña (mín. 8 caracteres)"
+        placeholder="Nueva contraseña"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
@@ -73,6 +74,7 @@ function ResetPasswordForm() {
         autoFocus
         className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]"
       />
+      <p className="text-[11px] text-gray-400 -mt-1">{PASSWORD_RULES}</p>
       <input
         type="password"
         placeholder="Confirmar contraseña"

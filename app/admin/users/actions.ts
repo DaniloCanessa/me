@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import bcrypt from 'bcryptjs';
+import { validatePassword } from '@/lib/password';
 
 const PROTECTED_EMAIL = 'danilo.canessa@gmail.com';
 
@@ -13,7 +14,8 @@ export async function createUser(formData: FormData) {
   const password = formData.get('password') as string;
 
   if (!email || !name || !password) return { error: 'Campos requeridos incompletos' };
-  if (password.length < 8) return { error: 'La contraseña debe tener al menos 8 caracteres' };
+  const pwErr = validatePassword(password);
+  if (pwErr) return { error: pwErr };
 
   const password_hash = await bcrypt.hash(password, 12);
   const db = getSupabaseAdmin();
@@ -42,7 +44,8 @@ export async function updateUser(id: string, formData: FormData) {
 
 export async function resetPassword(id: string, formData: FormData) {
   const password = formData.get('password') as string;
-  if (!password || password.length < 8) return { error: 'Mínimo 8 caracteres' };
+  const pwErr = validatePassword(password);
+  if (pwErr) return { error: pwErr };
 
   const password_hash = await bcrypt.hash(password, 12);
   const db = getSupabaseAdmin();
