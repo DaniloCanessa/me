@@ -294,14 +294,14 @@ export async function POST(request: Request) {
   try {
     const [operatorResult, clientResult] = await Promise.allSettled([
       resend.emails.send({
-        from: 'Mercado Energy <onboarding@resend.dev>',
+        from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
         to: [recipient],
         replyTo: body.contact.email,
         subject: `Nuevo lead solar — ${displayName ?? body.contact.email} (${body.simulation.regionName})`,
         html: buildEmailHtml(body),
       }),
       resend.emails.send({
-        from: 'Mercado Energy <onboarding@resend.dev>',
+        from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
         to: [body.contact.email],
         subject: 'Tu propuesta solar está lista — Mercado Energy',
         html: buildClientEmailHtml(body),

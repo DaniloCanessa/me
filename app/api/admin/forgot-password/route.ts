@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   await resend.emails.send({
-    from:    'Mercado Energy <onboarding@resend.dev>',
+    from:    'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
     to:      user.email,
     subject: 'Restablecer contraseña — Mercado Energy Back-office',
     html: `

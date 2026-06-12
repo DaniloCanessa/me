@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   };
 
   const { error } = await resend.emails.send({
-    from: 'Mercado Energy <onboarding@resend.dev>',
+    from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
     to: clientEmail,
     replyTo: process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com',
     subject: 'Tu simulación solar — Mercado Energy',

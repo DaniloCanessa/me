@@ -273,7 +273,7 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
 
   try {
     await resend.emails.send({
-      from: 'Mercado Energy <onboarding@resend.dev>',
+      from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
       to: recipients,
       subject: `${tenders.length} licitaci${tenders.length === 1 ? 'ón nueva' : 'ones nuevas'} — Mercado Público`,
       html,

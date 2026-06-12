@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   try {
     await resend.emails.send({
-      from: 'Mercado Energy <onboarding@resend.dev>',
+      from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
       to: [recipient],
       replyTo: body.email,
       subject: `Contacto web — ${body.name} (${typeLabel})`,
