@@ -10,10 +10,12 @@ import AdminSidebar from './AdminSidebar';
 export default function AdminShell({
   userName,
   userRole,
+  pendingExpenses = 0,
   children,
 }: {
   userName: string;
   userRole: string;
+  pendingExpenses?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -35,7 +37,7 @@ export default function AdminShell({
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <AdminSidebar userName={userName} userRole={userRole} onNavigate={() => setOpen(false)} />
+        <AdminSidebar userName={userName} userRole={userRole} pendingExpenses={pendingExpenses} onNavigate={() => setOpen(false)} />
       </div>
 
       {/* Columna principal */}

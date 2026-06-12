@@ -24,11 +24,13 @@ function NavItem({
   label,
   icon,
   onNavigate,
+  badge,
 }: {
   href: string;
   label: string;
   icon: string;
   onNavigate?: () => void;
+  badge?: number;
 }) {
   const pathname = usePathname();
   const active = pathname.startsWith(href);
@@ -44,6 +46,11 @@ function NavItem({
     >
       <span className="text-base leading-none w-5 text-center">{icon}</span>
       {label}
+      {badge ? (
+        <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#389fe0] text-white text-[10px] font-semibold">
+          {badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -52,10 +59,12 @@ export default function AdminSidebar({
   userName,
   userRole,
   onNavigate,
+  pendingExpenses = 0,
 }: {
   userName: string;
   userRole: string;
   onNavigate?: () => void;
+  pendingExpenses?: number;
 }) {
   return (
     <aside className="w-56 h-full shrink-0 bg-white border-r border-gray-100 flex flex-col">
@@ -80,7 +89,8 @@ export default function AdminSidebar({
           CRM
         </p>
         {NAV_MAIN.map((item) => (
-          <NavItem key={item.href} {...item} onNavigate={onNavigate} />
+          <NavItem key={item.href} {...item} onNavigate={onNavigate}
+            badge={item.href === '/admin/gastos' ? pendingExpenses : undefined} />
         ))}
 
         <p className="px-3 mt-4 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">

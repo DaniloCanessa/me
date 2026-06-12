@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import AdminShell from '@/components/admin/AdminShell';
+import { countPendingExpenses } from '@/lib/db/expenses';
 
 // El backoffice nunca debe indexarse en buscadores.
 export const metadata = { robots: { index: false, follow: false } };
@@ -35,8 +36,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     return <>{children}</>;
   }
 
+  const pendingExpenses = await countPendingExpenses();
+
   return (
-    <AdminShell userName={user.name} userRole={user.role}>
+    <AdminShell userName={user.name} userRole={user.role} pendingExpenses={pendingExpenses}>
       {children}
     </AdminShell>
   );
