@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   applicationName: SITE_NAME,
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
+  // Verificación de Bing Webmaster Tools
+  verification: { other: { 'msvalidate.01': '20DF6DE3460DED87D3451A30B2B37C13' } },
   openGraph: {
     type: 'website',
     siteName: SITE_NAME,
