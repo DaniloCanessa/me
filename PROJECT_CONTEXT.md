@@ -1,6 +1,6 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 11 de junio 2026 (sesión 24 — captura de gastos con OCR + cambio de dominio a www.mercadoenergy.cl EN VIVO)
+> Última actualización: 12 de junio 2026 (sesión 25 — seguridad del back-office: sesión 12h, rate-limits, política de contraseñas; + fix de contraste móvil)
 > Repositorio: https://github.com/DaniloCanessa/me
 > Producción: **https://www.mercadoenergy.cl** (dominio definitivo, EN VIVO con SSL desde sesión 24). `mercado-energy.vercel.app` redirige 301 al dominio.
 
@@ -8,7 +8,7 @@
 
 ## ⚡ PRÓXIMO PASO AL REABRIR ESTE PROYECTO
 
-**Sesiones 17 a 24 completadas, commiteadas y desplegadas.** Sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle. **Sesión 24:** `2aad819` flujo de captura de gastos + `874fc1a` enlace "ver boleta" + `5b4d522` 301 del `.vercel.app` al dominio nuevo (cambio de dominio en vivo). Requiere la migración `supabase/expense_captures.sql` (ya ejecutada por el usuario).
+**Sesiones 17 a 24 completadas, commiteadas y desplegadas.** Sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle. **Sesión 24:** `2aad819` flujo de captura de gastos + `874fc1a` enlace "ver boleta" + `5b4d522` 301 del `.vercel.app` al dominio nuevo (cambio de dominio en vivo). Requiere la migración `supabase/expense_captures.sql` (ya ejecutada por el usuario). **Sesión 25:** `ed03406` contraste móvil (light-only), `dd84b23` seguridad (sesión 12h + rate-limits + fix relay `send-report`), `29a98af` política de contraseñas.
 
 **✅ CAMBIO DE DOMINIO COMPLETADO (sesión 24, 11 jun 2026):** `www.mercadoenergy.cl` ya sirve este proyecto con SSL y reemplazó la tienda Jumpseller. **El DNS se edita en HostGator** (nameservers `ns28`/`ns29.hostgator.cl`), NO en NIC Chile (que es solo el registrador). Registros puestos: apex `mercadoenergy.cl` **A → `216.198.79.1`**, `www` **CNAME → `81ad3f5d52b0cd8b.vercel-dns-017.com`** (valores nuevos de Vercel); el apex redirige 308 a www (lo hace Vercel). **Correo Titan preservado** (MX `mx1`/`mx2.titan.email` intactos — el sitio viejo estaba en Jumpseller y el correo en Titan). Las **301 del sitio viejo (~154 URLs, commit `c0bb683`)** ya están activas (institucionales 1:1 + fichas de producto a `/soluciones`). `mercado-energy.vercel.app` → **301 al dominio** (commit `5b4d522`, redirect host-based en `next.config.ts`). **✅ SEARCH CONSOLE + BING + SITEMAP LISTOS (sesión 24):** Google verificado por propiedad de **Dominio** (TXT `google-site-verification` en HostGator, TTL **3600** para no chocar con el SPF de Titan que ya estaba) + sitemap enviado. Bing verificado por **meta tag** `msvalidate.01` (en la metadata de `app/layout.tsx`, commit `0b49522` — Bing no importa propiedades de tipo "Dominio" desde GSC, por eso se agregó manual) + sitemap enviado. **Único pendiente del usuario:** reinstalar la PWA en el celular desde el dominio nuevo (la vieja apuntaba al `.vercel.app`).
 
@@ -35,6 +35,7 @@
 **Pendiente del usuario:** llenar las URLs de redes sociales en `/admin/config` (sección "Redes sociales") para que aparezcan los íconos en el footer — mientras estén vacías no se muestran.
 
 **Pendientes (media prioridad):**
+- **Rate-limit con store compartido (Upstash Redis o tabla Supabase)** — anotado en sesión 25: el limitador actual es en memoria/por-instancia (primera barrera). Pasar a un tope global solo si se ve abuso real o crece el tráfico. No urgente
 - **Captura de gastos v2** (la v1 ya está desplegada en sesión 24): auto-match de ítems de la boleta contra la lista de compra del proyecto; boletas multi-ítem en una pasada; link de captura público (tokenizado, sin login) para terceros; badge de pendientes + notificación en el sidebar; vista/total de gastos generales (sin proyecto)
 - Comprimir fotos pesadas de proyectos (`casa-carlos-alvarado.jpg` 9 MB, `poroma-img.jpg` 3,6 MB, `panaderia-san-bernardo.jpg` 3 MB) — ffmpeg quedó instalado en el sistema; `next/image` ya las optimiza al servir pero el origen es pesado
 - Conteo de leads en `/admin/leads` trae todas las filas y cortaría en 1.000 (mismo límite Supabase de sesión 18); hoy no afecta, cambiar a `count` exacto cuando crezca
@@ -82,6 +83,17 @@ La landing page está completamente construida con identidad visual de marca. El
 - **CTAs unificados:** "Simular mi ahorro" → "**Simula tu proyecto**" en hero, FinalCTA, net-billing y formulario simulador. Botón del Navbar → "**Simulador**". Banner Soluciones → "Simula tu sistema ideal".
 - **Componentes con props opcionales para reuso:** `Solutions({ showHeader })`, `Projects({ showHeader })`, `ContactSection({ showEyebrow })` — permiten usarlos con header (home) o sin él (bajo el título de página).
 - **Simulador alineado al estilo del sitio:** `SimulatorClient` — header pasó de banda azul plana a blanco con blur + sticky + "Simulador solar" en texto con gradiente. `StepCustomerType` — emojis 🏠🏢 → íconos SVG en badges azules + tarjetas premium. Fix coherencia de color: `StepSupply` (texto seleccionado verde → azul de marca), `BillOCRUpload` (spinner verde → azul). **Paso 7 (`StepResults`)**: tarjetas alineadas (`ring` + sombra suave), hero de ahorro refinado (número `text-4xl tracking-tight` + sombra), bloques CTA → negro de marca `#010101`, botón CTA con hover `#1d65c5` + sombra, sección auto eléctrico 🚗 → `IconCar`. **Pendiente:** emojis de avisos condicionales del Paso 7.
+
+**Desarrollos sesión 25 (12 junio 2026) — Seguridad del back-office + contraste móvil (commits `ed03406`, `dd84b23`, `29a98af`):**
+
+- **Fix de contraste en móvil (commit `ed03406`):** `app/globals.css` tenía el bloque `@media (prefers-color-scheme: dark)` heredado de la plantilla → con el modo oscuro del sistema el texto se volvía casi blanco sobre fondos claros (inputs ilegibles en el celular). Se quitó el dark mode (la app es **light-only**), se declaró `color-scheme: light` y se fijó `color` en `input/textarea/select`. Arregla TODOS los formularios de una.
+- **Auditoría de seguridad — lo que ya estaba bien:** contraseñas con bcrypt (cost 12), JWT HS256 con expiración + cookie `httpOnly`/`secure`/`sameSite=lax`, reset token con expiración (1h) y sin reuso, forgot-password sin enumeración de usuarios, OCR/PDF-cotizaciones/cron todos autovalidan sesión. **Ojo:** `proxy.ts` solo protege `/admin/:path*`, NO `/api/*` → cada API debe autovalidar.
+- **Hardening (commit `dd84b23`):**
+  - **Sesión 7 días → 12 h** (JWT exp + cookie maxAge en `/api/admin/login`). Decisión del usuario: 12h fijas (no por inactividad).
+  - **`/api/send-report` era un RELAY DE CORREO ABIERTO** (sin auth: enviaba a cualquier email con cualquier PDF desde el dominio verificado) → rate-limit 5/h por IP + validación de email + tope de tamaño del PDF (~5 MB).
+  - **Rate-limit** anti fuerza-bruta en login (10 / 15 min por IP) y en formularios (contacto 10/h, forgot-password 5/h, leads 30/h). Helper `lib/rate-limit.ts` — **en memoria, por instancia** (primera barrera, no tope global).
+- **Política de contraseñas (commit `29a98af`):** `lib/password.ts` → `validatePassword` (mín. 8 + 1 mayúscula + 1 carácter especial), aplicada **server-side** en crear usuario, reset por admin y reset por email, + ayuda en pantalla. Aplica a contraseñas nuevas; las existentes siguen válidas hasta que se cambien.
+- **Pendiente anotado (NO urgente):** rate-limit con **store compartido (Upstash Redis o tabla Supabase)** para tope global multi-instancia — hoy el límite es por-instancia. Hacerlo solo si se ve abuso real en logs o el sitio escala. Upstash vía Vercel Marketplace (~30-45 min, plan gratis); requiere volver el limitador `async` (await en los 6 call sites).
 
 **Desarrollos sesión 24 (9 junio 2026) — Flujo de captura de gastos: boletas de compra con OCR y bandeja de aprobación (commits `2aad819`, `874fc1a` + migración `supabase/expense_captures.sql`):**
 
