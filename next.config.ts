@@ -66,7 +66,18 @@ async function redirects() {
     "/accesorios/:path*",
   ];
 
+  // Consolidación SEO (sesión 24): la URL de producción .vercel.app redirige
+  // (301) al dominio canónico www.mercadoenergy.cl. Solo matchea ese host
+  // exacto — no afecta a los previews ni al propio dominio nuevo.
+  const vercelToDomain = {
+    source: "/:path*",
+    has: [{ type: "host" as const, value: "mercado-energy.vercel.app" }],
+    destination: "https://www.mercadoenergy.cl/:path*",
+    statusCode: 301 as const,
+  };
+
   return [
+    vercelToDomain,
     ...oneToOne.map(([source, destination]) => r301(source, destination)),
     ...toSoluciones.map((source) => r301(source, "/soluciones")),
   ];
