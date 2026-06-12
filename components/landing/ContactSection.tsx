@@ -42,7 +42,7 @@ export default function ContactSection({ showEyebrow = true }: { showEyebrow?: b
 
             <div className="space-y-5">
               {[
-                { Icon: IconMail, label: 'Email', value: 'contacto@mercadoenergy.cl', href: 'mailto:contacto@mercadoenergy.cl' },
+                { Icon: IconMail, label: 'Email', value: 'ventas@mercadoenergy.cl', href: 'mailto:ventas@mercadoenergy.cl' },
                 { Icon: IconPin, label: 'Oficina', value: 'Miguel León Prado 134, Santiago', href: null },
                 { Icon: IconPhone, label: 'Teléfono', value: '+56 9 6654 6276', href: 'tel:+56966546276' },
               ].map((item) => (

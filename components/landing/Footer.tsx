@@ -25,7 +25,7 @@ export default async function Footer() {
               Soluciones energéticas fotovoltaicas para hogares y empresas en Chile.
             </p>
             <div className="mt-6 space-y-2 text-sm text-white/50">
-              <p>📧 <a href="mailto:contacto@mercadoenergy.cl" className="hover:text-[#389fe0] transition-colors">contacto@mercadoenergy.cl</a></p>
+              <p>📧 <a href="mailto:ventas@mercadoenergy.cl" className="hover:text-[#389fe0] transition-colors">ventas@mercadoenergy.cl</a></p>
               <p>📍 Miguel León Prado 134, Santiago</p>
             </div>
 

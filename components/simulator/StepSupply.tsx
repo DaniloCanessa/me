@@ -270,7 +270,7 @@ export default function StepSupply({ category, initialData, contact, onSubmit }:
             )}
             {contactRequest === 'error' && (
               <p className="mt-3 text-xs text-red-500">
-                No pudimos enviar tu solicitud. Inténtalo de nuevo o escríbenos a contacto@mercadoenergy.cl.
+                No pudimos enviar tu solicitud. Inténtalo de nuevo o escríbenos a ventas@mercadoenergy.cl.
               </p>
             )}
           </div>

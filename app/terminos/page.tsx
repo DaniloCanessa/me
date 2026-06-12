@@ -18,7 +18,7 @@ export default function TerminosPage() {
           <strong>Biznexus Group SpA</strong>, razón social del servicio comercial <strong>Mercado Energy</strong>,
           RUT 77.958.683-9, con domicilio en Miguel León Prado 134, Santiago de Chile.
           Correo de contacto:{' '}
-          <a href="mailto:contacto@mercadoenergy.cl" className="text-[#389fe0] hover:underline">contacto@mercadoenergy.cl</a>.
+          <a href="mailto:ventas@mercadoenergy.cl" className="text-[#389fe0] hover:underline">ventas@mercadoenergy.cl</a>.
         </p>
         <p className="text-gray-600 mt-2">
           Estos términos se rigen por la <strong>Ley N° 19.496</strong> sobre Protección de los Derechos de los Consumidores,

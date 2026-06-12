@@ -49,7 +49,7 @@ const jsonLd = {
   description:
     'Soluciones energéticas integrales en Chile: energía solar fotovoltaica, eólica, climatización eficiente y consultoría energética.',
   url: SITE_URL,
-  email: 'contacto@mercadoenergy.cl',
+  email: 'ventas@mercadoenergy.cl',
   telephone: '+56966546276',
   image: `${SITE_URL}${OG_IMAGE}`,
   address: {

@@ -45,7 +45,7 @@ export default function DevolucionesPage() {
         </ul>
         <p className="text-gray-600 mt-3">
           Para ejercer el retracto, el consumidor debe notificarlo por escrito a{' '}
-          <a href="mailto:contacto@mercadoenergy.cl" className="text-[#389fe0] hover:underline">contacto@mercadoenergy.cl</a>{' '}
+          <a href="mailto:ventas@mercadoenergy.cl" className="text-[#389fe0] hover:underline">ventas@mercadoenergy.cl</a>{' '}
           dentro del plazo legal. Mercado Energy reembolsará los montos pagados dentro de los{' '}
           <strong>10 días hábiles</strong> siguientes a la recepción de la notificación, conforme al artículo 3 bis inciso 4°.
         </p>
@@ -134,7 +134,7 @@ export default function DevolucionesPage() {
         <ol className="list-decimal pl-5 text-gray-600 space-y-2">
           <li>
             <strong>Contacto inicial:</strong> envíe un correo a{' '}
-            <a href="mailto:contacto@mercadoenergy.cl" className="text-[#389fe0] hover:underline">contacto@mercadoenergy.cl</a>{' '}
+            <a href="mailto:ventas@mercadoenergy.cl" className="text-[#389fe0] hover:underline">ventas@mercadoenergy.cl</a>{' '}
             con su nombre, número de contrato, descripción del problema y fotografías si aplica.
           </li>
           <li>

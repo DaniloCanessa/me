@@ -28,7 +28,7 @@ export default function PrivacidadPage() {
           RUT: 77.958.683-9<br />
           Domicilio: Miguel León Prado 134, Santiago, Chile<br />
           Email de contacto para privacidad:{' '}
-          <a href="mailto:contacto@mercadoenergy.cl" className="text-[#389fe0] hover:underline">contacto@mercadoenergy.cl</a>
+          <a href="mailto:ventas@mercadoenergy.cl" className="text-[#389fe0] hover:underline">ventas@mercadoenergy.cl</a>
         </p>
       </section>
 
@@ -150,7 +150,7 @@ export default function PrivacidadPage() {
         </div>
         <p className="text-gray-600 mt-4">
           Para ejercer sus derechos, envíe una solicitud a{' '}
-          <a href="mailto:contacto@mercadoenergy.cl" className="text-[#389fe0] hover:underline">contacto@mercadoenergy.cl</a>{' '}
+          <a href="mailto:ventas@mercadoenergy.cl" className="text-[#389fe0] hover:underline">ventas@mercadoenergy.cl</a>{' '}
           indicando su nombre completo, RUT y descripción del derecho que desea ejercer. Responderemos dentro de los <strong>15 días hábiles</strong> siguientes a la recepción de la solicitud, conforme al artículo 30 de la Ley N° 21.719.
         </p>
       </section>

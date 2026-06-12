@@ -25,7 +25,7 @@ export default function FinalCTA() {
             Simula tu proyecto →
           </Link>
           <a
-            href="mailto:contacto@mercadoenergy.cl"
+            href="mailto:ventas@mercadoenergy.cl"
             className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white font-semibold py-4 px-10 rounded-xl text-base transition-colors"
           >
             Contactar un especialista
