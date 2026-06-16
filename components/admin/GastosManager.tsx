@@ -22,6 +22,11 @@ function clp(n: number | null) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
+// El archivo subido puede ser imagen o PDF (el path conserva la extensión).
+function isPdfPath(path: string | null | undefined): boolean {
+  return !!path && path.toLowerCase().endsWith('.pdf');
+}
+
 type Draft = {
   proveedor: string; rut: string; tipo: string; folio: string; fecha: string;
   neto: string; iva: string; total: string; con_iva: boolean; notas: string;
@@ -87,7 +92,9 @@ export default function GastosManager({ captures, projects }: { captures: Row[];
             <button key={c.id} onClick={() => setActive(c)}
               className="text-left bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:border-[#389fe0]/40 transition-colors">
               <div className="h-32 bg-gray-50 flex items-center justify-center overflow-hidden">
-                {c.signedUrl
+                {isPdfPath(c.image_path)
+                  ? <span className="text-3xl">📄<span className="block text-[10px] text-gray-400 mt-1 font-medium">PDF</span></span>
+                  : c.signedUrl
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={c.signedUrl} alt="Boleta" className="w-full h-full object-cover" />
                   : <span className="text-3xl">🧾</span>}
@@ -135,8 +142,10 @@ function ReviewModal({
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrMock, setOcrMock] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [isPending, start] = useTransition();
   const readOnly = capture.status !== 'pendiente';
+  const isPdf = isPdfPath(capture.image_path);
 
   const set = (patch: Partial<Draft>) => setD((prev) => ({ ...prev, ...patch }));
   const hasProject = d.project_select !== '' && d.project_select !== '__sin__';
@@ -221,14 +230,28 @@ function ReviewModal({
         </div>
 
         <div className="grid md:grid-cols-2 gap-5 p-5">
-          {/* Imagen */}
+          {/* Boleta / factura — imagen o PDF */}
           <div className="flex flex-col gap-3">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 overflow-hidden flex items-center justify-center min-h-48">
-              {capture.signedUrl
+            <div className="relative rounded-xl border border-gray-100 bg-gray-50 overflow-hidden flex items-center justify-center min-h-48">
+              {!capture.signedUrl
+                ? <span className="text-4xl py-12">🧾</span>
+                : isPdf
+                ? <iframe src={capture.signedUrl} title="Boleta / factura (PDF)" className="w-full h-96 border-0" />
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={capture.signedUrl} alt="Boleta" className="w-full max-h-96 object-contain" />
-                : <span className="text-4xl py-12">🧾</span>}
+                : <img src={capture.signedUrl} alt="Boleta" className="w-full max-h-96 object-contain" />}
+              {capture.signedUrl && (
+                <button onClick={() => setExpanded(true)} title="Ampliar"
+                  className="absolute top-2 right-2 bg-white/90 hover:bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 shadow-sm">
+                  ⛶ Ampliar
+                </button>
+              )}
             </div>
+            {capture.signedUrl && (
+              <a href={capture.signedUrl} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-[#1d65c5] hover:underline text-center">
+                {isPdf ? '📄 Abrir PDF en pestaña nueva' : '🔍 Abrir imagen en pestaña nueva'}
+              </a>
+            )}
             {!readOnly && (
               <button onClick={runOcr} disabled={ocrLoading || isPending}
                 className="rounded-xl border border-[#389fe0] text-[#1d65c5] hover:bg-[#389fe0]/5 disabled:opacity-50 py-2 text-sm font-semibold transition-colors">
@@ -346,6 +369,49 @@ function ReviewModal({
           )}
         </div>
       </div>
+
+      {expanded && capture.signedUrl && (
+        <Lightbox url={capture.signedUrl} isPdf={isPdf} onClose={() => setExpanded(false)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Lightbox: boleta/PDF a pantalla completa, con zoom para imágenes ─────────
+
+function Lightbox({ url, isPdf, onClose }: { url: string; isPdf: boolean; onClose: () => void }) {
+  const [zoomed, setZoomed] = useState(false);
+
+  // Cerrar con Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/85 flex flex-col" onClick={onClose}>
+      <div className="flex justify-end p-3 shrink-0">
+        <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+          className="text-white/80 hover:text-white text-xs mr-4 self-center">Abrir en pestaña ↗</a>
+        <button onClick={onClose} className="text-white/90 hover:text-white text-3xl leading-none px-2">×</button>
+      </div>
+      <div className="flex-1 overflow-auto flex items-center justify-center px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+        {isPdf ? (
+          <iframe src={url} title="Boleta / factura (PDF)" className="w-full h-full bg-white rounded-lg border-0" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="Boleta"
+            onClick={() => setZoomed((z) => !z)}
+            className={zoomed
+              ? 'max-w-none cursor-zoom-out'
+              : 'max-w-full max-h-full object-contain cursor-zoom-in'}
+            style={zoomed ? { width: 'auto', height: 'auto' } : undefined} />
+        )}
+      </div>
+      {!isPdf && (
+        <p className="text-center text-white/50 text-xs pb-3 shrink-0">Clic en la imagen para {zoomed ? 'reducir' : 'ampliar'} · Esc para cerrar</p>
+      )}
     </div>
   );
 }
