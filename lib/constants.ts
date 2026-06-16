@@ -7,6 +7,17 @@ export const CHILE_BT1 = {
   fixedChargeCLP: 1_200,
 };
 
+// ─── Estacionalidad de consumo residencial (perfil nacional BT1) ──────────────
+// Coeficientes relativos (consumo del mes / promedio mensual anual), media = 1.
+// Promedio nacional de hogares residenciales sin A/C, CNE / Energía Abierta
+// 2015–2019. Describen la FORMA estacional (invariante a la escala): peak en
+// invierno (jul/ago), valle en otoño-verano (mar/dic). Se usan para extrapolar
+// los meses faltantes a partir de uno o más meses conocidos (solo residencial).
+export const SEASONAL_COEFFICIENTS: Record<number, number> = {
+  1: 0.988, 2: 0.948, 3: 0.927, 4: 0.957, 5: 0.984, 6: 1.071,
+  7: 1.144, 8: 1.127, 9: 1.027, 10: 0.966, 11: 0.954, 12: 0.908,
+};
+
 // ─── Límites regulatorios DFL 4 ──────────────────────────────────────────────
 
 export const DFL4 = {

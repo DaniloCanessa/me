@@ -137,6 +137,7 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
             initialData={state.consumptionProfile}
             supply={state.supply!}
             ocrEnabled={ocrEnabled}
+            isBusinessCustomer={state.customerCategory === 'business'}
             onSubmit={(consumptionProfile) => {
               update({ consumptionProfile });
               goNext();

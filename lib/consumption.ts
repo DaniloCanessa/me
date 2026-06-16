@@ -8,7 +8,32 @@ import type {
   FutureConsumption,
   AnnualEnergyBalance,
 } from './types';
-import { SOLAR_DEFAULTS } from './constants';
+import { SOLAR_DEFAULTS, SEASONAL_COEFFICIENTS } from './constants';
+
+// ─── Extrapolación estacional residencial ────────────────────────────────────
+// A partir de uno o más meses conocidos (mes 1-12 → kWh), reconstruye los 12
+// meses con el perfil nacional BT1. Trabaja con coeficientes relativos:
+//   1. mediaAnual = promedio de (Cₘ / coef[m]) sobre los meses conocidos
+//   2. mes faltante k = round(mediaAnual × coef[k])
+// Devuelve SOLO los meses no conocidos estimados; los conocidos los conserva
+// el llamador tal cual. Si no hay meses válidos, devuelve un mapa vacío.
+
+export function extrapolateSeasonalKWh(known: Map<number, number>): Map<number, number> {
+  const out = new Map<number, number>();
+  const implied: number[] = [];
+  for (const [month, kWh] of known) {
+    const coef = SEASONAL_COEFFICIENTS[month];
+    if (coef && Number.isFinite(kWh) && kWh > 0) implied.push(kWh / coef);
+  }
+  if (implied.length === 0) return out;
+
+  const mediaAnual = implied.reduce((a, b) => a + b, 0) / implied.length;
+  for (let m = 1; m <= 12; m++) {
+    if (known.has(m)) continue;
+    out.set(m, Math.round(mediaAnual * SEASONAL_COEFFICIENTS[m]));
+  }
+  return out;
+}
 
 // ─── Consumo mensual por equipo de AA (kWh/mes/equipo) ───────────────────────
 // Promedio anual en Chile: incluye uso en verano (cooling) e invierno (heating).

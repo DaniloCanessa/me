@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import type { ConsumptionProfile, MonthlyBill, SupplyData, TarifaType } from '@/lib/types';
 import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route';
 import { MONTH_NAMES, DISTRIBUTORS, CHILE_BT1 } from '@/lib/constants';
+import { extrapolateSeasonalKWh } from '@/lib/consumption';
 import BillOCRUpload from './BillOCRUpload';
 import { IconUpload } from '@/components/landing/icons';
 
@@ -14,6 +15,9 @@ interface StepBillsProps {
   supply: SupplyData;
   /** true solo para usuarios internos con sesión de admin: muestra el OCR de boletas. */
   ocrEnabled?: boolean;
+  /** true para clientes empresa: mantiene el relleno por promedio de vecinos.
+   *  Residencial usa la extrapolación estacional (perfil nacional BT1). */
+  isBusinessCustomer?: boolean;
   onSubmit: (profile: ConsumptionProfile) => void;
   onUpdateSupply?: (partial: Pick<SupplyData, 'distribuidora' | 'tarifa'>) => void;
 }
@@ -97,6 +101,7 @@ function buildProfile(
   supply: SupplyData,
   manualDistribuidora: string,
   manualTarifa: TarifaType,
+  isBusiness: boolean,
   avgTotalBill?: number,
   avgPowerCharge?: number,
 ): ConsumptionProfile {
@@ -129,13 +134,28 @@ function buildProfile(
     });
   });
 
-  // ── Interpolación estacional para meses faltantes ─────────────────────────
+  // ── Relleno de meses faltantes ─────────────────────────────────────────────
+  // Residencial: extrapolación estacional (perfil nacional BT1), desde 1 mes.
+  // Empresa: comportamiento histórico (promedio de meses vecinos, desde 2 meses).
   const allBills: MonthlyBill[] = [...realBills];
+  const monthKWh = new Map<number, number>();
+  realBills.forEach((b) => monthKWh.set(b.month, b.consumptionKWh));
 
-  if (realBills.length >= 2) {
-    const monthKWh = new Map<number, number>();
-    realBills.forEach((b) => monthKWh.set(b.month, b.consumptionKWh));
-
+  if (!isBusiness) {
+    // Residencial: extrapolación estacional por coeficientes.
+    const estimates = extrapolateSeasonalKWh(monthKWh);
+    slots.forEach((slot) => {
+      const est = estimates.get(slot.month);
+      if (est === undefined || est <= 0) return;
+      allBills.push({
+        month: slot.month,
+        year: slot.year,
+        consumptionKWh: est,
+        source: 'interpolated',
+      });
+    });
+  } else if (realBills.length >= 2) {
+    // Empresa: promedio de meses vecinos (±1, ±2).
     slots.forEach((slot) => {
       if (monthKWh.has(slot.month)) return;
 
@@ -192,7 +212,7 @@ const TARIFA_OPTIONS: { value: TarifaType; label: string }[] = [
 
 const SLOTS = generateMonthSlots();
 
-export default function StepBills({ initialData, supply, ocrEnabled = false, onSubmit, onUpdateSupply }: StepBillsProps) {
+export default function StepBills({ initialData, supply, ocrEnabled = false, isBusinessCustomer = false, onSubmit, onUpdateSupply }: StepBillsProps) {
   const [rows, setRows] = useState<Record<string, RowValues>>(
     () => initRowsFromProfile(SLOTS, initialData),
   );
@@ -299,7 +319,7 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, onS
       });
     }
     onSubmit(buildProfile(
-      SLOTS, rows, supply, manualDistribuidora, manualTarifa,
+      SLOTS, rows, supply, manualDistribuidora, manualTarifa, isBusinessCustomer,
       avgTotalBill ? parseFloat(avgTotalBill) : undefined,
       avgPowerCharge ? parseFloat(avgPowerCharge) : undefined,
     ));
