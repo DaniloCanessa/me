@@ -29,7 +29,8 @@ function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
         {sorted.map((bill) => {
           const isInterpolated = bill.source === 'interpolated';
           const heightPct = peak > 0 ? (bill.consumptionKWh / peak) * 100 : 0;
-          const isMax = !isInterpolated && bill.consumptionKWh === profile.peakMonthKWh;
+          // El mes de mayor consumo de la curva, sea real o estimado.
+          const isMax = bill.consumptionKWh === profile.peakMonthKWh;
           return (
             <div
               key={`${bill.year}-${bill.month}`}
@@ -40,14 +41,14 @@ function ConsumptionChart({ profile }: { profile: ConsumptionProfile }) {
                   style={{ height: `${Math.max(heightPct, 4)}%` }}
                   className={[
                     'w-full rounded-t-sm transition-all relative',
-                    isInterpolated
-                      ? 'bg-gray-200'
-                      : isMax ? 'bg-[#389fe0]' : 'bg-green-300',
+                    // El mes de mayor consumo se resalta en azul aunque sea estimado;
+                    // si no, verde = dato real, gris = estimado.
+                    isMax ? 'bg-[#389fe0]' : isInterpolated ? 'bg-gray-200' : 'bg-green-300',
                   ].join(' ')}
                 >
                   <span className={[
                     'absolute -top-4 left-0 right-0 text-center text-[9px] whitespace-nowrap',
-                    isInterpolated ? 'text-gray-400' : isMax ? 'font-semibold text-[#1d65c5]' : 'text-gray-500',
+                    isMax ? 'font-semibold text-[#1d65c5]' : isInterpolated ? 'text-gray-400' : 'text-gray-500',
                   ].join(' ')}>
                     {bill.consumptionKWh}
                   </span>
@@ -99,6 +100,11 @@ export default function StepBillReview({ profile, onConfirm }: StepBillReviewPro
     a.year !== b.year ? a.year - b.year : a.month - b.month,
   );
 
+  // Meses con dato real vs estimados (rellenados) vs sin dato alguno.
+  const realCount = profile.bills.filter((b) => b.source !== 'interpolated').length;
+  const estimatedCount = profile.bills.length - realCount;
+  const missingCount = 12 - profile.bills.length;
+
   // Precio promedio por kWh si hay meses con monto informado
   const billsWithPrice = profile.bills.filter((b) => b.kWhPriceCLP != null);
   const avgKWhPrice =
@@ -140,7 +146,7 @@ export default function StepBillReview({ profile, onConfirm }: StepBillReviewPro
             />
             <Stat
               label="Meses ingresados"
-              value={`${profile.bills.length}/12`}
+              value={`${realCount}/12`}
               sub={profile.isComplete ? 'Completo' : 'Simulación aproximada'}
             />
           </div>
@@ -156,11 +162,21 @@ export default function StepBillReview({ profile, onConfirm }: StepBillReviewPro
             </div>
           )}
 
-          {!profile.isComplete && (
+          {estimatedCount > 0 && (
+            <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-4 py-2.5">
+              <span className="text-blue-500 text-sm">ℹ</span>
+              <p className="text-xs text-blue-700">
+                Estimamos {estimatedCount} mes{estimatedCount > 1 ? 'es' : ''} a partir de tus datos
+                para completar el año, según el patrón estacional de consumo.
+              </p>
+            </div>
+          )}
+
+          {missingCount > 0 && (
             <div className="flex items-center gap-2 bg-amber-50 rounded-xl px-4 py-2.5">
               <span className="text-amber-500 text-sm">⚠</span>
               <p className="text-xs text-amber-700">
-                Tienes {12 - profile.bills.length} mes{12 - profile.bills.length > 1 ? 'es' : ''} sin datos.
+                Tienes {missingCount} mes{missingCount > 1 ? 'es' : ''} sin datos.
                 La simulación usará el promedio de {profile.averageMonthlyKWh} kWh para esos meses.
               </p>
             </div>

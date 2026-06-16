@@ -179,7 +179,6 @@ function buildProfile(
     });
   }
 
-  const realValues = realBills.map((b) => b.consumptionKWh);
   const allValues  = allBills.map((b) => b.consumptionKWh);
   const average    = allValues.length > 0
     ? Math.round(allValues.reduce((a, b) => a + b, 0) / allValues.length)
@@ -188,8 +187,10 @@ function buildProfile(
   return {
     bills: allBills,
     averageMonthlyKWh: average,
-    peakMonthKWh: realValues.length > 0 ? Math.max(...realValues) : 0,
-    minMonthKWh:  realValues.length > 0 ? Math.min(...realValues) : 0,
+    // Peak/min sobre TODOS los meses (reales + estimados) para que coincidan
+    // con la curva mostrada en el gráfico de revisión.
+    peakMonthKWh: allValues.length > 0 ? Math.max(...allValues) : 0,
+    minMonthKWh:  allValues.length > 0 ? Math.min(...allValues) : 0,
     isComplete: realBills.length === 12,
     avgTotalBillCLP:   avgTotalBill,
     avgPowerChargeCLP: avgPowerCharge,
