@@ -126,13 +126,21 @@ export interface SyncResult {
 export async function syncTenders(): Promise<SyncResult> {
   const db = getSupabaseAdmin();
 
-  const { data: kwRows } = await db
+  const { data: kwRows, error: kwError } = await db
     .from('tender_keywords')
     .select('keyword')
     .eq('is_active', true);
   const keywords = (kwRows ?? []).map((k: { keyword: string }) => k.keyword);
   if (keywords.length === 0) {
-    return { revisadas: 0, calzaron: 0, nuevas: 0, emailEnviado: false, error: 'No hay palabras clave activas' };
+    // No se pudieron cargar las palabras clave (error de BD o tabla vacía). Aun
+    // así enviamos el correo diario para no romper el heartbeat, marcando la
+    // anomalía: la ausencia de correo debe significar "el cron no corrió", no
+    // "el cron corrió pero falló en silencio".
+    const warning = kwError
+      ? 'No se pudieron cargar las palabras clave: error al consultar la base de datos. Revisa la conexión a Supabase.'
+      : 'No hay palabras clave activas configuradas. Agrega alguna en /admin/licitaciones.';
+    const emailEnviado = await notifyNoNewTenders({ revisadas: 0, calzaron: 0 }, warning);
+    return { revisadas: 0, calzaron: 0, nuevas: 0, emailEnviado, error: warning };
   }
 
   // Hoy y ayer
@@ -141,9 +149,11 @@ export async function syncTenders(): Promise<SyncResult> {
   yesterday.setDate(today.getDate() - 1);
 
   const seen = new Map<string, MPListItem>();
+  let fetchOk = false; // ¿respondió la API de Mercado Público al menos una vez?
   for (const date of [today, yesterday]) {
     try {
       const list = await fetchTendersByDate(date);
+      fetchOk = true;
       list.forEach((item) => { if (!seen.has(item.CodigoExterno)) seen.set(item.CodigoExterno, item); });
     } catch (err) {
       console.error('[mercadopublico] Error listando fecha', toDdmmyyyy(date), err);
@@ -212,7 +222,12 @@ export async function syncTenders(): Promise<SyncResult> {
         .in('codigo_externo', inserted.map((t) => t.codigo_externo));
     }
   } else {
-    emailEnviado = await notifyNoNewTenders({ revisadas: all.length, calzaron: matches.length });
+    // Si la API de Mercado Público no respondió en ninguna fecha, "0 publicaciones"
+    // no significa "no hubo nuevas" sino "no se pudo consultar": lo advertimos.
+    const warning = !fetchOk
+      ? 'No se pudo consultar la API de Mercado Público hoy (posible caída temporal del servicio). Se reintentará en la próxima corrida.'
+      : undefined;
+    emailEnviado = await notifyNoNewTenders({ revisadas: all.length, calzaron: matches.length }, warning);
   }
 
   return { revisadas: all.length, calzaron: matches.length, nuevas: inserted.length, emailEnviado };
@@ -298,7 +313,12 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
 // Correo "heartbeat" de los días SIN licitaciones nuevas: confirma que el cron
 // corrió y revisó las publicaciones del día. Así el usuario recibe un correo
 // todos los días y sabe que la sincronización sigue funcionando.
-async function notifyNoNewTenders(stats: { revisadas: number; calzaron: number }): Promise<boolean> {
+// `warning` (opcional): anomalía detectada (API caída, sin keywords) que se
+// muestra destacada para que el correo diario no oculte una falla parcial.
+async function notifyNoNewTenders(
+  stats: { revisadas: number; calzaron: number },
+  warning?: string,
+): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return false;
 
@@ -311,6 +331,11 @@ async function notifyNoNewTenders(stats: { revisadas: number; calzaron: number }
   const fecha = new Date().toLocaleDateString('es-CL', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
+
+  const warningBlock = warning ? `
+          <p style="margin:0 0 16px;padding:10px 12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e">
+            ⚠ ${warning}
+          </p>` : '';
 
   const html = `
 <!DOCTYPE html>
@@ -325,6 +350,7 @@ async function notifyNoNewTenders(stats: { revisadas: number; calzaron: number }
           <h1 style="margin:8px 0 0;color:#fff;font-size:20px">Sin licitaciones nuevas hoy</h1>
         </td></tr>
         <tr><td style="padding:22px 28px">
+          ${warningBlock}
           <p style="margin:0 0 12px;font-size:14px;color:#374151">
             Revisión del <strong>${fecha}</strong> completada. No apareció ninguna licitación nueva que calce con tus palabras clave.
           </p>

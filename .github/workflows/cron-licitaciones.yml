@@ -1,0 +1,27 @@
+name: Cron licitaciones (respaldo)
+
+# Respaldo del cron de Vercel: en plan Hobby el cron de Vercel es "best-effort"
+# (ventana flexible de 1 h y se puede saltar). GitHub Actions dispara el mismo
+# endpoint a hora fija. El dedup del lado del servidor evita duplicados si ambos
+# corren. Requiere el secreto de repo CRON_SECRET (mismo valor que en Vercel).
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 12:00 UTC = 08:00 Chile (igual que vercel.json)
+  workflow_dispatch:        # permite dispararlo a mano desde la pestaña Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar sincronización de licitaciones
+        run: |
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://www.mercadoenergy.cl/api/cron/tenders")
+          echo "HTTP $code"
+          echo "Respuesta:"
+          cat /tmp/resp.txt
+          echo ""
+          # Falla el job (✗ visible en Actions) si no respondió 200.
+          test "$code" = "200"
