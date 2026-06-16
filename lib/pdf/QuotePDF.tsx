@@ -151,6 +151,8 @@ export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string })
           <View style={S.colBlock}>
             <Text style={S.colTitle}>Cotización para</Text>
             <Text style={S.colLine}>{quote.client_name}</Text>
+            {quote.client_rut && <Text style={S.colSub}>RUT {quote.client_rut}</Text>}
+            {quote.client_atencion && <Text style={S.colSub}>Atención: {quote.client_atencion}</Text>}
             {quote.client_email && <Text style={S.colSub}>{quote.client_email}</Text>}
             {quote.client_phone && <Text style={S.colSub}>{quote.client_phone}</Text>}
           </View>

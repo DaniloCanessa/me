@@ -787,6 +787,18 @@ export default function QuoteEditor({
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
               </label>
               <label className="block">
+                <span className="text-xs text-gray-500 mb-1 block">RUT</span>
+                <input name="client_rut" type="text" defaultValue={quote.client_rut ?? ''}
+                  placeholder="76.123.456-7"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
+              </label>
+              <label className="block">
+                <span className="text-xs text-gray-500 mb-1 block">Atención a</span>
+                <input name="client_atencion" type="text" defaultValue={quote.client_atencion ?? ''}
+                  placeholder="Contacto en la empresa"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
+              </label>
+              <label className="block">
                 <span className="text-xs text-gray-500 mb-1 block">Email</span>
                 <input name="client_email" type="email" defaultValue={quote.client_email}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />

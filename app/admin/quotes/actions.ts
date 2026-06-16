@@ -18,7 +18,7 @@ export async function createQuote(clientId: string, installationId?: string) {
 
   const { data: client } = await db
     .from('clients')
-    .select('nombre, email, telefono')
+    .select('nombre, email, telefono, rut, atencion_a')
     .eq('id', clientId)
     .single();
 
@@ -33,6 +33,8 @@ export async function createQuote(clientId: string, installationId?: string) {
       client_name:     client.nombre,
       client_email:    client.email ?? '',
       client_phone:    client.telefono ?? null,
+      client_rut:      client.rut ?? null,
+      client_atencion: client.atencion_a ?? null,
       subtotal_clp:    0,
       discount_clp:    0,
       total_clp:       0,
@@ -52,6 +54,8 @@ export async function updateQuoteHeader(id: string, formData: FormData) {
     client_name:     formData.get('client_name') as string,
     client_email:    formData.get('client_email') as string,
     client_phone:    (formData.get('client_phone') as string) || null,
+    client_rut:      (formData.get('client_rut') as string) || null,
+    client_atencion: (formData.get('client_atencion') as string) || null,
     notes:           (formData.get('notes') as string) || null,
     client_notes:    (formData.get('client_notes') as string) || null,
     validity_days:   parseInt(formData.get('validity_days') as string) || 10,

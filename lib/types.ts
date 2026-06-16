@@ -60,6 +60,7 @@ export interface Client {
   nombre: string;
   rut: string | null;
   empresa: string | null;
+  atencion_a: string | null;   // persona de contacto en la empresa (quién solicitó)
   ciudad: string | null;
   telefono: string | null;
   email: string | null;
@@ -173,6 +174,8 @@ export interface Quote {
   client_name: string;
   client_email: string;
   client_phone: string | null;
+  client_rut: string | null;        // snapshot del RUT del cliente (para el PDF)
+  client_atencion: string | null;   // snapshot de "atención a" (contacto)
   subtotal_clp: number;
   discount_clp: number;
   total_clp: number;

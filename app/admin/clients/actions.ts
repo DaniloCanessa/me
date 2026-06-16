@@ -6,10 +6,11 @@ import { revalidatePath } from 'next/cache';
 export async function createClient(formData: FormData) {
   const db = getSupabaseAdmin();
   const { error, data } = await db.from('clients').insert({
-    nombre:   formData.get('nombre') as string,
-    rut:      (formData.get('rut') as string) || null,
-    empresa:  (formData.get('empresa') as string) || null,
-    ciudad:   (formData.get('ciudad') as string) || null,
+    nombre:     formData.get('nombre') as string,
+    rut:        (formData.get('rut') as string) || null,
+    empresa:    (formData.get('empresa') as string) || null,
+    atencion_a: (formData.get('atencion_a') as string) || null,
+    ciudad:     (formData.get('ciudad') as string) || null,
     telefono: (formData.get('telefono') as string) || null,
     email:    (formData.get('email') as string) || null,
     notas:    (formData.get('notas') as string) || null,
@@ -27,6 +28,7 @@ export async function updateClient(id: string, formData: FormData) {
     nombre:     formData.get('nombre') as string,
     rut:        (formData.get('rut') as string) || null,
     empresa:    (formData.get('empresa') as string) || null,
+    atencion_a: (formData.get('atencion_a') as string) || null,
     ciudad:     (formData.get('ciudad') as string) || null,
     telefono:   (formData.get('telefono') as string) || null,
     email:      (formData.get('email') as string) || null,
@@ -66,12 +68,14 @@ export async function convertLeadToClient(leadId: string) {
     .from('clients')
     .insert({
       lead_id:  leadId,
-      nombre:   lead.name ?? lead.contact_name ?? lead.email,
-      email:    lead.email,
-      telefono: lead.phone ?? null,
-      empresa:  (lead as Record<string, unknown>).company_name as string ?? null,
-      ciudad:   lead.city ?? null,
-      source:   'simulador',
+      nombre:     lead.name ?? lead.contact_name ?? lead.email,
+      email:      lead.email,
+      telefono:   lead.phone ?? null,
+      empresa:    (lead as Record<string, unknown>).company_name as string ?? null,
+      // En leads de empresa, el contacto es quien solicitó → "atención a".
+      atencion_a: (lead as Record<string, unknown>).company_name ? (lead.contact_name ?? null) : null,
+      ciudad:     lead.city ?? null,
+      source:     'simulador',
     })
     .select('id')
     .single();

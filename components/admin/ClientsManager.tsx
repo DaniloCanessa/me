@@ -48,6 +48,11 @@ function ClientModal({
               <input name="empresa" type="text"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
             </label>
+            <label className="block col-span-2">
+              <span className="text-xs text-gray-500 mb-1 block">Atención a</span>
+              <input name="atencion_a" type="text" placeholder="Contacto en la empresa que solicita"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+            </label>
             <label className="block">
               <span className="text-xs text-gray-500 mb-1 block">Email</span>
               <input name="email" type="email"
