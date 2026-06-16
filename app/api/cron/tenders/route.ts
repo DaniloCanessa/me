@@ -1,4 +1,4 @@
-import { syncTenders, sendTestTenderNotification } from '@/lib/mercadopublico';
+import { syncTenders, sendTestTenderNotification, sendTestNoNewTenders } from '@/lib/mercadopublico';
 import { isAdminAuthenticated } from '@/lib/auth';
 
 export const maxDuration = 300; // la sincronización puede tardar (rate limit ~1 req/s)
@@ -16,11 +16,15 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, message: 'No autorizado' }, { status: 401 });
   }
 
-  // Modo prueba (?test): envía un correo con las últimas licitaciones para
-  // verificar el envío, sin tocar la lógica diaria. Solo admin.
-  if (new URL(request.url).searchParams.get('test') !== null) {
-    const result = await sendTestTenderNotification();
-    console.log('[cron/tenders] TEST', JSON.stringify(result));
+  // Modo prueba (?test): envía un correo para verificar el envío, sin tocar la
+  // lógica diaria. `?test=heartbeat` fuerza el correo de "sin novedades";
+  // cualquier otro valor envía una muestra con las últimas licitaciones.
+  const testParam = new URL(request.url).searchParams.get('test');
+  if (testParam !== null) {
+    const result = testParam === 'heartbeat'
+      ? await sendTestNoNewTenders()
+      : await sendTestTenderNotification();
+    console.log('[cron/tenders] TEST', testParam, JSON.stringify(result));
     return Response.json(result);
   }
 

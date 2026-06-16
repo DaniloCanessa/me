@@ -198,7 +198,10 @@ export async function syncTenders(): Promise<SyncResult> {
     }
   }
 
-  // Notificación por email
+  // Notificación por email — SIEMPRE se envía un correo diario:
+  // - si hay licitaciones nuevas, llega el detalle de las nuevas;
+  // - si no hay, llega un aviso de "sin novedades" que confirma que el cron
+  //   corrió (heartbeat: así el usuario sabe que el sistema sigue vivo).
   let emailEnviado = false;
   if (inserted.length > 0) {
     emailEnviado = await notifyNewTenders(inserted);
@@ -208,6 +211,8 @@ export async function syncTenders(): Promise<SyncResult> {
         .update({ notificada: true })
         .in('codigo_externo', inserted.map((t) => t.codigo_externo));
     }
+  } else {
+    emailEnviado = await notifyNoNewTenders({ revisadas: all.length, calzaron: matches.length });
   }
 
   return { revisadas: all.length, calzaron: matches.length, nuevas: inserted.length, emailEnviado };
@@ -215,12 +220,9 @@ export async function syncTenders(): Promise<SyncResult> {
 
 // ─── Email de notificación (Resend) ──────────────────────────────────────────
 
-async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return false;
-
-  // Destinatarios parametrizables (tabla tender_recipients, editable en
-  // /admin/licitaciones). Fallback a LEAD_RECIPIENT_EMAIL si no hay activos.
+// Destinatarios parametrizables (tabla tender_recipients, editable en
+// /admin/licitaciones). Fallback a LEAD_RECIPIENT_EMAIL si no hay activos.
+async function getActiveRecipients(): Promise<string[]> {
   const db = getSupabaseAdmin();
   const { data: recRows } = await db
     .from('tender_recipients')
@@ -230,6 +232,14 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
   if (recipients.length === 0 && process.env.LEAD_RECIPIENT_EMAIL) {
     recipients = [process.env.LEAD_RECIPIENT_EMAIL];
   }
+  return recipients;
+}
+
+async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+
+  const recipients = await getActiveRecipients();
   if (recipients.length === 0) return false;
 
   const { Resend } = await import('resend');
@@ -285,6 +295,69 @@ async function notifyNewTenders(tenders: Tender[]): Promise<boolean> {
   }
 }
 
+// Correo "heartbeat" de los días SIN licitaciones nuevas: confirma que el cron
+// corrió y revisó las publicaciones del día. Así el usuario recibe un correo
+// todos los días y sabe que la sincronización sigue funcionando.
+async function notifyNoNewTenders(stats: { revisadas: number; calzaron: number }): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+
+  const recipients = await getActiveRecipients();
+  if (recipients.length === 0) return false;
+
+  const { Resend } = await import('resend');
+  const resend = new Resend(apiKey);
+
+  const fecha = new Date().toLocaleDateString('es-CL', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;max-width:600px;width:100%">
+        <tr><td style="background:#010101;padding:22px 28px">
+          <p style="margin:0;color:#70caca;font-size:11px;letter-spacing:1px;text-transform:uppercase">Mercado Energy · Licitaciones</p>
+          <h1 style="margin:8px 0 0;color:#fff;font-size:20px">Sin licitaciones nuevas hoy</h1>
+        </td></tr>
+        <tr><td style="padding:22px 28px">
+          <p style="margin:0 0 12px;font-size:14px;color:#374151">
+            Revisión del <strong>${fecha}</strong> completada. No apareció ninguna licitación nueva que calce con tus palabras clave.
+          </p>
+          <p style="margin:0 0 16px;font-size:13px;color:#6b7280">
+            Se revisaron <strong>${stats.revisadas}</strong> publicaciones de hoy y ayer en Mercado Público${stats.calzaron > 0 ? ` (${stats.calzaron} ya estaban registradas)` : ''}.
+          </p>
+          <p style="margin:0;font-size:12px;color:#9ca3af">
+            Este aviso confirma que la sincronización diaria está funcionando.
+          </p>
+          <p style="margin:16px 0 0;font-size:12px">
+            <a href="https://mercado-energy.vercel.app/admin/licitaciones" style="color:#1d65c5">Ver todas en el backoffice →</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  try {
+    await resend.emails.send({
+      from: 'Mercado Energy <notificaciones@send.mercadoenergy.cl>',
+      to: recipients,
+      subject: 'Sin licitaciones nuevas hoy — Mercado Público',
+      html,
+    });
+    return true;
+  } catch (err) {
+    console.error('[mercadopublico] Resend error (sin novedades):', err);
+    return false;
+  }
+}
+
 // Envía un correo de PRUEBA con las últimas licitaciones guardadas, por el
 // mismo camino real de notificación. Sirve para verificar el envío end-to-end
 // sin esperar a que aparezcan nuevas. La lógica diaria NO cambia.
@@ -303,6 +376,16 @@ export async function sendTestTenderNotification(): Promise<{ ok: boolean; sent:
   return {
     ok,
     sent: ok ? tenders.length : 0,
+    reason: ok ? undefined : 'Resend no envió — revisa RESEND_API_KEY o los destinatarios en /admin/licitaciones.',
+  };
+}
+
+// Envía un correo de PRUEBA del heartbeat "sin novedades", por el mismo camino
+// real. Sirve para verificar ese correo sin esperar a un día sin licitaciones.
+export async function sendTestNoNewTenders(): Promise<{ ok: boolean; reason?: string }> {
+  const ok = await notifyNoNewTenders({ revisadas: 0, calzaron: 0 });
+  return {
+    ok,
     reason: ok ? undefined : 'Resend no envió — revisa RESEND_API_KEY o los destinatarios en /admin/licitaciones.',
   };
 }
