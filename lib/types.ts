@@ -460,6 +460,10 @@ export interface ConsumptionProfile {
   isComplete: boolean;            // true si tiene los 12 meses
   avgTotalBillCLP?: number;       // promedio monto total boleta (todos los cargos)
   avgPowerChargeCLP?: number;     // promedio cargo por potencia mensual
+  // Solo cuando el cliente ya tiene PFV: aclara si el consumo ingresado es el
+  // de la boleta de la compañía (importación de red) o el consumo total
+  // (red + lo que produce su PFV). Cambia el dimensionamiento del complemento.
+  consumptionBasis?: 'grid' | 'total';
 }
 
 // ─── Consumos futuros ─────────────────────────────────────────────────────────

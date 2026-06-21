@@ -102,6 +102,7 @@ function buildProfile(
   manualDistribuidora: string,
   manualTarifa: TarifaType,
   isBusiness: boolean,
+  consumptionBasis: 'grid' | 'total' | undefined,
   avgTotalBill?: number,
   avgPowerCharge?: number,
 ): ConsumptionProfile {
@@ -194,6 +195,7 @@ function buildProfile(
     isComplete: realBills.length === 12,
     avgTotalBillCLP:   avgTotalBill,
     avgPowerChargeCLP: avgPowerCharge,
+    consumptionBasis:  supply.hasExistingSolar ? (consumptionBasis ?? 'grid') : undefined,
   };
 }
 
@@ -241,6 +243,12 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
   );
   const [avgPowerCharge, setAvgPowerCharge] = useState(
     initialData?.avgPowerChargeCLP?.toString() ?? '',
+  );
+
+  // Solo si el cliente ya tiene PFV: ¿el consumo ingresado es el de la boleta de
+  // la compañía (importación de red) o su consumo total (red + lo que produce su PFV)?
+  const [consumptionBasis, setConsumptionBasis] = useState<'grid' | 'total'>(
+    initialData?.consumptionBasis ?? 'grid',
   );
 
   function setRow(key: string, field: keyof RowValues, value: string) {
@@ -321,6 +329,7 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     }
     onSubmit(buildProfile(
       SLOTS, rows, supply, manualDistribuidora, manualTarifa, isBusinessCustomer,
+      supply.hasExistingSolar ? consumptionBasis : undefined,
       avgTotalBill ? parseFloat(avgTotalBill) : undefined,
       avgPowerCharge ? parseFloat(avgPowerCharge) : undefined,
     ));
@@ -372,6 +381,37 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
             según la estación del año. Y si solo conoces el monto de tu boleta, ingrésalo y
             nosotros calculamos el consumo.
           </p>
+        )}
+
+        {/* Base del consumo — solo si ya tiene PFV (el consumo de la compañía
+            ya viene descontado por su planta; hay que saber cuál ingresó) */}
+        {supply.hasExistingSolar && (
+          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 flex flex-col gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Ya tienes paneles — ¿qué consumo ingresaste?</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Como ya generas parte de tu energía, necesitamos saber a qué corresponde el consumo de arriba.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {([
+                { value: 'grid' as const, title: 'El de mi boleta', sub: 'Lo que me cobra la compañía (lo que tomo de la red)' },
+                { value: 'total' as const, title: 'Mi consumo total', sub: 'Todo lo que consumo (red + lo que produce mi PFV)' },
+              ]).map((opt) => {
+                const active = consumptionBasis === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => setConsumptionBasis(opt.value)}
+                    className={[
+                      'text-left rounded-xl border-2 px-4 py-3 transition-all',
+                      active ? 'border-[#389fe0] bg-[#389fe0]/5' : 'border-gray-200 hover:border-[#b0cedd]',
+                    ].join(' ')}>
+                    <p className={['text-sm font-semibold', active ? 'text-[#1d65c5]' : 'text-gray-700'].join(' ')}>{opt.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{opt.sub}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Resumen en vivo */}

@@ -12,6 +12,7 @@ import type {
   TarifaType,
 } from '@/lib/types';
 import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBattery } from '@/lib/calculations';
+import { getRegionById } from '@/lib/regions';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
@@ -27,6 +28,63 @@ interface StepResultsProps {
   state: WizardState;
   config?: SimulatorConfig;
   catalog?: SolarKit[];
+}
+
+// ─── PFV existente: saldo de empalme y consumo residual a cubrir ──────────────
+// Si el cliente ya tiene paneles, la planta nueva solo puede usar el espacio
+// libre del empalme (saldo = empalme − PFV existente). Si el saldo es < 1 kWp,
+// no hay margen para ampliar → se ofrece mantención. El consumo objetivo del
+// complemento depende de qué ingresó el cliente (boleta de la compañía vs total).
+
+const MIN_HEADROOM_KWP = 1; // umbral "a tope": menos de 1 kWp libre → mantención
+
+type ExistingSolarInfo =
+  | { active: false }
+  | {
+      active: true;
+      existingKWp: number;
+      empalmeMaxKW: number | undefined;
+      headroomKWp: number | null;
+      atTope: boolean;
+      basis: 'grid' | 'total';
+      effectiveAvgKWh: number; // consumo mensual residual que cubrirá el complemento
+    };
+
+function empalmeKWFor(state: WizardState): number | undefined {
+  const supply = state.supply!;
+  return state.customerCategory === 'business'
+    ? supply.potenciaContratadaKW
+    : supply.amperajeA != null
+      ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
+      : undefined;
+}
+
+function getExistingSolarInfo(state: WizardState): ExistingSolarInfo {
+  const supply  = state.supply!;
+  const profile = state.consumptionProfile!;
+  if (!supply.hasExistingSolar || !supply.existingSystemKWp) return { active: false };
+
+  const existingKWp  = supply.existingSystemKWp;
+  const empalmeMaxKW = empalmeKWFor(state);
+  const headroomKWp  = empalmeMaxKW != null
+    ? Math.max(0, Math.round((empalmeMaxKW - existingKWp) * 10) / 10)
+    : null;
+  const atTope = headroomKWp != null && headroomKWp < MIN_HEADROOM_KWP;
+
+  const basis: 'grid' | 'total' = profile.consumptionBasis ?? 'grid';
+  let effectiveAvgKWh = profile.averageMonthlyKWh;
+  if (basis === 'total') {
+    const regionId = (state.contact as PersonContact | BusinessContact)?.regionId || 'metropolitana';
+    const region = getRegionById(regionId);
+    if (region) {
+      // Energía que ya aporta la PFV existente (estimada); el residual de red es
+      // lo que aún se importa y lo que el complemento intentará cubrir.
+      const existingMonthlyProd = (existingKWp * region.annualProductionKWhPerKWp) / 12;
+      effectiveAvgKWh = Math.max(0, Math.round(profile.averageMonthlyKWh - existingMonthlyProd));
+    }
+  }
+
+  return { active: true, existingKWp, empalmeMaxKW, headroomKWp, atTope, basis, effectiveAvgKWh };
 }
 
 // ─── Construcción del SimulatorInput ──────────────────────────────────────────
@@ -46,14 +104,19 @@ function buildBaseInput(state: WizardState, config?: SimulatorConfig): Simulator
       ? Math.round(billsWithPrice.reduce((s, b) => s + b.kWhPriceCLP!, 0) / billsWithPrice.length)
       : fallbackKWhPrice;
 
-  const empalmeMaxKW = state.customerCategory === 'business'
-    ? supply.potenciaContratadaKW
-    : supply.amperajeA != null
-      ? Math.round((supply.amperajeA * 220 / 1000) * 10) / 10
-      : undefined;
+  const empalmeMaxKW = empalmeKWFor(state);
+
+  // PFV existente (no "a tope"): el complemento se dimensiona contra el saldo del
+  // empalme y contra el consumo residual a cubrir; si no, todo el empalme y el
+  // consumo promedio normal.
+  const es = getExistingSolarInfo(state);
+  const baseAvgKWh = es.active && !es.atTope ? es.effectiveAvgKWh : profile.averageMonthlyKWh;
+  const empalmeForSizing = es.active && !es.atTope && es.headroomKWp != null
+    ? es.headroomKWp
+    : empalmeMaxKW;
 
   const monthlyConsumptionKWh =
-    profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0);
+    baseAvgKWh + (future?.totalAdditionalMonthlyKWh ?? 0);
 
   return {
     regionId,
@@ -69,7 +132,7 @@ function buildBaseInput(state: WizardState, config?: SimulatorConfig): Simulator
     customerType:     state.customerCategory === 'natural' ? 'residential' : 'business',
     hasExistingSolar: supply.hasExistingSolar,
     existingSystemKWp: supply.existingSystemKWp,
-    empalmeMaxKW,
+    empalmeMaxKW: empalmeForSizing,
     // Config overrides desde DB
     injectionValueFactor:   config?.injectionFactor,
     discountRateReal:       config?.discountRateReal,
@@ -468,14 +531,22 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
     : (contact as BusinessContact).companyName;
   const contactEmail = (contact as PersonContact).email ?? (contact as BusinessContact).email;
 
+  // PFV existente: saldo de empalme + si está "a tope" (sin margen para ampliar).
+  const existingSolar = useMemo(() => getExistingSolarInfo(state), [state]);
+
   // ── Simulaciones ────────────────────────────────────────────────────────────
   const { baseInput, scenarios, futureScenarios, businessResult, businessBaseResult, recommendedScenario } = useMemo(() => {
     const batteryUsableFraction = (100 - batteryReservePct) / 100;
     const inp = { ...buildBaseInput(state, config), batteryUsableFraction };
     const addKWh = state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0;
     const hasAdd = addKWh > 0;
+    // Consumo "base" (sin equipos nuevos): con PFV existente es el residual a cubrir.
+    const es = getExistingSolarInfo(state);
+    const baseConsumption = es.active && !es.atTope
+      ? es.effectiveAvgKWh
+      : state.consumptionProfile!.averageMonthlyKWh;
     const inpBase = hasAdd
-      ? { ...inp, monthlyConsumptionKWh: state.consumptionProfile!.averageMonthlyKWh }
+      ? { ...inp, monthlyConsumptionKWh: baseConsumption }
       : inp;
 
     if (!isResidential) {
@@ -646,6 +717,104 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
     }
   }, [ctaState, contact, state.customerCategory, supply, profile, activeResult]);
 
+  // CTA para el caso "planta a tope" → solicitud de revisión/mantención (sin
+  // propuesta de planta nueva). Mismo endpoint de leads, simulación en cero.
+  const handleMaintenanceCTA = useCallback(async () => {
+    if (ctaState !== 'idle') return;
+    setCtaState('loading');
+    const c = contact as PersonContact & BusinessContact;
+    const payload = {
+      customerCategory: state.customerCategory,
+      contact: {
+        name: c.name, companyName: c.companyName, contactName: c.contactName,
+        email: c.email, phone: c.phone, regionId: c.regionId, city: c.city, commune: c.commune,
+      },
+      supply: { tarifa: supply.tarifa, distribuidora: supply.distribuidora },
+      averageMonthlyKWh: profile.averageMonthlyKWh,
+      simulation: {
+        regionName: activeResult.region.name,
+        kitSizeKWp: 0, kitPriceCLP: 0, batteryCapacityKWh: 0,
+        monthlyBenefitCLP: 0, annualBenefitCLP: 0, paybackYears: 0, coveragePercent: 0,
+      },
+      consumption_profile: {
+        bills: profile.bills.map((b) => ({ month: b.month, year: b.year, consumptionKWh: b.consumptionKWh, variableAmountCLP: b.variableAmountCLP })),
+        averageMonthlyKWh: profile.averageMonthlyKWh,
+      },
+      scenarios_json: null,
+      future_consumption: null,
+      supply_details: {
+        tarifa: supply.tarifa, distribuidora: supply.distribuidora,
+        amperajeA: supply.amperajeA, potenciaContratadaKW: supply.potenciaContratadaKW,
+        tensionSuministro: supply.tensionSuministro,
+        hasExistingSolar: supply.hasExistingSolar, existingSystemKWp: supply.existingSystemKWp,
+        propertyType: supply.propertyType,
+        consumptionBasis: profile.consumptionBasis,
+        maintenanceRequest: true, // PFV a tope: pide revisión/mantención
+      },
+    };
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      setCtaState(res.ok ? 'success' : 'error');
+    } catch {
+      setCtaState('error');
+    }
+  }, [ctaState, contact, state.customerCategory, supply, profile, activeResult]);
+
+  // ── PFV existente "a tope": no hay margen de empalme → revisión/mantención ──
+  if (existingSolar.active && existingSolar.atTope) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white rounded-2xl p-6 shadow-[0_16px_48px_rgba(56,159,224,0.25)]">
+          <p className="text-sm opacity-70 mb-1">{contactName}</p>
+          <p className="text-2xl font-bold leading-tight tracking-tight">Tu planta ya aprovecha todo tu empalme</p>
+          <p className="text-sm opacity-90 mt-2">
+            Tienes una PFV de <strong>{existingSolar.existingKWp} kWp</strong>
+            {existingSolar.empalmeMaxKW != null && <> y un empalme de ~<strong>{existingSolar.empalmeMaxKW} kW</strong></>}.
+            No queda margen para ampliar sin modificar el empalme.
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6">
+          <h2 className="text-base font-bold text-[#010101] tracking-tight">Te recomendamos una revisión / mantención</h2>
+          <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+            Para asegurar que tu planta produzca al máximo, podemos revisar su estado, limpieza,
+            inversor y conexiones. Si más adelante quieres ampliar, evaluamos también una mejora
+            de empalme.
+          </p>
+          <ul className="mt-4 flex flex-col gap-2 text-sm text-gray-600">
+            {['Inspección de paneles e inversor', 'Limpieza y revisión de conexiones', 'Diagnóstico de producción real vs esperada'].map((t) => (
+              <li key={t} className="flex items-start gap-2">
+                <span className="text-[#389fe0] mt-0.5">✓</span> {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleMaintenanceCTA}
+          disabled={ctaState !== 'idle'}
+          className={[
+            'w-full rounded-xl font-semibold py-3.5 text-sm transition-all',
+            ctaState === 'success'
+              ? 'bg-green-500 text-white'
+              : 'bg-[#010101] hover:bg-[#1d65c5] text-white disabled:opacity-60',
+          ].join(' ')}
+        >
+          {ctaState === 'loading' ? 'Enviando…'
+            : ctaState === 'success' ? '✓ ¡Listo! Te contactaremos pronto'
+            : ctaState === 'error' ? 'Hubo un error — reintentar'
+            : 'Quiero que me contacten para una revisión'}
+        </button>
+        {ctaState === 'error' && (
+          <p className="text-xs text-red-500 text-center -mt-3">No se pudo enviar. Intenta nuevamente.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
@@ -682,6 +851,20 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
             : ` · ${baseInput.energyPrice.kWhPriceCLP} CLP/kWh`}
         </p>
       </div>
+
+      {/* ── Aviso: propuesta complementaria a la PFV existente ─────────────── */}
+      {existingSolar.active && !existingSolar.atTope && (
+        <div className="bg-[#389fe0]/8 border border-[#389fe0]/20 rounded-xl px-4 py-3 text-sm text-[#1d65c5]">
+          <p className="font-semibold">Propuesta para complementar tu PFV existente</p>
+          <p className="text-xs text-[#1d65c5]/80 mt-1 leading-relaxed">
+            Ya tienes {existingSolar.existingKWp} kWp instalados. Esta propuesta usa el
+            espacio libre de tu empalme{existingSolar.headroomKWp != null && <> (~{existingSolar.headroomKWp} kW disponibles)</>}
+            {existingSolar.basis === 'total'
+              ? ' y dimensiona sobre el consumo que aún tomas de la red.'
+              : ' sobre el consumo de tu boleta de la compañía.'}
+          </p>
+        </div>
+      )}
 
       {/* ── Toggle consumo base / futuro ───────────────────────────────────── */}
       {hasAdditions && (futureScenarios ?? businessBaseResult) && (
