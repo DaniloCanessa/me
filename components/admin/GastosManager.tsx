@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ExpenseCapture } from '@/lib/db/expenses';
+import { GENERAL_EXPENSE_CATEGORIES } from '@/lib/db/expenses';
 import {
   saveExpenseCapture, approveExpenseCapture, rejectExpenseCapture,
   deleteExpenseCapture, getProjectItemsForExpense,
@@ -30,7 +31,7 @@ function isPdfPath(path: string | null | undefined): boolean {
 type Draft = {
   proveedor: string; rut: string; tipo: string; folio: string; fecha: string;
   neto: string; iva: string; total: string; con_iva: boolean; notas: string;
-  project_select: string; project_item_id: string;
+  project_select: string; project_item_id: string; categoria: string;
 };
 
 function draftFrom(c: Row): Draft {
@@ -41,6 +42,7 @@ function draftFrom(c: Row): Draft {
     notas: c.notas ?? '',
     project_select: c.sin_proyecto ? '__sin__' : (c.project_id ?? ''),
     project_item_id: c.project_item_id ?? '',
+    categoria: c.categoria ?? '',
   };
 }
 
@@ -50,7 +52,7 @@ function draftToFormData(d: Draft, extra?: Record<string, string>): FormData {
   fd.set('folio', d.folio); fd.set('fecha', d.fecha); fd.set('neto', d.neto);
   fd.set('iva', d.iva); fd.set('total', d.total); fd.set('con_iva', String(d.con_iva));
   fd.set('notas', d.notas); fd.set('project_select', d.project_select);
-  fd.set('project_item_id', d.project_item_id);
+  fd.set('project_item_id', d.project_item_id); fd.set('categoria', d.categoria);
   for (const [k, v] of Object.entries(extra ?? {})) fd.set(k, v);
   return fd;
 }
@@ -334,6 +336,16 @@ function ReviewModal({
                   onChange={(e) => set({ project_item_id: e.target.value })}>
                   <option value="">Sin ítem específico</option>
                   {items.map((it) => <option key={it.id} value={it.id}>{it.description}</option>)}
+                </select>
+              </div>
+            )}
+            {d.project_select === '__sin__' && (
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Categoría del gasto general</label>
+                <select className={inputCls} value={d.categoria} disabled={readOnly}
+                  onChange={(e) => set({ categoria: e.target.value })}>
+                  <option value="">— Sin categoría —</option>
+                  {GENERAL_EXPENSE_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
             )}

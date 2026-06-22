@@ -13,6 +13,7 @@ export const GENERAL_EXPENSE_CATEGORIES = [
   'Transporte',
   'Oficina',
   'Impuestos',
+  'Comisiones',
   'Otros',
 ] as const;
 

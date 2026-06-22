@@ -146,6 +146,9 @@ export async function approveExpenseCapture(id: string, formData: FormData) {
 
   const { projectId, sinProyecto, hasProject } = decodeProjectSelect((formData.get('project_select') as string) || '');
   const itemId = (formData.get('project_item_id') as string) || null;
+  // Categoría solo aplica al gasto general (sin proyecto); con proyecto va a la
+  // cuenta corriente del proyecto y no se categoriza.
+  const categoria = !hasProject ? ((formData.get('categoria') as string) || null) : null;
 
   // Con proyecto → se crea una compra real (entra a la cuenta corriente).
   let purchaseId: string | null = null;
@@ -185,6 +188,7 @@ export async function approveExpenseCapture(id: string, formData: FormData) {
     project_id:      hasProject ? projectId : null,
     project_item_id: hasProject ? (itemId || null) : null,
     sin_proyecto:    !hasProject || sinProyecto,
+    categoria,
     purchase_id:     purchaseId,
     reviewed_by:     user?.name ?? user?.email ?? null,
     reviewed_at:     new Date().toISOString(),
@@ -193,6 +197,7 @@ export async function approveExpenseCapture(id: string, formData: FormData) {
   if (error) return { error: error.message };
 
   revalidatePath('/admin/gastos');
+  revalidatePath('/admin/finanzas');
   if (hasProject && projectId) revalidatePath(`/admin/projects/${projectId}`);
   return { ok: true };
 }
