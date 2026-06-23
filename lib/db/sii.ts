@@ -73,6 +73,34 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
     return { kind: 'ventas', compras: [], ventas };
   }
 
+  // Ventas (detalle, una fila por documento): "Nro;Tipo Doc;Tipo Venta;Rut cliente;…;Monto Neto;Monto IVA;Monto total"
+  // Se agrega por tipo de documento para guardar en la tabla resumen.
+  if (header.includes('rut cliente') || (header.includes('tipo venta') && header.includes('razon social'))) {
+    const TIPO_LABEL: Record<string, string> = {
+      '33': 'Facturas electrónicas (33)', '34': 'Facturas exentas (34)',
+      '39': 'Boletas (39)', '41': 'Boletas exentas (41)',
+      '46': 'Factura de compra (46)', '48': 'Comprobante Pago Electrónico (48)',
+      '56': 'Notas de débito (56)', '61': 'Notas de crédito (61)',
+    };
+    const agg = new Map<string, RcvVentaRow>();
+    for (const line of lines.slice(1)) {
+      const c = line.split(';');
+      if (c.length < 14) continue;
+      const tipo = (c[1] ?? '').trim();
+      const label = TIPO_LABEL[tipo] ?? `Tipo ${tipo}`;
+      const cur = agg.get(label) ?? { tipo_documento: label, total_documentos: 0, monto_exento: 0, monto_neto: 0, monto_iva: 0, monto_total: 0 };
+      // Notas de crédito (61) restan al débito
+      const sign = tipo === '61' ? -1 : 1;
+      cur.total_documentos += 1;
+      cur.monto_exento += sign * num(c[10]);
+      cur.monto_neto += sign * num(c[11]);
+      cur.monto_iva += sign * num(c[12]);
+      cur.monto_total += sign * num(c[13]);
+      agg.set(label, cur);
+    }
+    return { kind: 'ventas', compras: [], ventas: [...agg.values()] };
+  }
+
   return { kind: 'desconocido', compras: [], ventas: [] };
 }
 
