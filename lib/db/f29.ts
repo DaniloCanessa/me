@@ -1,18 +1,17 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getRcvCreditoIva, getRcvDebitoIva } from '@/lib/db/sii';
 
-// ─── Planilla F29 mensual (módulo tributario — Fase B) ───────────────────────
-// Los renglones CALCULADOS se derivan en vivo de los documentos (facturas de
-// venta, compras y gastos con tipo 'factura'); los renglones MANUALES viven en
-// f29_periods. Códigos del F29 (SII) anotados en cada campo.
-// Base DEVENGADA: todo se imputa por la fecha del documento, no del pago.
+// ─── Planilla F29 mensual (módulo tributario) ────────────────────────────────
+// El crédito y el débito salen del RCV del SII importado (fuente autoritativa,
+// cuadra exacto con el F29). Si aún no se importa el RCV de un mes, se usa como
+// respaldo lo registrado en la app: crédito = facturas de la bandeja de gastos
+// (tipo factura aprobadas); débito = facturas de venta emitidas. Los renglones
+// manuales (remanente anterior, PPM, retenciones…) viven en f29_periods.
+// Códigos del F29 (SII) anotados en cada campo. Base devengada (por documento).
 
 const IVA = 1.19;
 const r = (n: number) => Math.round(n);
-
-// IVA contenido en un monto según si ya incluye IVA.
-function ivaOf(monto: number, yaConIva: boolean): number {
-  return yaConIva ? r(monto - monto / IVA) : r(monto * 0.19);
-}
+const ivaOf = (monto: number, yaConIva: boolean) => (yaConIva ? r(monto - monto / IVA) : r(monto * 0.19));
 
 const monthRange = (periodo: string) => {
   const [y, m] = periodo.split('-').map(Number);
@@ -20,7 +19,7 @@ const monthRange = (periodo: string) => {
   return { desde: `${periodo}-01`, hasta: `${periodo}-${String(last).padStart(2, '0')}` };
 };
 
-export type F29Linea = { count: number; iva: number };
+export type F29Fuente = 'rcv' | 'app';
 
 export type F29Manual = {
   remanente_anterior: number;   // 504
@@ -43,71 +42,53 @@ const DEFAULT_MANUAL: F29Manual = {
 
 export type F29Result = {
   periodo: string;
-  // Débito fiscal (ventas emitidas del mes)
-  debito: {
-    facturas: F29Linea;       // 502/503
-    boletas: F29Linea;        // 111/110
-    notasDebito: F29Linea;    // 513/512
-    notasCredito: F29Linea;   // NC emitidas: restan débito
-    total: number;            // 538 (IVA)
-  };
-  // Crédito fiscal (compras/gastos con factura del mes)
-  credito: {
-    comprasProyecto: F29Linea;  // facturas de compra de proyectos (520)
-    gastosGenerales: F29Linea;  // facturas de gasto general (520)
-    delMes: number;             // crédito del mes (sin remanente)
-    total: number;              // 537 = delMes + remanente anterior (504)
-  };
+  debito: { iva: number; docs: number; fuente: F29Fuente };   // 538
+  credito: { delMes: number; docs: number; fuente: F29Fuente; total: number }; // 520 / 537
   manual: F29Manual;
-  manualExiste: boolean;        // ya hay fila guardada para el mes
-  remanenteAnteriorSugerido: number; // 77 del mes previo (si no hay fila)
-  // Determinación
-  ivaDeterminado: number;       // 89 (a pagar; 0 si hay remanente)
-  remanenteSiguiente: number;   // 77 (si crédito > débito)
-  totalAPagar: number;          // 91 (+ recargos 94 si los hay)
+  manualExiste: boolean;
+  remanenteAnteriorSugerido: number; // 77 del mes previo
+  ivaDeterminado: number;            // 89
+  remanenteSiguiente: number;        // 77
+  totalAPagar: number;               // 91
 };
 
-// Solo el lado calculado (débito/crédito del mes), sin remanente ni manuales.
+// Lado calculado: débito y crédito del mes (RCV-first, respaldo en la app).
 async function getF29Calc(periodo: string) {
   const db = getSupabaseAdmin();
   const { desde, hasta } = monthRange(periodo);
 
-  const [ventas, compras, gastos] = await Promise.all([
-    db.from('sales_invoices').select('tipo, iva_clp')
-      .eq('estado', 'emitida').gte('fecha_emision', desde).lte('fecha_emision', hasta),
-    // Crédito: solo facturas de compra de proyectos (anticipos NO dan crédito)
-    db.from('project_purchases').select('monto_clp, con_iva, tipo')
-      .eq('tipo', 'factura').gte('fecha', desde).lte('fecha', hasta),
-    // Gastos generales aprobados con documento 'factura'
-    db.from('expense_captures').select('total, con_iva, tipo')
-      .eq('status', 'aprobado').eq('sin_proyecto', true).eq('tipo', 'factura')
-      .gte('fecha', desde).lte('fecha', hasta),
+  const [rcvCred, rcvDeb, gastos, ventas] = await Promise.all([
+    getRcvCreditoIva(periodo),
+    getRcvDebitoIva(periodo),
+    db.from('expense_captures').select('total, con_iva')
+      .eq('status', 'aprobado').eq('tipo', 'factura').gte('fecha', desde).lte('fecha', hasta),
+    db.from('sales_invoices').select('iva_clp').eq('estado', 'emitida')
+      .gte('fecha_emision', desde).lte('fecha_emision', hasta),
   ]);
 
-  const lin = () => ({ count: 0, iva: 0 });
-  const facturas = lin(), boletas = lin(), notasDebito = lin(), notasCredito = lin();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const v of (ventas.data ?? []) as any[]) {
-    const iva = v.iva_clp || 0;
-    const bucket = v.tipo === 'boleta' ? boletas
-      : v.tipo === 'nota_debito' ? notasDebito
-      : v.tipo === 'nota_credito' ? notasCredito : facturas;
-    bucket.count += 1; bucket.iva += iva;
+  // Crédito: RCV si está importado; si no, facturas de la bandeja de gastos.
+  let creditoMes: number, creditoDocs: number, fuenteCredito: F29Fuente;
+  if (rcvCred.docs > 0) {
+    creditoMes = rcvCred.iva; creditoDocs = rcvCred.docs; fuenteCredito = 'rcv';
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = (gastos.data ?? []) as any[];
+    creditoMes = g.reduce((s, x) => s + ivaOf(x.total ?? 0, !!x.con_iva), 0);
+    creditoDocs = g.length; fuenteCredito = 'app';
   }
-  const debitoTotal = facturas.iva + boletas.iva + notasDebito.iva - notasCredito.iva;
 
-  const comprasProyecto = lin(), gastosGenerales = lin();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const c of (compras.data ?? []) as any[]) {
-    comprasProyecto.count += 1; comprasProyecto.iva += ivaOf(c.monto_clp || 0, !!c.con_iva);
+  // Débito: RCV ventas si está importado; si no, facturas de venta emitidas.
+  let debitoTotal: number, debitoDocs: number, fuenteDebito: F29Fuente;
+  if (rcvDeb.docs > 0) {
+    debitoTotal = rcvDeb.iva; debitoDocs = rcvDeb.docs; fuenteDebito = 'rcv';
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = (ventas.data ?? []) as any[];
+    debitoTotal = v.reduce((s, x) => s + (x.iva_clp ?? 0), 0);
+    debitoDocs = v.length; fuenteDebito = 'app';
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const g of (gastos.data ?? []) as any[]) {
-    gastosGenerales.count += 1; gastosGenerales.iva += ivaOf(g.total || 0, !!g.con_iva);
-  }
-  const creditoMes = comprasProyecto.iva + gastosGenerales.iva;
 
-  return { facturas, boletas, notasDebito, notasCredito, debitoTotal, comprasProyecto, gastosGenerales, creditoMes };
+  return { creditoMes, creditoDocs, fuenteCredito, debitoTotal, debitoDocs, fuenteDebito };
 }
 
 function prevPeriodo(periodo: string): string {
@@ -138,8 +119,7 @@ export async function getF29(periodo: string): Promise<F29Result> {
   const calc = await getF29Calc(periodo);
   const { row: manual, exists: manualExiste } = await getManual(periodo);
 
-  // Sugerencia del remanente anterior (504) = remanente siguiente (77) del mes
-  // previo, calculado con su crédito + su propio remanente anterior guardado.
+  // Remanente anterior sugerido (504) = remanente siguiente (77) del mes previo.
   const prev = prevPeriodo(periodo);
   const [prevCalc, prevManual] = await Promise.all([getF29Calc(prev), getManual(prev)]);
   const prevRemanenteSiguiente = Math.max(
@@ -157,15 +137,8 @@ export async function getF29(periodo: string): Promise<F29Result> {
 
   return {
     periodo,
-    debito: {
-      facturas: calc.facturas, boletas: calc.boletas,
-      notasDebito: calc.notasDebito, notasCredito: calc.notasCredito,
-      total: calc.debitoTotal,
-    },
-    credito: {
-      comprasProyecto: calc.comprasProyecto, gastosGenerales: calc.gastosGenerales,
-      delMes: calc.creditoMes, total: creditoTotal,
-    },
+    debito: { iva: calc.debitoTotal, docs: calc.debitoDocs, fuente: calc.fuenteDebito },
+    credito: { delMes: calc.creditoMes, docs: calc.creditoDocs, fuente: calc.fuenteCredito, total: creditoTotal },
     manual: { ...manual, remanente_anterior: remanenteAnterior },
     manualExiste,
     remanenteAnteriorSugerido: prevRemanenteSiguiente,

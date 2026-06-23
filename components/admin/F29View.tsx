@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { F29Result, F29Linea } from '@/lib/db/f29';
+import type { F29Result, F29Fuente } from '@/lib/db/f29';
 import { saveF29Period } from '@/app/admin/finanzas/actions';
 
 function clp(n: number) {
@@ -54,8 +54,8 @@ export default function F29View({ f29, mes, label }: { f29: F29Result; mes: stri
   // Recalcula determinación con el remanente anterior editado (display en vivo).
   const remAnterior = toNum(m.remanente_anterior);
   const creditoTotal = f29.credito.delMes + remAnterior;
-  const ivaDeterminado = Math.max(0, f29.debito.total - creditoTotal);
-  const remSiguiente = Math.max(0, creditoTotal - f29.debito.total);
+  const ivaDeterminado = Math.max(0, f29.debito.iva - creditoTotal);
+  const remSiguiente = Math.max(0, creditoTotal - f29.debito.iva);
   const totalAPagar = ivaDeterminado + toNum(m.ppm_neto) + toNum(m.retencion_honorarios)
     + toNum(m.otros_impuestos) + toNum(m.reajustes) + toNum(m.multas);
 
@@ -86,19 +86,15 @@ export default function F29View({ f29, mes, label }: { f29: F29Result; mes: stri
           className="ml-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900" />
       </div>
 
-      {/* A. Débito fiscal (calculado) */}
-      <Section title="Débito fiscal — ventas emitidas" hint="Calculado desde las facturas de venta del mes.">
-        <CalcRow code="502" label="Facturas emitidas" line={f29.debito.facturas} />
-        {f29.debito.boletas.count > 0 && <CalcRow code="111" label="Boletas" line={f29.debito.boletas} />}
-        {f29.debito.notasDebito.count > 0 && <CalcRow code="513" label="Notas de débito" line={f29.debito.notasDebito} />}
-        {f29.debito.notasCredito.count > 0 && <CalcRow code="—" label="Notas de crédito (restan)" line={f29.debito.notasCredito} negative />}
-        <TotalRow code="538" label="Total débitos" value={f29.debito.total} />
+      {/* A. Débito fiscal */}
+      <Section title="Débito fiscal — ventas del mes" hint={f29.debito.fuente === 'rcv' ? 'Desde el RCV de ventas del SII importado.' : 'Desde las facturas de venta registradas (aún sin importar el RCV).'}>
+        <CalcLine code="502" label="Ventas afectas" iva={f29.debito.iva} docs={f29.debito.docs} fuente={f29.debito.fuente} />
+        <TotalRow code="538" label="Total débitos" value={f29.debito.iva} />
       </Section>
 
       {/* B. Crédito fiscal */}
-      <Section title="Crédito fiscal — compras con factura" hint="Calculado desde compras de proyecto y gastos generales con factura. Los anticipos no dan crédito.">
-        <CalcRow code="520" label="Facturas de compra (proyectos)" line={f29.credito.comprasProyecto} />
-        {f29.credito.gastosGenerales.count > 0 && <CalcRow code="520" label="Facturas de gasto general" line={f29.credito.gastosGenerales} />}
+      <Section title="Crédito fiscal — compras del mes" hint={f29.credito.fuente === 'rcv' ? 'Desde el RCV de compras del SII importado.' : 'Desde las facturas de la bandeja de gastos (aún sin importar el RCV).'}>
+        <CalcLine code="520" label="Facturas de compra recibidas" iva={f29.credito.delMes} docs={f29.credito.docs} fuente={f29.credito.fuente} />
         <ManualRow code="504" label="Remanente crédito mes anterior"
           value={m.remanente_anterior} onChange={(v) => set({ remanente_anterior: v })}
           hint={!f29.manualExiste && f29.remanenteAnteriorSugerido > 0 ? `Sugerido del mes previo: ${clp(f29.remanenteAnteriorSugerido)}` : undefined} />
@@ -182,12 +178,17 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-function CalcRow({ code, label, line, negative }: { code: string; label: string; line: F29Linea; negative?: boolean }) {
+function CalcLine({ code, label, iva, docs, fuente }: { code: string; label: string; iva: number; docs: number; fuente: F29Fuente }) {
   return (
     <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-      <span className="text-sm text-gray-600">{label} <Code>{code}</Code>
-        {line.count > 0 && <span className="text-xs text-gray-400 ml-1">· {line.count} doc.</span>}</span>
-      <span className="text-sm font-medium text-gray-900 tabular-nums">{negative ? '−' : ''}{clp(line.iva)}</span>
+      <span className="text-sm text-gray-600">
+        {label} <Code>{code}</Code>
+        {docs > 0 && <span className="text-xs text-gray-400 ml-1">· {docs} doc.</span>}
+        <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${fuente === 'rcv' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+          {fuente === 'rcv' ? 'RCV SII' : 'app'}
+        </span>
+      </span>
+      <span className="text-sm font-medium text-gray-900 tabular-nums">{clp(iva)}</span>
     </div>
   );
 }
