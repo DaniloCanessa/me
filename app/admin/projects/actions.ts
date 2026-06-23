@@ -256,6 +256,8 @@ export async function addProjectPurchase(projectId: string, formData: FormData) 
     con_iva:                 formData.get('con_iva') === 'true',
     fecha:                   formData.get('fecha') as string,
     notas:                   (formData.get('notas') as string) || null,
+    settles_anticipo_id:     (formData.get('settles_anticipo_id') as string) || null,
+    absorbs_anticipo:        formData.get('absorbs_anticipo') === 'true',
   });
   if (error) return { error: error.message };
   revalidatePath(`/admin/projects/${projectId}`);
@@ -304,6 +306,8 @@ export async function updateProjectPurchase(projectId: string, purchaseId: strin
       con_iva:                 formData.get('con_iva') === 'true',
       fecha:                   formData.get('fecha') as string,
       notas:                   (formData.get('notas') as string) || null,
+      settles_anticipo_id:     (formData.get('settles_anticipo_id') as string) || null,
+      absorbs_anticipo:        formData.get('absorbs_anticipo') === 'true',
     })
     .eq('id', purchaseId)
     .eq('project_id', projectId);

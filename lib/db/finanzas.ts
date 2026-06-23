@@ -30,14 +30,22 @@ export async function getFinanzas(desde: string, hasta: string): Promise<Finanza
   const db = getSupabaseAdmin();
   const hastaFin = `${hasta}T23:59:59`;
 
-  const [pays, purchases, costs, generales] = await Promise.all([
+  const [pays, purchases, costs, generales, absorbed] = await Promise.all([
     db.from('project_payments').select('monto_clp, fecha').gte('fecha', desde).lte('fecha', hasta),
-    db.from('project_purchases').select('monto_clp, con_iva, fecha').gte('fecha', desde).lte('fecha', hasta),
+    db.from('project_purchases').select('id, monto_clp, con_iva, fecha').gte('fecha', desde).lte('fecha', hasta),
     db.from('project_costs').select('monto_clp, con_iva, created_at').gte('created_at', desde).lte('created_at', hastaFin),
     db.from('expense_captures').select('total, con_iva, categoria, fecha')
       .eq('status', 'aprobado').eq('sin_proyecto', true)
       .gte('fecha', desde).lte('fecha', hasta),
+    // Anticipos absorbidos por una factura (su monto ya está en la factura): no
+    // se cuentan de nuevo en caja. La factura que los absorbe puede ser de otro mes.
+    db.from('project_purchases').select('settles_anticipo_id')
+      .eq('absorbs_anticipo', true).not('settles_anticipo_id', 'is', null),
   ]);
+  const absorbedIds = new Set(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (absorbed.data ?? []).map((x: any) => x.settles_anticipo_id as string),
+  );
 
   // ── Ventas: pagos de clientes (con IVA incluido por regla del negocio) ──
   let ventasConIva = 0;
@@ -49,6 +57,7 @@ export async function getFinanzas(desde: string, hasta: string): Promise<Finanza
   let gpConIva = 0, gpNeto = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const x of (purchases.data ?? []) as any[]) {
+    if (absorbedIds.has(x.id)) continue; // anticipo ya incluido en su factura
     const s = split(x.monto_clp ?? 0, !!x.con_iva);
     gpConIva += s.conIva; gpNeto += s.neto;
   }

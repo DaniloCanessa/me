@@ -137,6 +137,10 @@ export type ProjectPurchase = {
   fecha: string;
   notas: string | null;
   created_at: string;
+  // Ciclo anticipo→factura (Fase C). En una factura: anticipo que salda + si su
+  // monto ya lo incluye (absorbs). En un anticipo: ambos null/false.
+  settles_anticipo_id: string | null;
+  absorbs_anticipo: boolean;
 };
 
 export async function getProjectPurchases(projectId: string): Promise<ProjectPurchase[]> {

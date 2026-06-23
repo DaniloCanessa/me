@@ -77,12 +77,14 @@ function AvanceBadge({ pct: p, overrun }: { pct: number; overrun: boolean }) {
 function PurchaseForm({
   items,
   defaultItemId,
+  openAnticipos,
   onSubmit,
   onCancel,
   isPending,
 }: {
   items: ProjectItem[];
   defaultItemId: string | null;
+  openAnticipos: ProjectPurchase[];
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   isPending: boolean;
@@ -91,9 +93,13 @@ function PurchaseForm({
   const [precioUnitario, setPrecioUnitario] = useState(0);
   const [costoReferencia, setCostoReferencia] = useState(0);
   const [conIva, setConIva] = useState(false);
+  const [tipo, setTipo] = useState<'factura' | 'anticipo'>('factura');
+  const [settlesAnticipoId, setSettlesAnticipoId] = useState('');
+  const [absorbs, setAbsorbs] = useState(true);
   const [selectedItemId, setSelectedItemId] = useState(defaultItemId || '');
   const totalLinea = Math.round(cantidad * precioUnitario);
   const showCostoReferencia = selectedItemId === ''; // Solo cuando "Sin ítem específico"
+  const purchaseConIvaLocal = (p: ProjectPurchase) => (p.con_iva ? p.monto_clp : Math.round(p.monto_clp * 1.19));
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap gap-3 items-end">
       {defaultItemId !== null ? (
@@ -120,12 +126,39 @@ function PurchaseForm({
 
       <div className="w-32">
         <label className="text-xs text-gray-500 mb-1 block">Tipo</label>
-        <select name="tipo"
+        <select name="tipo" value={tipo} onChange={e => setTipo(e.target.value as 'factura' | 'anticipo')}
           className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
           <option value="factura">Factura</option>
           <option value="anticipo">Anticipo</option>
         </select>
       </div>
+
+      {/* Ciclo anticipo→factura: una factura puede saldar un anticipo previo */}
+      {tipo === 'factura' && openAnticipos.length > 0 && (
+        <div className="w-full flex flex-wrap gap-3 items-end bg-amber-50/40 rounded-xl px-3 py-2 -mx-1">
+          <div className="w-64">
+            <label className="text-xs text-gray-500 mb-1 block">¿Salda un anticipo?</label>
+            <select name="settles_anticipo_id" value={settlesAnticipoId}
+              onChange={e => setSettlesAnticipoId(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0] bg-white">
+              <option value="">No (factura independiente)</option>
+              {openAnticipos.map(a => (
+                <option key={a.id} value={a.id}>
+                  Anticipo {clp(purchaseConIvaLocal(a))} · {a.fecha}{a.proveedor ? ` · ${a.proveedor}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {settlesAnticipoId && (
+            <label className="flex items-center gap-2 text-xs text-gray-600 pb-2.5">
+              <input type="checkbox" name="absorbs_anticipo" value="true"
+                checked={absorbs} onChange={e => setAbsorbs(e.target.checked)}
+                className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
+              El monto de la factura ya incluye el anticipo (no contar dos veces)
+            </label>
+          )}
+        </div>
+      )}
 
       <div className="w-36">
         <label className="text-xs text-gray-500 mb-1 block">Proveedor</label>
@@ -306,7 +339,19 @@ export default function ProjectDetail({
   // Monto de una compra con IVA: si con_iva ya viene incluido se usa tal cual; si no, se aplica ×1.19
   const purchaseConIva = (p: ProjectPurchase) => (p.con_iva ? p.monto_clp : Math.round(p.monto_clp * 1.19));
   const purchaseSinIva = (p: ProjectPurchase) => (p.con_iva ? Math.round(p.monto_clp / 1.19) : p.monto_clp);
-  const totalComprado  = purchases.reduce((s, p) => s + purchaseConIva(p), 0); // con IVA
+  // Anticipos absorbidos por una factura (su monto ya está en la factura): no se
+  // cuentan de nuevo en caja. La factura que los salda cuenta completa.
+  const absorbedAnticipoIds = new Set(
+    purchases.filter(p => p.tipo === 'factura' && p.absorbs_anticipo && p.settles_anticipo_id)
+             .map(p => p.settles_anticipo_id as string),
+  );
+  const countsInCaja = (p: ProjectPurchase) => !absorbedAnticipoIds.has(p.id);
+  // Anticipos aún no saldados por ninguna factura (ofrecibles al registrar una).
+  const linkedAnticipoIds = new Set(
+    purchases.filter(p => p.settles_anticipo_id).map(p => p.settles_anticipo_id as string),
+  );
+  const openAnticipos = purchases.filter(p => p.tipo === 'anticipo' && !linkedAnticipoIds.has(p.id));
+  const totalComprado  = purchases.filter(countsInCaja).reduce((s, p) => s + purchaseConIva(p), 0); // con IVA
   const totalCobrado   = payments.reduce((s, p) => s + p.monto_clp, 0);      // c/IVA
   const porCobrar      = revenue - totalCobrado;
   const cobradoPct     = revenue > 0 ? (totalCobrado / revenue) * 100 : 0;
@@ -327,7 +372,7 @@ export default function ProjectDetail({
     const conIva = esCosteExistente ? false : c.con_iva;
     return s + (conIva ? Math.round(c.monto_clp / 1.19) : c.monto_clp);
   }, 0); // neto
-  const compradoSinIva = purchases.reduce((s, p) => s + purchaseSinIva(p), 0);
+  const compradoSinIva = purchases.filter(countsInCaja).reduce((s, p) => s + purchaseSinIva(p), 0);
   const profitSinIva   = revenueSinIva - costBaseSinIva - costExtraSinIva;
   const marginSinIvaPct= revenueSinIva > 0 ? (profitSinIva / revenueSinIva) * 100 : 0;
   const cobradoSinIva  = Math.round(totalCobrado / IVA);
@@ -522,6 +567,8 @@ export default function ProjectDetail({
       fecha:                   fd.get('fecha') as string,
       notas:                  (fd.get('notas') as string) || null,
       created_at:             new Date().toISOString(),
+      settles_anticipo_id:    (fd.get('settles_anticipo_id') as string) || null,
+      absorbs_anticipo:        fd.get('absorbs_anticipo') === 'true',
     };
 
     setPurchases(prev => [optimistic, ...prev]);
@@ -704,6 +751,8 @@ export default function ProjectDetail({
       ...l,
       costo_referencia_sin_iva: null, // Campo obligatorio agregado
       created_at: new Date().toISOString(),
+      settles_anticipo_id: null,
+      absorbs_anticipo: false,
     }));
 
     setPurchases(prev => [...optimistic, ...prev]);
@@ -995,6 +1044,7 @@ export default function ProjectDetail({
                   <PurchaseForm
                     items={items}
                     defaultItemId={null}
+                    openAnticipos={openAnticipos}
                     onSubmit={handleAddPurchase}
                     onCancel={() => setShowGlobalAdd(false)}
                     isPending={isPurchasePending}
@@ -1029,7 +1079,7 @@ export default function ProjectDetail({
 
                       // Cálculos por MONTO (performance financiero) — todo en neto para comparar contra costo cotizado
                       const costoCotizado = item.costo_proveedor_clp * item.quantity;
-                      const montoComprado = itemPurchases.reduce((s, p) => s + purchaseSinIva(p), 0);
+                      const montoComprado = itemPurchases.filter(countsInCaja).reduce((s, p) => s + purchaseSinIva(p), 0);
                       const diferenciaMonto = montoComprado - costoCotizado;
 
                       const isExpanded = expandedItems.has(item.id);
@@ -1156,6 +1206,7 @@ export default function ProjectDetail({
                                     <PurchaseForm
                                       items={items}
                                       defaultItemId={item.id}
+                                      openAnticipos={openAnticipos}
                                       onSubmit={handleAddPurchase}
                                       onCancel={() => setAddingForItem(null)}
                                       isPending={isPurchasePending}
@@ -1755,7 +1806,7 @@ export default function ProjectDetail({
           // Agrupar compras por factura SOLO cuando hay folio real (mismo tipo + proveedor + folio + fecha).
           // Compras sin folio se muestran individualmente — antes se fusionaban entre sí y "desaparecían" líneas.
           const groupedPurchases = purchases
-            .filter(p => !p.id.startsWith('temp-'))
+            .filter(p => !p.id.startsWith('temp-') && countsInCaja(p))
             .reduce((groups, purchase) => {
               const key = purchase.folio
                 ? `${purchase.tipo}-${purchase.proveedor || 'Sin proveedor'}-${purchase.folio}-${purchase.fecha}`
@@ -1791,6 +1842,7 @@ export default function ProjectDetail({
                 group.proveedor,
                 group.folio ? `#${group.folio}` : null,
                 group.items_count > 1 ? `(${group.items_count} ítems)` : null,
+                group.absorbs_anticipo && group.settles_anticipo_id ? '(incluye anticipo)' : null,
                 group.notas
               ].filter(Boolean).join(' · '),
               tipo: 'gasto' as const,
@@ -2047,6 +2099,9 @@ function PurchaseEditForm({
       <td colSpan={colSpan} className="px-4 py-3">
         <form onSubmit={onSubmit} className="flex flex-wrap gap-3 items-end">
           <input type="hidden" name="purchase_id" value={purchase.id} />
+          {/* Preserva el vínculo anticipo→factura al editar (se define al registrar) */}
+          <input type="hidden" name="settles_anticipo_id" value={purchase.settles_anticipo_id || ''} />
+          <input type="hidden" name="absorbs_anticipo" value={purchase.absorbs_anticipo ? 'true' : 'false'} />
 
           <div className="w-32">
             <label className="text-xs text-gray-500 mb-1 block">Tipo</label>
