@@ -13,6 +13,7 @@ const NAV_MAIN = [
   { href: '/admin/facturas-venta', label: 'Facturas venta', icon: '📄' },
   { href: '/admin/finanzas', label: 'Finanzas',      icon: '📊' },
   { href: '/admin/conciliacion', label: 'Conciliación SII', icon: '🔎' },
+  { href: '/admin/balance', label: 'Balance anual', icon: '📒' },
   { href: '/admin/licitaciones', label: 'Licitaciones', icon: '🏛️' },
   { href: '/admin/simulator', label: 'Simulador',    icon: '⚡' },
 ];
