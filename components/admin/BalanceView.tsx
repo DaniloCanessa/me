@@ -64,6 +64,10 @@ export default function BalanceView({ balance, honorarios, anio }: { balance: Ba
         <button onClick={() => router.push(`/admin/balance?anio=${anio - 1}`)} className="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">←</button>
         <span className="text-sm font-bold text-gray-800 min-w-24 text-center">Ejercicio {anio}</span>
         <button onClick={() => router.push(`/admin/balance?anio=${anio + 1}`)} className="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">→</button>
+        <a href={`/api/admin/balance/export?anio=${anio}`}
+          className="ml-auto rounded-lg border border-gray-200 text-gray-600 text-sm font-medium px-3 py-1.5 hover:bg-gray-50">
+          ↓ Exportar a Excel
+        </a>
       </div>
 
       {/* Estado de resultado */}
