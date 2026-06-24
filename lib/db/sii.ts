@@ -149,7 +149,7 @@ export type ConciliacionEstado = 'calza' | 'falta_en_app' | 'falta_en_sii' | 'mo
 export type ConciliacionCompra = {
   estado: ConciliacionEstado;
   // datos SII (si existe)
-  sii?: { rut_proveedor: string; razon_social: string; folio: string; fecha_docto: string | null; monto_iva: number; monto_total: number };
+  sii?: { rut_proveedor: string; razon_social: string; folio: string; fecha_docto: string | null; monto_neto: number; monto_iva: number; monto_total: number };
   // datos app (si existe)
   app?: { id: string; proveedor: string | null; rut: string | null; folio: string | null; fecha: string | null; iva: number | null; total: number | null };
 };
@@ -203,7 +203,7 @@ export async function getConciliacion(periodo: string): Promise<ConciliacionResu
   for (const s of sii) {
     const key = `${normRut(s.rut_proveedor)}|${(s.folio ?? '').trim()}`;
     const a = appByKey.get(key);
-    const siiData = { rut_proveedor: s.rut_proveedor, razon_social: s.razon_social, folio: s.folio, fecha_docto: s.fecha_docto, monto_iva: Number(s.monto_iva) || 0, monto_total: Number(s.monto_total) || 0 };
+    const siiData = { rut_proveedor: s.rut_proveedor, razon_social: s.razon_social, folio: s.folio, fecha_docto: s.fecha_docto, monto_neto: Number(s.monto_neto) || 0, monto_iva: Number(s.monto_iva) || 0, monto_total: Number(s.monto_total) || 0 };
     if (a) {
       appMatched.add(a.id);
       const appIva = ivaFromCapture(a.total, !!a.con_iva);

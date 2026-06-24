@@ -72,6 +72,12 @@ export default function BalanceView({ balance, honorarios, anio }: { balance: Ba
         <Row label="Ingresos por ventas del giro" code="4.1.01" value={b.ingresos} sign="+" color="text-[#1d65c5]" />
         <Row label="Costo de ventas / compras del giro" code="5.1.01" value={b.costos} sign="−" color="text-red-600" />
         <Row label="Gastos por honorarios" code="5.1.02" value={b.honorarios} sign="−" color="text-red-600" />
+        {b.activoFijo > 0 && (
+          <div className="flex items-center justify-between px-5 py-2 bg-blue-50/30">
+            <span className="text-xs text-gray-500">Activo fijo (no es gasto, va a Activos) <span className="font-mono text-[10px] text-gray-400">[1.1.05]</span></span>
+            <span className="text-xs text-gray-500 tabular-nums">{clp(b.activoFijo)}</span>
+          </div>
+        )}
         <div className={`flex items-center justify-between px-5 py-4 border-t-2 ${resultadoPositivo ? 'border-green-200 bg-green-50/40' : 'border-red-200 bg-red-50/40'}`}>
           <span className="text-sm font-bold text-gray-800">{resultadoPositivo ? 'Utilidad' : 'Pérdida'} del ejercicio {anio}</span>
           <span className={`text-lg font-bold ${resultadoPositivo ? 'text-green-700' : 'text-red-600'}`}>{resultadoPositivo ? '' : '−'}{clp(Math.abs(b.resultadoEjercicio))}</span>

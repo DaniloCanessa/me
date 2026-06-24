@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ConciliacionResult, ConciliacionCompra, ConciliacionEstado } from '@/lib/db/sii';
-import { uploadRcvCsv } from '@/app/admin/conciliacion/actions';
+import { uploadRcvCsv, registrarGastoGeneral, registrarTodasGenerales } from '@/app/admin/conciliacion/actions';
+import { GENERAL_EXPENSE_CATEGORIES } from '@/lib/db/expenses';
 
 function clp(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
@@ -47,6 +48,39 @@ export default function ConciliacionView({
     });
   }
 
+  // Registro de gasto general desde una factura del SII (pre-llenada).
+  const [reg, setReg] = useState<ConciliacionCompra['sii'] | null>(null);
+  const [categoria, setCategoria] = useState('');
+  const [activoFijo, setActivoFijo] = useState(false);
+  const [regFile, setRegFile] = useState<File | null>(null);
+
+  function openReg(sii: NonNullable<ConciliacionCompra['sii']>) {
+    setReg(sii); setCategoria(''); setActivoFijo(false); setRegFile(null); setError(null);
+  }
+  function saveReg() {
+    if (!reg) return;
+    const fd = new FormData();
+    fd.set('razon_social', reg.razon_social ?? ''); fd.set('rut', reg.rut_proveedor ?? '');
+    fd.set('folio', reg.folio ?? ''); fd.set('fecha', reg.fecha_docto ?? '');
+    fd.set('neto', String(reg.monto_neto)); fd.set('iva', String(reg.monto_iva)); fd.set('total', String(reg.monto_total));
+    fd.set('categoria', categoria); fd.set('activo_fijo', String(activoFijo));
+    if (regFile) fd.set('file', regFile);
+    start(async () => {
+      const res = await registrarGastoGeneral(fd);
+      if (res?.error) { setError(res.error); return; }
+      setReg(null); router.refresh();
+    });
+  }
+  function registrarTodas() {
+    setError(null);
+    start(async () => {
+      const res = await registrarTodasGenerales(mes);
+      if (res?.error) { setError(res.error); return; }
+      setMsg(`Registradas ${res.count ?? 0} facturas como gasto general (categorízalas en Gastos).`);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4 max-w-4xl">
       {/* Mes + carga */}
@@ -80,11 +114,17 @@ export default function ConciliacionView({
       </div>
 
       {/* Semáforo resumen */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Chip n={c.resumen.calza} label="Calzan" estado="calza" />
         <Chip n={c.resumen.faltaEnApp} label="Falta en tu app" estado="falta_en_app" />
         <Chip n={c.resumen.faltaEnSii} label="No está en el SII" estado="falta_en_sii" />
         <Chip n={c.resumen.montoDistinto} label="Monto distinto" estado="monto_distinto" />
+        {c.resumen.faltaEnApp > 0 && (
+          <button onClick={registrarTodas} disabled={pending}
+            className="ml-auto text-xs rounded-lg bg-[#1d65c5] hover:bg-[#1450a0] text-white font-medium px-3 py-1.5 disabled:opacity-60">
+            Registrar las {c.resumen.faltaEnApp} que faltan como gasto general
+          </button>
+        )}
       </div>
 
       {/* Tabla de conciliación de compras */}
@@ -106,10 +146,11 @@ export default function ConciliacionView({
                   <th className="text-left font-medium px-4 py-2">Folio</th>
                   <th className="text-right font-medium px-4 py-2">IVA SII</th>
                   <th className="text-right font-medium px-4 py-2">IVA app</th>
+                  <th className="px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {c.compras.map((row, i) => <CompraRow key={i} row={row} />)}
+                {c.compras.map((row, i) => <CompraRow key={i} row={row} onRegister={openReg} />)}
               </tbody>
             </table>
           </div>
@@ -136,6 +177,47 @@ export default function ConciliacionView({
         🔴 <strong>Falta en tu app</strong>: el SII la tiene, regístrala. 🟠 <strong>No está en el SII</strong>: tú la tienes
         pero el SII no la cuenta — crédito que el SII pudo haber omitido, revísalo para no perderlo.
       </p>
+
+      {/* Modal: registrar como gasto general */}
+      {reg && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !pending && setReg(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Registrar como gasto general</h2>
+              <button onClick={() => setReg(null)} className="text-gray-400 hover:text-gray-700 text-xl">×</button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <div className="bg-gray-50 rounded-xl p-3 text-sm">
+                <p className="font-semibold text-gray-800">{reg.razon_social}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{reg.rut_proveedor} · folio {reg.folio} · {reg.fecha_docto}</p>
+                <p className="text-xs text-gray-500 mt-1">Neto {clp(reg.monto_neto)} · IVA {clp(reg.monto_iva)} · Total {clp(reg.monto_total)}</p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Categoría</label>
+                <select value={categoria} onChange={(e) => setCategoria(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900">
+                  <option value="">— Sin categoría —</option>
+                  {GENERAL_EXPENSE_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={activoFijo} onChange={(e) => setActivoFijo(e.target.checked)}
+                  className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
+                Es activo fijo (bien durable, no gasto) — va a Activos en el balance
+              </label>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Adjuntar imagen/PDF (opcional)</label>
+                <input type="file" accept="image/*,application/pdf" onChange={(e) => setRegFile(e.target.files?.[0] ?? null)} className="text-xs text-gray-600" />
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setReg(null)} className="rounded-lg border border-gray-200 text-gray-600 text-sm px-4 py-2 hover:bg-gray-50">Cancelar</button>
+              <button onClick={saveReg} disabled={pending} className="rounded-lg bg-[#010101] hover:bg-[#1d65c5] text-white text-sm font-semibold px-4 py-2 disabled:opacity-60">{pending ? 'Guardando…' : 'Registrar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -166,7 +248,7 @@ function Chip({ n, label, estado }: { n: number; label: string; estado: Concilia
   );
 }
 
-function CompraRow({ row }: { row: ConciliacionCompra }) {
+function CompraRow({ row, onRegister }: { row: ConciliacionCompra; onRegister: (sii: NonNullable<ConciliacionCompra['sii']>) => void }) {
   const meta = ESTADO_META[row.estado];
   const prov = row.sii?.razon_social || row.app?.proveedor || '—';
   const folio = row.sii?.folio || row.app?.folio || '—';
@@ -181,6 +263,11 @@ function CompraRow({ row }: { row: ConciliacionCompra }) {
       <td className="px-4 py-2.5 text-gray-500 tabular-nums">{folio}</td>
       <td className="px-4 py-2.5 text-right tabular-nums text-gray-900">{row.sii ? clp(row.sii.monto_iva) : '—'}</td>
       <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{row.app?.iva != null ? clp(row.app.iva) : '—'}</td>
+      <td className="px-4 py-2.5 text-right">
+        {row.estado === 'falta_en_app' && row.sii && (
+          <button onClick={() => onRegister(row.sii!)} className="text-xs text-[#1d65c5] hover:underline whitespace-nowrap">Registrar</button>
+        )}
+      </td>
     </tr>
   );
 }
