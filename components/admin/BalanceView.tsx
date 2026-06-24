@@ -126,6 +126,44 @@ export default function BalanceView({ balance, honorarios, anio }: { balance: Ba
         </div>
       </div>
 
+      {/* Cuadratura del balance (Activo = Pasivo + Patrimonio) */}
+      {(() => {
+        const ivaCreditoRem = Math.max(0, b.ivaCredito - b.ivaDebito);
+        const ivaDebitoPagar = Math.max(0, b.ivaDebito - b.ivaCredito);
+        const pasivoPatr = ivaDebitoPagar + b.retencionHonorarios + b.patrimonioFinal;
+        const otrosActivos = ivaCreditoRem + b.ppm + b.activoFijo;
+        const caja = pasivoPatr - otrosActivos; // Caja/banco = residual que cuadra
+        const totalActivo = otrosActivos + caja;
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Balance — cuadratura</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Caja/banco es el residual que cuadra; compáralo con tu cartola real.</p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-gray-100">
+              <div className="p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Activos</p>
+                <Mini l="Caja / banco" v={caja} code="1.1.01" />
+                <Mini l="IVA crédito (remanente)" v={ivaCreditoRem} code="1.1.02" />
+                <Mini l="PPM por recuperar" v={b.ppm} code="1.1.03" />
+                {b.activoFijo > 0 && <Mini l="Activo fijo" v={b.activoFijo} code="1.1.05" />}
+                <div className="flex justify-between pt-2 mt-1 border-t border-gray-100 text-sm font-bold"><span>Total activo</span><span className="tabular-nums">{clp(totalActivo)}</span></div>
+              </div>
+              <div className="p-4">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Pasivo + Patrimonio</p>
+                {ivaDebitoPagar > 0 && <Mini l="IVA débito por pagar" v={ivaDebitoPagar} code="2.1.01" />}
+                <Mini l="Retención honorarios" v={b.retencionHonorarios} code="2.1.02" />
+                <Mini l="Patrimonio" v={b.patrimonioFinal} code="3.x" />
+                <div className="flex justify-between pt-2 mt-1 border-t border-gray-100 text-sm font-bold"><span>Total pasivo + patr.</span><span className="tabular-nums">{clp(pasivoPatr)}</span></div>
+              </div>
+            </div>
+            <div className="px-5 py-2.5 bg-green-50/50 border-t border-green-100 text-center text-xs text-green-700 font-medium">
+              ✓ Activo {clp(totalActivo)} = Pasivo + Patrimonio {clp(pasivoPatr)}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Honorarios */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -223,6 +261,15 @@ function Row({ label, code, value, sign, color }: { label: string; code?: string
     <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
       <span className="text-sm text-gray-600">{label}{code && <span className="ml-1 text-[10px] font-mono text-gray-400">[{code}]</span>}</span>
       <span className={`text-sm font-semibold tabular-nums ${color}`}>{sign}{clp(value)}</span>
+    </div>
+  );
+}
+
+function Mini({ l, v, code }: { l: string; v: number; code?: string }) {
+  return (
+    <div className="flex justify-between py-1 text-sm">
+      <span className="text-gray-600">{l}{code && <span className="ml-1 text-[10px] font-mono text-gray-400">[{code}]</span>}</span>
+      <span className="tabular-nums text-gray-900">{clp(v)}</span>
     </div>
   );
 }
