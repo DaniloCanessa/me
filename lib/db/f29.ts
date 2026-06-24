@@ -40,6 +40,16 @@ const DEFAULT_MANUAL: F29Manual = {
   notas: null, revisado: false,
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type F29Oficial = Record<string, any> | null;
+
+export type RemanenteCheck = {
+  esperado: number;   // 77 del mes previo (lo que el SII DEBÍA arrastrar)
+  declarado: number;  // 504 que el SII trajo este mes
+  ok: boolean;
+  dif: number;
+} | null;
+
 export type F29Result = {
   periodo: string;
   debito: { iva: number; docs: number; fuente: F29Fuente };   // 538
@@ -50,7 +60,15 @@ export type F29Result = {
   ivaDeterminado: number;            // 89
   remanenteSiguiente: number;        // 77
   totalAPagar: number;               // 91
+  oficial: F29Oficial;               // F29 declarado al SII (certificado)
+  remanenteCheck: RemanenteCheck;    // verificación del arrastre del remanente
 };
+
+async function getF29Oficial(periodo: string): Promise<F29Oficial> {
+  const db = getSupabaseAdmin();
+  const { data } = await db.from('f29_oficial').select('*').eq('periodo', periodo).maybeSingle();
+  return data ?? null;
+}
 
 // Lado calculado: débito y crédito del mes (RCV-first, respaldo en la app).
 async function getF29Calc(periodo: string) {
@@ -135,6 +153,19 @@ export async function getF29(periodo: string): Promise<F29Result> {
     + manual.ppm_neto + manual.retencion_honorarios + manual.otros_impuestos
     + manual.reajustes + manual.multas;
 
+  // Verificación del remanente: el 504 que el SII declaró este mes debería ser
+  // el 77 del mes previo (reajustado). Si no, el SII no lo arrastró → alarma.
+  const [oficial, prevOficial] = await Promise.all([getF29Oficial(periodo), getF29Oficial(prev)]);
+  let remanenteCheck: RemanenteCheck = null;
+  const declarado504 = oficial?.c504_rem_anterior;
+  const esperado77 = prevOficial?.c77_rem_siguiente;
+  if (declarado504 != null && esperado77 != null) {
+    const dif = Number(declarado504) - Number(esperado77);
+    // tolerancia por reajuste (IPC mensual): ~3% o $50
+    const ok = Math.abs(dif) <= Math.max(50, Number(esperado77) * 0.03);
+    remanenteCheck = { esperado: Number(esperado77), declarado: Number(declarado504), ok, dif };
+  }
+
   return {
     periodo,
     debito: { iva: calc.debitoTotal, docs: calc.debitoDocs, fuente: calc.fuenteDebito },
@@ -143,5 +174,6 @@ export async function getF29(periodo: string): Promise<F29Result> {
     manualExiste,
     remanenteAnteriorSugerido: prevRemanenteSiguiente,
     ivaDeterminado, remanenteSiguiente, totalAPagar,
+    oficial, remanenteCheck,
   };
 }

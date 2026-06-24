@@ -47,12 +47,15 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
     for (const line of lines.slice(1)) {
       const c = line.split(';');
       if (c.length < 15) continue;
+      const tipo = c[1]?.trim() ?? '';
+      // Notas de crédito recibidas (tipo 61) restan al crédito fiscal.
+      const sign = tipo === '61' ? -1 : 1;
       compras.push({
-        tipo_doc: c[1]?.trim() ?? '', tipo_compra: c[2]?.trim() ?? '',
+        tipo_doc: tipo, tipo_compra: c[2]?.trim() ?? '',
         rut_proveedor: c[3]?.trim() ?? '', razon_social: c[4]?.trim() ?? '',
         folio: c[5]?.trim() ?? '', fecha_docto: parseFecha(c[6]),
-        monto_exento: num(c[9]), monto_neto: num(c[10]),
-        monto_iva: num(c[11]), monto_total: num(c[14]),
+        monto_exento: sign * num(c[9]), monto_neto: sign * num(c[10]),
+        monto_iva: sign * num(c[11]), monto_total: sign * num(c[14]),
       });
     }
     return { kind: 'compras', compras, ventas: [] };

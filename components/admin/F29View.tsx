@@ -86,6 +86,40 @@ export default function F29View({ f29, mes, label }: { f29: F29Result; mes: stri
           className="ml-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-900" />
       </div>
 
+      {/* Verificación del remanente arrastrado (504 ← 77 del mes previo) */}
+      {f29.remanenteCheck && (
+        f29.remanenteCheck.ok ? (
+          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-sm text-green-700">
+            ✓ Remanente arrastrado correctamente: el SII trajo {clp(f29.remanenteCheck.declarado)} (mes previo cerró en {clp(f29.remanenteCheck.esperado)}).
+          </div>
+        ) : (
+          <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-sm text-red-700">
+            <p className="font-bold">⚠️ Revisar: el remanente no calza</p>
+            <p className="text-xs mt-1">El SII trajo <strong>{clp(f29.remanenteCheck.declarado)}</strong> como remanente del mes anterior (código 504),
+            pero el mes previo cerró en <strong>{clp(f29.remanenteCheck.esperado)}</strong> (código 77). Diferencia: {clp(Math.abs(f29.remanenteCheck.dif))}.
+            Si el SII no arrastró el remanente, podrías estar perdiendo crédito — revísalo antes de declarar.</p>
+          </div>
+        )
+      )}
+
+      {/* F29 declarado al SII (oficial) */}
+      {f29.oficial && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Declarado al SII</p>
+            {f29.oficial.folio && <span className="text-[11px] text-gray-400">folio {f29.oficial.folio}</span>}
+          </div>
+          <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-xs">
+            {[['Débito (502)', f29.oficial.c502_debito], ['Crédito (520)', f29.oficial.c520_credito],
+              ['Total créditos (537)', f29.oficial.c537_total_credito], ['Rem. anterior (504)', f29.oficial.c504_rem_anterior],
+              ['Rem. siguiente (77)', f29.oficial.c77_rem_siguiente], ['Total a pagar (91)', f29.oficial.c91_total_pagar],
+            ].filter(([, v]) => v != null).map(([l, v]) => (
+              <div key={l as string} className="flex justify-between"><span className="text-gray-500">{l}</span><span className="tabular-nums text-gray-800 font-medium">{clp(Number(v))}</span></div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* A. Débito fiscal */}
       <Section title="Débito fiscal — ventas del mes" hint={f29.debito.fuente === 'rcv' ? 'Desde el RCV de ventas del SII importado.' : 'Desde las facturas de venta registradas (aún sin importar el RCV).'}>
         <CalcLine code="502" label="Ventas afectas" iva={f29.debito.iva} docs={f29.debito.docs} fuente={f29.debito.fuente} />
