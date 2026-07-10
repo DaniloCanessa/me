@@ -97,24 +97,25 @@ function ConsumptionChart({ bills }: { bills: MonthlyBill[] }) {
   );
 }
 
-// ─── Gráfico de generación mensual (línea) ────────────────────────────────────
+// ─── Generación (columnas) vs consumo (línea) ─────────────────────────────────
+// Refleja el consumo real por mes (boletas). En los meses con generación por encima
+// del consumo, el excedente se inyecta a la red.
 
-function GenerationChart({ result }: { result: SimulatorResult }) {
+function GenVsConsumptionChart({ result }: { result: SimulatorResult }) {
   const { monthly } = result.energyBalance;
-  const W = 714;
-  const H = 120;
-  const PAD = { top: 16, right: 8, bottom: 22, left: 36 };
+  const W = 714, H = 150;
+  const PAD = { top: 16, right: 10, bottom: 22, left: 40 };
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...monthly.map((m) => m.productionKWh), 1);
-
-  const xAt = (i: number) => PAD.left + (i / (monthly.length - 1)) * cW;
-  const yAt = (v: number) => PAD.top + cH - (v / maxVal) * cH;
-
-  const pathD = monthly
-    .map((m, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(m.productionKWh).toFixed(1)}`)
+  const maxVal = Math.max(...monthly.map((m) => Math.max(m.productionKWh, m.consumptionKWh)), 1);
+  const n = monthly.length;
+  const slot = cW / n;
+  const barW = Math.min(slot * 0.58, 26);
+  const baseY = PAD.top + cH;
+  const yOf = (v: number) => baseY - (v / maxVal) * cH;
+  const consPath = monthly
+    .map((m, i) => `${i === 0 ? 'M' : 'L'}${(PAD.left + slot * i + slot / 2).toFixed(1)},${yOf(m.consumptionKWh).toFixed(1)}`)
     .join(' ');
-
   const yTicks = [0, 0.5, 1];
 
   return (
@@ -124,26 +125,93 @@ function GenerationChart({ result }: { result: SimulatorResult }) {
         return (
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
-            <text x={PAD.left - 4} y={+yy + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">
-              {Math.round(maxVal * t)}
-            </text>
+            <text x={PAD.left - 5} y={+yy + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">{Math.round(maxVal * t)}</text>
           </g>
         );
       })}
+      {monthly.map((m, i) => {
+        const x = PAD.left + slot * i + (slot - barW) / 2;
+        const barH = (m.productionKWh / maxVal) * cH;
+        return (
+          <g key={m.month}>
+            <rect x={x} y={baseY - barH} width={barW} height={Math.max(barH, 0)} fill="#f59e0b" opacity={0.85} rx={1.5} />
+            <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">{m.monthName.slice(0, 3)}</text>
+          </g>
+        );
+      })}
+      <path d={consPath} fill="none" stroke={C.brand} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       {monthly.map((m, i) => (
-        <text
-          key={m.month}
-          x={xAt(i).toFixed(1)} y={H - 4}
-          textAnchor="middle" fontSize={8} fill="#9ca3af"
-        >
-          {m.monthName.slice(0, 3)}
-        </text>
-      ))}
-      <path d={pathD} fill="none" stroke={C.accent} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      {monthly.map((m, i) => (
-        <circle key={m.month} cx={xAt(i)} cy={yAt(m.productionKWh)} r={2.5} fill={C.accent} />
+        <circle key={m.month} cx={PAD.left + slot * i + slot / 2} cy={yOf(m.consumptionKWh)} r={2.5} fill={C.brand} />
       ))}
     </svg>
+  );
+}
+
+// ─── Balance energético mensual (barras apiladas) ─────────────────────────────
+// Producción dividida en autoconsumo (base) + inyección (arriba); la línea marca
+// lo que se sigue tomando de la red.
+
+function BalanceChart({ result }: { result: SimulatorResult }) {
+  const { monthly } = result.energyBalance;
+  const W = 714, H = 150;
+  const PAD = { top: 16, right: 10, bottom: 22, left: 40 };
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top - PAD.bottom;
+  const maxVal = Math.max(...monthly.map((m) => Math.max(m.productionKWh, m.consumedFromGridKWh)), 1);
+  const n = monthly.length;
+  const slot = cW / n;
+  const barW = Math.min(slot * 0.6, 26);
+  const baseY = PAD.top + cH;
+  const h = (v: number) => (v / maxVal) * cH;
+  const gridPath = monthly
+    .map((m, i) => `${i === 0 ? 'M' : 'L'}${(PAD.left + slot * i + slot / 2).toFixed(1)},${(baseY - h(m.consumedFromGridKWh)).toFixed(1)}`)
+    .join(' ');
+  const yTicks = [0, 0.5, 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
+      {yTicks.map((t) => {
+        const yy = (PAD.top + cH * (1 - t)).toFixed(1);
+        return (
+          <g key={t}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
+            <text x={PAD.left - 5} y={+yy + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">{Math.round(maxVal * t)}</text>
+          </g>
+        );
+      })}
+      {monthly.map((m, i) => {
+        const x = PAD.left + slot * i + (slot - barW) / 2;
+        const selfH = h(m.selfConsumptionKWh);
+        const injH = h(m.injectedToGridKWh);
+        return (
+          <g key={m.month}>
+            <rect x={x} y={baseY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
+            <rect x={x} y={baseY - selfH - injH} width={barW} height={Math.max(injH, 0)} fill="#2563eb" opacity={0.8} rx={1.5} />
+            <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">{m.monthName.slice(0, 3)}</text>
+          </g>
+        );
+      })}
+      <path d={gridPath} fill="none" stroke="#9ca3af" strokeWidth={1.75} strokeDasharray="3 2" strokeLinejoin="round" strokeLinecap="round" />
+      {monthly.map((m, i) => (
+        <circle key={m.month} cx={PAD.left + slot * i + slot / 2} cy={baseY - h(m.consumedFromGridKWh)} r={1.8} fill="#9ca3af" />
+      ))}
+    </svg>
+  );
+}
+
+// Chip de leyenda reutilizable para los gráficos del informe.
+function LegendItem({ color, label, line, dashed }: { color: string; label: string; line?: boolean; dashed?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <div style={{
+        width: line ? 18 : 12,
+        height: line ? 0 : 8,
+        borderTop: line ? `2px ${dashed ? 'dashed' : 'solid'} ${color}` : undefined,
+        backgroundColor: line ? undefined : color,
+        borderRadius: line ? 0 : 2,
+      }} />
+      <span style={{ fontSize: 8, color: C.gray }}>{label}</span>
+    </div>
   );
 }
 
@@ -252,30 +320,25 @@ export default function SimulationReportHtml({
     >
 
       {/* ── Cabecera de marca ─────────────────────────────────────────────── */}
-      <div style={{ backgroundColor: C.black, borderRadius: 10, padding: '20px 24px 18px', marginBottom: 28 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ color: C.cyan, fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 5 }}>
-              Mercado Energy · Simulador Solar Chile
-            </div>
-            <div style={{ color: C.white, fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>
-              Propuesta de sistema solar fotovoltaico
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, marginTop: 6 }}>
-              Generado el {date}
-            </div>
+      <div style={{ backgroundImage: 'linear-gradient(120deg, #0c2c54, #1a5aa8)', borderRadius: 10, padding: '26px 28px 22px', marginBottom: 28 }}>
+        <div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/mercadoenergy-blanco.png"
+            alt="Mercado Energy"
+            width={258}
+            height={78}
+            style={{ display: 'block', height: 78, width: 258, marginBottom: 20 }}
+          />
+          <div style={{ color: C.white, fontSize: 22, fontWeight: 700, letterSpacing: -0.3 }}>
+            Propuesta de sistema solar fotovoltaico
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10 }}>
-              {isBusiness ? 'Sistema dimensionado' : 'Escenario recomendado'}
-            </div>
-            <div style={{ color: C.accent, fontSize: 18, fontWeight: 700, marginTop: 2 }}>
-              {isBusiness ? `PFV ${kit.sizekWp} kW` : scenarioLabels[recommendedScenario!]}
-            </div>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, marginTop: 6 }}>
+            Generado el {date}
           </div>
         </div>
         {/* Línea de acento de marca */}
-        <div style={{ height: 3, borderRadius: 2, marginTop: 14, backgroundImage: `linear-gradient(90deg, ${C.accent}, ${C.cyan})` }} />
+        <div style={{ height: 3, borderRadius: 2, marginTop: 16, backgroundImage: `linear-gradient(90deg, ${C.accent}, ${C.cyan})` }} />
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -423,15 +486,28 @@ export default function SimulationReportHtml({
           {explanatoryText}
         </div>
 
-        {/* Gráfico de generación mensual */}
+        {/* Gráfico: generación vs consumo mensual (con el tamaño de la PFV) */}
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 }}>
-            Generación solar mensual proyectada (kWh)
+            Generación vs consumo mensual · PFV {kit.sizekWp} kW (kWh)
           </div>
-          <GenerationChart result={recommended} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-            <div style={{ width: 20, height: 2, backgroundColor: C.accent }} />
-            <span style={{ fontSize: 8, color: C.gray }}>Producción estimada</span>
+          <GenVsConsumptionChart result={recommended} />
+          <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+            <LegendItem color="#f59e0b" label="Generación (columnas)" />
+            <LegendItem color={C.brand} label="Consumo (línea)" line />
+          </div>
+        </div>
+
+        {/* Gráfico: balance energético mensual (apilado) */}
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: C.gray, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 10 }}>
+            Balance energético mensual · PFV {kit.sizekWp} kW (kWh)
+          </div>
+          <BalanceChart result={recommended} />
+          <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+            <LegendItem color="#16a34a" label="Autoconsumo" />
+            <LegendItem color="#2563eb" label="Inyección a la red" />
+            <LegendItem color="#9ca3af" label="Consumo desde la red" line dashed />
           </div>
         </div>
 

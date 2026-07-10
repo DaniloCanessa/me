@@ -474,27 +474,8 @@ export default function StepSupply({ category, initialData, contact, onSubmit }:
           </div>
         )}
 
-        {/* ── Tarifa eléctrica (residencial) ── */}
-        {isResidential && !isApartment && (
-          <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-6 flex flex-col gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-700">Tarifa eléctrica</h2>
-              <p className="text-xs text-gray-400 mt-1">
-                Aparece en tu boleta. La mayoría de los hogares están en BT1.
-              </p>
-            </div>
-
-            <select
-              value={tarifa}
-              onChange={(e) => setTarifa(e.target.value as TarifaType)}
-              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition"
-            >
-              {TARIFA_BT.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Tarifa residencial: se asume BT1 (la casi totalidad de los hogares).
+            El selector se quitó para simplificar el flujo. */}
 
         {/* Opciones solares */}
         {!isApartment && (

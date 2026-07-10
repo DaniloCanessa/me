@@ -45,6 +45,29 @@ export function selectKits(
   return { kitA, kitB };
 }
 
+/** Kit sin batería del catálogo cuyo tamaño (kWp) está más cerca del objetivo.
+ *  Se usa para el override manual de tamaño de PFV (modo interno). */
+export function closestNoBatteryKit(targetKWp: number, catalog?: SolarKit[]): SolarKit {
+  const all = (catalog ?? KIT_CATALOG)
+    .filter((k) => !k.includesBattery)
+    .sort((a, b) => a.sizekWp - b.sizekWp);
+  return all.reduce(
+    (best, k) =>
+      Math.abs(k.sizekWp - targetKWp) < Math.abs(best.sizekWp - targetKWp) ? k : best,
+    all[0],
+  );
+}
+
+/** Kit sin batería del catálogo del escalón inmediatamente inferior a un tamaño dado.
+ *  Devuelve null si no hay ninguno más chico. Se usa para derivar la "más económica"
+ *  cuando se ajusta manualmente la planta principal (modo interno). */
+export function nextSmallerNoBatteryKit(sizeKWp: number, catalog?: SolarKit[]): SolarKit | null {
+  const smaller = (catalog ?? KIT_CATALOG)
+    .filter((k) => !k.includesBattery && k.sizekWp < sizeKWp)
+    .sort((a, b) => a.sizekWp - b.sizekWp);
+  return smaller.length > 0 ? smaller[smaller.length - 1] : null;
+}
+
 // ─── Kit empresa (dimensionamiento continuo) ──────────────────────────────────
 
 export function buildBusinessKit(
@@ -183,14 +206,21 @@ export function runSimulation(
   const batteryUsableFraction = input.batteryUsableFraction ?? SOLAR_DEFAULTS.batteryUsableFraction;
   const batteryCycleEff       = input.batteryCycleEfficiency ?? SOLAR_DEFAULTS.batteryDailyCycleEfficiency;
 
+  // Consumo por mes: usa el real de cada boleta si viene; si no, el promedio.
+  const consFor = (m: number) =>
+    input.monthlyConsumptionByMonth?.[m as MonthIndex] ?? input.monthlyConsumptionKWh;
+
   const monthly: MonthlyEnergyBalance[] = [];
+  let totalConsumptionKWh = 0;
   for (let m = 1; m <= 12; m++) {
+    const consumptionKWh = consFor(m);
+    totalConsumptionKWh += consumptionKWh;
     const productionKWh = kit.sizekWp * region.monthlyProductionKWhPerKWp[m as MonthIndex];
     monthly.push(
       calcMonthlyBalance(
         m,
         productionKWh,
-        input.monthlyConsumptionKWh,
+        consumptionKWh,
         kWhPriceCLP,
         injectionValueCLP,
         fixedChargeCLP,
@@ -201,8 +231,6 @@ export function runSimulation(
       ),
     );
   }
-
-  const totalConsumptionKWh        = input.monthlyConsumptionKWh * 12;
   const totalSelfConsumptionKWh    = monthly.reduce((s, m) => s + m.selfConsumptionKWh, 0);
   const totalBatteryChargeKWh      = monthly.reduce((s, m) => s + m.batteryChargeKWh, 0);
   const totalBatteryDischargeKWh   = monthly.reduce((s, m) => s + m.batteryDischargeKWh, 0);
@@ -276,18 +304,43 @@ export function calcThreeScenarios(
   input: SimulatorInput,
   batteryCount: number,
   catalog?: SolarKit[],
+  opts?: {
+    /** Override manual del tamaño de la planta principal (modo interno). */
+    overrideKitKWp?: number;
+    /** Escenario C: aplicar la batería a la planta económica (kitB) en vez de la principal. */
+    cUsesEconomic?: boolean;
+  },
 ): KitScenarios {
-  const empalmeMaxKW    = input.empalmeMaxKW!;
-  const { kitA, kitB }  = selectKits(empalmeMaxKW, catalog);
+  const empalmeMaxKW      = input.empalmeMaxKW!;
+  const { kitA: autoKitA, kitB: autoKitB } = selectKits(empalmeMaxKW, catalog);
+
+  // Planta principal: la recomendada automáticamente, o el override manual (interno).
+  const mainKit = opts?.overrideKitKWp != null
+    ? closestNoBatteryKit(opts.overrideKitKWp, catalog)
+    : autoKitA;
+
+  // Planta "más económica":
+  //  • Modo automático: el segundo tamaño más grande que cabe en el empalme.
+  //  • Con override manual: el escalón de catálogo inmediatamente inferior al elegido
+  //    (así siempre es coherentemente más chica y barata que la principal). Si la
+  //    principal es la más pequeña del catálogo, no hay más económica → null.
+  const economicKit = opts?.overrideKitKWp != null
+    ? nextSmallerNoBatteryKit(mainKit.sizekWp, catalog)
+    : autoKitB;
+
   const batteryKWh      = batteryCount * (input.batteryModuleKWh    ?? SOLAR_DEFAULTS.batteryModuleKWh);
   const batteryCostCLP  = batteryCount * (input.batteryModulePriceCLP ?? SOLAR_DEFAULTS.batteryModulePriceCLP);
 
+  // Escenario C: la batería puede montarse sobre la planta recomendada (mainKit)
+  // o sobre la más económica (economicKit), según elija el usuario.
+  const cKit = opts?.cUsesEconomic && economicKit ? economicKit : mainKit;
+
   return {
-    A:    runSimulation(input, kitA, 0),
-    B:    kitB ? runSimulation(input, kitB, 0) : null,
-    C:    runSimulation(input, kitA, batteryKWh, kitA.priceReferenceCLP + batteryCostCLP),
-    kitA,
-    kitB,
+    A:    runSimulation(input, mainKit, 0),
+    B:    economicKit ? runSimulation(input, economicKit, 0) : null,
+    C:    runSimulation(input, cKit, batteryKWh, cKit.priceReferenceCLP + batteryCostCLP),
+    kitA: mainKit,
+    kitB: economicKit,
   };
 }
 

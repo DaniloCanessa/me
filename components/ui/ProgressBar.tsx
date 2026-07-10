@@ -5,7 +5,6 @@ const STEP_LABELS: Record<WizardStep, string> = {
   'contact':             'Contacto',
   'supply':              'Suministro',
   'bills':               'Boletas',
-  'bill-review':         'Revisión',
   'future-consumption':  'Futuro',
   'results':             'Resultado',
 };
@@ -15,7 +14,6 @@ const STEP_ORDER: WizardStep[] = [
   'contact',
   'supply',
   'bills',
-  'bill-review',
   'future-consumption',
   'results',
 ];

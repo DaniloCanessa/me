@@ -9,7 +9,6 @@ import StepCustomerType from '@/components/simulator/StepCustomerType';
 import StepContact from '@/components/simulator/StepContact';
 import StepSupply from '@/components/simulator/StepSupply';
 import StepBills from '@/components/simulator/StepBills';
-import StepBillReview from '@/components/simulator/StepBillReview';
 import StepFutureConsumption from '@/components/simulator/StepFutureConsumption';
 import StepResults from '@/components/simulator/StepResults';
 
@@ -18,7 +17,6 @@ const STEP_ORDER: WizardStep[] = [
   'contact',
   'supply',
   'bills',
-  'bill-review',
   'future-consumption',
   'results',
 ];
@@ -148,13 +146,6 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
           />
         )}
 
-        {state.step === 'bill-review' && (
-          <StepBillReview
-            profile={state.consumptionProfile!}
-            onConfirm={goNext}
-          />
-        )}
-
         {state.step === 'future-consumption' && (
           <StepFutureConsumption
             initialData={state.futureConsumption}
@@ -168,7 +159,7 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
         )}
 
         {state.step === 'results' && (
-          <StepResults state={state} config={config} catalog={catalog} />
+          <StepResults state={state} config={config} catalog={catalog} adminMode={ocrEnabled} />
         )}
 
       </div>

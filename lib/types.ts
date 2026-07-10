@@ -251,6 +251,9 @@ export interface SimulatorInput {
   distribuidora?: string;
   tarifa: TarifaType;
   monthlyConsumptionKWh: number;
+  /** Consumo real por mes (1–12). Si viene, la simulación lo usa mes a mes en vez
+   *  del promedio; los meses ausentes caen a monthlyConsumptionKWh. */
+  monthlyConsumptionByMonth?: Partial<Record<MonthIndex, number>>;
   energyPrice: EnergyPriceData;
   fixedChargeCLP?: number;
   customerType: CustomerType;
@@ -517,7 +520,6 @@ export type WizardStep =
   | 'contact'
   | 'supply'
   | 'bills'
-  | 'bill-review'
   | 'future-consumption'
   | 'results';
 

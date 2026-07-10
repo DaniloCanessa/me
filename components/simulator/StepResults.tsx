@@ -10,6 +10,7 @@ import type {
   PersonContact,
   BusinessContact,
   TarifaType,
+  MonthIndex,
 } from '@/lib/types';
 import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBattery } from '@/lib/calculations';
 import { getRegionById } from '@/lib/regions';
@@ -17,7 +18,7 @@ import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalys
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
-import { IconCar } from '@/components/landing/icons';
+import { IconCar, IconBattery } from '@/components/landing/icons';
 import dynamic from 'next/dynamic';
 
 const PDFDownloadButton = dynamic(() => import('./PDFDownloadButton'), { ssr: false });
@@ -28,6 +29,8 @@ interface StepResultsProps {
   state: WizardState;
   config?: SimulatorConfig;
   catalog?: SolarKit[];
+  /** true solo con sesión de admin: habilita el selector manual de tamaño de PFV. */
+  adminMode?: boolean;
 }
 
 // ─── PFV existente: saldo de empalme y consumo residual a cubrir ──────────────
@@ -149,6 +152,38 @@ function buildBaseInput(state: WizardState, config?: SimulatorConfig): Simulator
   };
 }
 
+// ─── Consumo real por mes ─────────────────────────────────────────────────────
+// Construye el consumo mes a mes desde las boletas (reales + estimación estacional
+// de los meses faltantes) para que la simulación no aplane el consumo al promedio.
+// Con PFV existente base "total" descuenta la producción de la planta actual por mes.
+// Los equipos futuros se suman como incremento mensual parejo (mismo criterio previo).
+
+function buildMonthlyConsumption(
+  state: WizardState,
+  includeAdditions: boolean,
+): Partial<Record<MonthIndex, number>> {
+  const profile = state.consumptionProfile!;
+  const es = getExistingSolarInfo(state);
+  const additions = includeAdditions ? (state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0) : 0;
+
+  const regionId = (state.contact as PersonContact | BusinessContact)?.regionId || 'metropolitana';
+  const region = getRegionById(regionId);
+  // Solo se descuenta la PFV existente si el consumo ingresado es el total (red + PFV).
+  const existing = es.active && !es.atTope && es.basis === 'total' ? es : null;
+
+  const map: Partial<Record<MonthIndex, number>> = {};
+  for (const bill of profile.bills) {
+    const m = bill.month as MonthIndex;
+    let c = bill.consumptionKWh;
+    if (existing && region) {
+      c = Math.max(0, c - existing.existingKWp * region.monthlyProductionKWhPerKWp[m]);
+    }
+    c += additions;
+    map[m] = Math.round(c);
+  }
+  return map;
+}
+
 // ─── Panel de análisis y recomendaciones ─────────────────────────────────────
 
 function AnalysisPanel({ analysis, tarifa }: { analysis: TariffAnalysisResult; tarifa: TarifaType }) {
@@ -253,6 +288,40 @@ function StatCard({ label, value, sub, accent }: {
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <p className={`text-2xl font-bold ${accent ?? 'text-gray-900'}`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+// Control segmentado (estilo iOS): riel con la opción activa como "thumb" blanco.
+// Mantiene todas las alternativas a la vista, pero más elegante que píldoras sueltas.
+function SegmentedControl<T extends string | number>({ options, value, onChange, ariaLabel }: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={ariaLabel} className="flex w-full gap-1 rounded-2xl bg-amber-100/50 p-1">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={String(o.value)}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.value)}
+            className={[
+              'flex-1 min-w-0 rounded-xl px-2 py-2 text-sm font-semibold tabular-nums transition-all duration-200',
+              active
+                ? 'bg-white text-amber-900 shadow-[0_1px_4px_rgba(120,53,15,0.18)]'
+                : 'text-amber-700/70 hover:text-amber-900',
+            ].join(' ')}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -413,10 +482,187 @@ function MonthlyLineChart({ monthly }: { monthly: SimulatorResult['energyBalance
   );
 }
 
+// ─── Gráfico de barras apiladas del balance mensual ───────────────────────────
+// Cada barra = producción del mes, dividida en autoconsumo (base) + inyección
+// (arriba). Una línea gris marca lo que se sigue tomando de la red. Reemplaza la
+// tabla densa como vista principal; los números quedan en el detalle colapsable.
+
+function StackedBalanceChart({ monthly }: { monthly: SimulatorResult['energyBalance']['monthly'] }) {
+  const W = 560, H = 180;
+  const PAD = { top: 16, right: 10, bottom: 24, left: 34 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(1, ...monthly.map((m) => Math.max(m.productionKWh, m.consumedFromGridKWh)));
+  const n = monthly.length;
+  const slot = chartW / n;
+  const barW = Math.min(slot * 0.62, 26);
+  const baseY = PAD.top + chartH;
+  const h = (v: number) => (v / maxVal) * chartH;
+
+  const gridPath = monthly
+    .map((m, i) => {
+      const cx = PAD.left + slot * i + slot / 2;
+      return `${i === 0 ? 'M' : 'L'}${cx.toFixed(1)},${(baseY - h(m.consumedFromGridKWh)).toFixed(1)}`;
+    })
+    .join(' ');
+
+  const yTicks = [0, 0.5, 1];
+
+  return (
+    <div className="mt-1">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+        {/* Rejilla y eje Y */}
+        {yTicks.map((t) => {
+          const yy = PAD.top + chartH * (1 - t);
+          return (
+            <g key={t}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
+              <text x={PAD.left - 4} y={yy + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
+                {Math.round(maxVal * t)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Barras apiladas: autoconsumo (base) + inyección (arriba) */}
+        {monthly.map((m, i) => {
+          const x = PAD.left + slot * i + (slot - barW) / 2;
+          const selfH = h(m.selfConsumptionKWh);
+          const injH = h(m.injectedToGridKWh);
+          return (
+            <g key={m.month}>
+              <rect x={x} y={baseY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
+              <rect
+                x={x}
+                y={baseY - selfH - injH}
+                width={barW}
+                height={Math.max(injH, 0)}
+                fill="#2563eb"
+                opacity={0.8}
+                rx={1.5}
+              />
+              <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">
+                {m.monthName.slice(0, 3)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Línea de consumo desde la red */}
+        <path d={gridPath} fill="none" stroke="#9ca3af" strokeWidth={1.75} strokeDasharray="3 2" strokeLinejoin="round" strokeLinecap="round" />
+        {monthly.map((m, i) => {
+          const cx = PAD.left + slot * i + slot / 2;
+          return <circle key={m.month} cx={cx} cy={baseY - h(m.consumedFromGridKWh)} r={1.8} fill="#9ca3af" />;
+        })}
+      </svg>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+        {[
+          { color: '#16a34a', label: 'Autoconsumo' },
+          { color: '#2563eb', label: 'Inyección a la red' },
+        ].map((s) => (
+          <div key={s.label} className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: s.color }} />
+            <span className="text-[10px] text-gray-500">{s.label}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: '#9ca3af' }} />
+          <span className="text-[10px] text-gray-500">Consumo desde la red</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Gráfico generación (columnas) vs consumo (línea) ─────────────────────────
+// Vista directa de por qué la cobertura no es 100%: en los meses en que las
+// columnas de generación superan la línea de consumo, el excedente se inyecta;
+// en invierno puede quedar por debajo. La generación es estacional; el consumo
+// es el promedio mensual usado en la simulación (línea de referencia).
+
+function GenerationConsumptionChart({ monthly }: { monthly: SimulatorResult['energyBalance']['monthly'] }) {
+  const W = 560, H = 190;
+  const PAD = { top: 18, right: 12, bottom: 24, left: 40 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(1, ...monthly.map((m) => Math.max(m.productionKWh, m.consumptionKWh)));
+  const n = monthly.length;
+  const slot = chartW / n;
+  const barW = Math.min(slot * 0.58, 24);
+  const baseY = PAD.top + chartH;
+  const yOf = (v: number) => baseY - (v / maxVal) * chartH;
+
+  const consPath = monthly
+    .map((m, i) => {
+      const cx = PAD.left + slot * i + slot / 2;
+      return `${i === 0 ? 'M' : 'L'}${cx.toFixed(1)},${yOf(m.consumptionKWh).toFixed(1)}`;
+    })
+    .join(' ');
+
+  const yTicks = [0, 0.5, 1];
+
+  return (
+    <div className="mt-1">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
+        {/* Rejilla y eje Y */}
+        {yTicks.map((t) => {
+          const yy = PAD.top + chartH * (1 - t);
+          return (
+            <g key={t}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
+              <text x={PAD.left - 5} y={yy + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
+                {Math.round(maxVal * t)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Columnas de generación */}
+        {monthly.map((m, i) => {
+          const x = PAD.left + slot * i + (slot - barW) / 2;
+          const barH = (m.productionKWh / maxVal) * chartH;
+          return (
+            <g key={m.month}>
+              <rect x={x} y={baseY - barH} width={barW} height={Math.max(barH, 0)} fill="#f59e0b" opacity={0.85} rx={1.5} />
+              <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">
+                {m.monthName.slice(0, 3)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Línea de consumo */}
+        <path d={consPath} fill="none" stroke="#1d65c5" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {monthly.map((m, i) => {
+          const cx = PAD.left + slot * i + slot / 2;
+          return <circle key={m.month} cx={cx} cy={yOf(m.consumptionKWh)} r={2.5} fill="#1d65c5" />;
+        })}
+      </svg>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
+          <span className="text-[10px] text-gray-500">Generación (columnas)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center" style={{ width: 16 }}>
+            <span className="inline-block w-4 rounded" style={{ height: 2, backgroundColor: '#1d65c5' }} />
+          </span>
+          <span className="text-[10px] text-gray-500">Consumo (línea)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Bloque financiero (detalle) ──────────────────────────────────────────────
 
 function FinancialDetail({ result }: { result: SimulatorResult }) {
   const { energyBalance, financial } = result;
+  const [showTable, setShowTable] = useState(false);
   return (
     <>
       <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
@@ -467,44 +713,84 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 overflow-x-auto">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Balance energético mensual</h2>
-        <table className="w-full text-xs min-w-[560px]">
-          <thead>
-            <tr className="text-gray-400 border-b border-gray-100">
-              <th className="text-left pb-2 font-medium">Mes</th>
-              <th className="text-right pb-2 font-medium">Producción</th>
-              <th className="text-right pb-2 font-medium">Autoconsumo</th>
-              <th className="text-right pb-2 font-medium">Inyección</th>
-              <th className="text-right pb-2 font-medium">Red</th>
-              <th className="text-right pb-2 font-medium">Beneficio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {energyBalance.monthly.map((m) => (
-              <tr key={m.month} className="border-b border-gray-50">
-                <td className="py-1.5 text-gray-700">{m.monthName}</td>
-                <td className="py-1.5 text-right text-gray-600">{m.productionKWh}</td>
-                <td className="py-1.5 text-right text-[#389fe0]">{m.selfConsumptionKWh}</td>
-                <td className="py-1.5 text-right text-blue-600">{m.injectedToGridKWh}</td>
-                <td className="py-1.5 text-right text-gray-500">{m.consumedFromGridKWh}</td>
-                <td className="py-1.5 text-right font-medium text-[#1d65c5]">
-                  {formatCLP(m.totalMonthlyBenefitCLP)}
-                </td>
-              </tr>
-            ))}
-            <tr className="font-semibold text-gray-700 bg-gray-50">
-              <td className="py-2">Total anual</td>
-              <td className="py-2 text-right">{energyBalance.totalProductionKWh}</td>
-              <td className="py-2 text-right text-[#389fe0]">{energyBalance.totalSelfConsumptionKWh}</td>
-              <td className="py-2 text-right text-blue-600">{energyBalance.totalInjectedKWh}</td>
-              <td className="py-2 text-right">{energyBalance.totalConsumedFromGridKWh}</td>
-              <td className="py-2 text-right text-[#389fe0]">{formatCLP(financial.annualBenefitCLP)}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p className="text-xs text-gray-400 mt-2">Valores en kWh</p>
-        <MonthlyLineChart monthly={energyBalance.monthly} />
+      <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h2 className="text-sm font-semibold text-gray-700">Generación vs consumo mensual</h2>
+          <span className="text-xs text-gray-400">PFV {result.kit.sizekWp} kW · en kWh</span>
+        </div>
+        <p className="text-xs text-gray-400 mb-1 leading-relaxed">
+          En los meses en que la generación supera tu consumo, el excedente se inyecta a la red.
+        </p>
+        <GenerationConsumptionChart monthly={energyBalance.monthly} />
+      </div>
+
+      <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h2 className="text-sm font-semibold text-gray-700">Balance energético mensual</h2>
+          <span className="text-xs text-gray-400">producción · en kWh</span>
+        </div>
+
+        {/* Vista principal: gráfico apilado (limpio, se lee de una) */}
+        <StackedBalanceChart monthly={energyBalance.monthly} />
+
+        {/* Resumen anual en una línea */}
+        <div className="flex flex-wrap gap-x-5 gap-y-1 mt-4 pt-3 border-t border-gray-100 text-xs">
+          <span className="text-gray-500">Producción anual: <strong className="text-gray-700">{energyBalance.totalProductionKWh.toLocaleString('es-CL')} kWh</strong></span>
+          <span className="text-gray-500">Autoconsumo: <strong className="text-green-700">{energyBalance.totalSelfConsumptionKWh.toLocaleString('es-CL')} kWh</strong></span>
+          <span className="text-gray-500">Inyección: <strong className="text-blue-700">{energyBalance.totalInjectedKWh.toLocaleString('es-CL')} kWh</strong></span>
+          <span className="text-gray-500">Beneficio: <strong className="text-[#389fe0]">{formatCLP(financial.annualBenefitCLP)}</strong></span>
+        </div>
+
+        {/* Detalle numérico colapsable */}
+        <button
+          type="button"
+          onClick={() => setShowTable((v) => !v)}
+          className="mt-3 text-xs font-semibold text-[#1d65c5] hover:text-[#389fe0] transition-colors flex items-center gap-1"
+        >
+          {showTable ? 'Ocultar detalle mensual' : 'Ver detalle mensual'}
+          <span className={`transition-transform ${showTable ? 'rotate-180' : ''}`}>▾</span>
+        </button>
+
+        {showTable && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs min-w-[560px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100">
+                  <th className="text-left pb-2 font-medium">Mes</th>
+                  <th className="text-right pb-2 font-medium">Producción</th>
+                  <th className="text-right pb-2 font-medium">Autoconsumo</th>
+                  <th className="text-right pb-2 font-medium">Inyección</th>
+                  <th className="text-right pb-2 font-medium">Red</th>
+                  <th className="text-right pb-2 font-medium">Beneficio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {energyBalance.monthly.map((m) => (
+                  <tr key={m.month} className="border-b border-gray-50">
+                    <td className="py-1.5 text-gray-700">{m.monthName}</td>
+                    <td className="py-1.5 text-right text-gray-600">{m.productionKWh}</td>
+                    <td className="py-1.5 text-right text-[#389fe0]">{m.selfConsumptionKWh}</td>
+                    <td className="py-1.5 text-right text-blue-600">{m.injectedToGridKWh}</td>
+                    <td className="py-1.5 text-right text-gray-500">{m.consumedFromGridKWh}</td>
+                    <td className="py-1.5 text-right font-medium text-[#1d65c5]">
+                      {formatCLP(m.totalMonthlyBenefitCLP)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="font-semibold text-gray-700 bg-gray-50">
+                  <td className="py-2">Total anual</td>
+                  <td className="py-2 text-right">{energyBalance.totalProductionKWh}</td>
+                  <td className="py-2 text-right text-[#389fe0]">{energyBalance.totalSelfConsumptionKWh}</td>
+                  <td className="py-2 text-right text-blue-600">{energyBalance.totalInjectedKWh}</td>
+                  <td className="py-2 text-right">{energyBalance.totalConsumedFromGridKWh}</td>
+                  <td className="py-2 text-right text-[#389fe0]">{formatCLP(financial.annualBenefitCLP)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="text-xs text-gray-400 mt-2">Valores en kWh</p>
+            <MonthlyLineChart monthly={energyBalance.monthly} />
+          </div>
+        )}
       </div>
     </>
   );
@@ -512,7 +798,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function StepResults({ state, config, catalog }: StepResultsProps) {
+export default function StepResults({ state, config, catalog, adminMode = false }: StepResultsProps) {
   const contact = state.contact!;
   const supply  = state.supply!;
   const profile = state.consumptionProfile!;
@@ -525,6 +811,19 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
   const [businessBattery, setBusinessBattery] = useState(false);
   const [ctaState, setCtaState]               = useState<CtaState>('idle');
   const [consumptionMode, setConsumptionMode] = useState<'base' | 'future'>('base');
+  // Escenario C: batería sobre la planta recomendada o la más económica.
+  const [batteryPlant, setBatteryPlant]       = useState<'recommended' | 'economic'>('recommended');
+  // Modo interno: override manual del tamaño de la PFV (null = tamaño recomendado).
+  const [adminSizeKWp, setAdminSizeKWp]       = useState<number | null>(null);
+
+  // Tamaños del catálogo (sin batería) disponibles para el selector manual interno.
+  const adminKitSizes = useMemo(
+    () => (catalog ?? [])
+      .filter((k) => !k.includesBattery)
+      .map((k) => k.sizekWp)
+      .sort((a, b) => a - b),
+    [catalog],
+  );
 
   const contactName = 'name' in contact
     ? (contact as PersonContact).name
@@ -537,7 +836,10 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
   // ── Simulaciones ────────────────────────────────────────────────────────────
   const { baseInput, scenarios, futureScenarios, businessResult, businessBaseResult, recommendedScenario } = useMemo(() => {
     const batteryUsableFraction = (100 - batteryReservePct) / 100;
-    const inp = { ...buildBaseInput(state, config), batteryUsableFraction };
+    // Consumo real por mes: con equipos futuros y sin ellos (para el toggle base/futuro).
+    const futureMap = buildMonthlyConsumption(state, true);
+    const baseMap   = buildMonthlyConsumption(state, false);
+    const inp = { ...buildBaseInput(state, config), batteryUsableFraction, monthlyConsumptionByMonth: futureMap };
     const addKWh = state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0;
     const hasAdd = addKWh > 0;
     // Consumo "base" (sin equipos nuevos): con PFV existente es el residual a cubrir.
@@ -546,7 +848,7 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
       ? es.effectiveAvgKWh
       : state.consumptionProfile!.averageMonthlyKWh;
     const inpBase = hasAdd
-      ? { ...inp, monthlyConsumptionKWh: baseConsumption }
+      ? { ...inp, monthlyConsumptionKWh: baseConsumption, monthlyConsumptionByMonth: baseMap }
       : inp;
 
     if (!isResidential) {
@@ -560,7 +862,11 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
       };
     }
 
-    const sc = calcThreeScenarios(inpBase, batteryCount, catalog);
+    const scenarioOpts = {
+      overrideKitKWp: adminSizeKWp ?? undefined,
+      cUsesEconomic:  batteryPlant === 'economic',
+    };
+    const sc = calcThreeScenarios(inpBase, batteryCount, catalog, scenarioOpts);
     // Regla 1: si kitA tiene payback > 12 años y kitB tiene payback < 10 años → recomendar B
     let recommended: 'A' | 'B' | 'C' = 'A';
     if (sc.B && sc.A.financial.paybackYears > 12 && sc.B.financial.paybackYears < 10) {
@@ -570,12 +876,12 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
     return {
       baseInput: inp,
       scenarios: sc,
-      futureScenarios: hasAdd ? calcThreeScenarios(inp, batteryCount, catalog) : null,
+      futureScenarios: hasAdd ? calcThreeScenarios(inp, batteryCount, catalog, scenarioOpts) : null,
       businessResult: null,
       businessBaseResult: null,
       recommendedScenario: recommended,
     };
-  }, [state, isResidential, batteryCount, batteryReservePct, businessBattery]);
+  }, [state, isResidential, batteryCount, batteryReservePct, businessBattery, adminSizeKWp, batteryPlant]);
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
   const effectiveScenario = userScenarioOverride ?? recommendedScenario;
@@ -825,10 +1131,10 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
       <div className="bg-gradient-to-br from-[#389fe0] to-[#1d65c5] text-white rounded-2xl p-6 shadow-[0_16px_48px_rgba(56,159,224,0.25)]">
         <p className="text-sm opacity-70 mb-1">{contactName}</p>
         <p className="text-4xl font-bold leading-tight tracking-tight">
-          {formatCLP(activeResult.financial.monthlyBenefitCLP)}
-          <span className="text-lg font-normal opacity-75">/mes</span>
+          {formatCLP(activeResult.financial.annualBenefitCLP)}
+          <span className="text-lg font-normal opacity-75">/año</span>
         </p>
-        <p className="text-sm opacity-90 font-medium mt-0.5 mb-4">de ahorro estimado en energía</p>
+        <p className="text-sm opacity-90 font-medium mt-0.5 mb-4">de ahorro estimado anual en energía</p>
         <div className="grid grid-cols-3 gap-3 text-sm border-t border-white/20 pt-4">
           <div>
             <p className="text-xs opacity-60">Retorno</p>
@@ -932,7 +1238,7 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
 
       {/* ── Selector de baterías (empresa con batería) ─────────────────────── */}
       {!isResidential && businessBattery && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col gap-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-amber-800">Módulos de batería</p>
             <select
@@ -945,25 +1251,79 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
               ))}
             </select>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1.5">
             <div>
               <p className="text-xs font-medium text-amber-800">Reserva de emergencia</p>
               <p className="text-[10px] text-amber-600">Porcentaje que nunca se descarga (cortes de luz)</p>
             </div>
-            <select
-              value={batteryReservePct}
-              onChange={(e) => setBatteryReservePct(Number(e.target.value))}
-              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
+            <div className="flex flex-wrap gap-1.5">
               {[10, 20, 30, 40, 50].map((pct) => (
-                <option key={pct} value={pct}>{pct}%{pct === 30 ? ' (por defecto)' : ''}</option>
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setBatteryReservePct(pct)}
+                  className={[
+                    'px-3.5 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
+                    batteryReservePct === pct
+                      ? 'border-amber-500 bg-amber-500 text-white'
+                      : 'border-amber-300 bg-white text-amber-800 hover:border-amber-400',
+                  ].join(' ')}
+                >
+                  {pct}%{pct === 30 ? ' ·' : ''}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-700 pt-1 border-t border-amber-200">
             <span>Capacidad total: <strong>{batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh</strong></span>
             <span>Reserva ({batteryReservePct}%): <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * batteryReservePct / 100).toFixed(1)} kWh</strong></span>
             <span>Uso nocturno: <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * (100 - batteryReservePct) / 100).toFixed(1)} kWh</strong></span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Selector manual de tamaño de PFV (modo interno) ────────────────── */}
+      {isResidential && adminMode && activeScenarios && adminKitSizes.length > 0 && (
+        <div className="bg-white rounded-2xl ring-1 ring-[#010101]/10 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-4 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-gray-700">Ajustar tamaño de PFV</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Sobrescribe la planta recomendada para cotizar otra capacidad.
+              </p>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider bg-[#010101] text-white/80 px-2 py-0.5 rounded-full">
+              Modo interno
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setAdminSizeKWp(null)}
+              className={[
+                'px-3.5 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
+                adminSizeKWp === null
+                  ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
+                  : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
+              ].join(' ')}
+            >
+              Auto
+            </button>
+            {adminKitSizes.map((kw) => (
+              <button
+                key={kw}
+                type="button"
+                onClick={() => setAdminSizeKWp(kw)}
+                className={[
+                  'px-3.5 py-2 rounded-xl text-sm font-semibold border-2 transition-all',
+                  adminSizeKWp === kw
+                    ? 'border-[#389fe0] bg-[#dde3e9]/50 text-[#1d65c5]'
+                    : 'border-gray-200 text-gray-600 hover:border-[#b0cedd]',
+                ].join(' ')}
+              >
+                {kw} kW
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -979,7 +1339,7 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
                 const meta = {
                   A: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'Sin batería', badge: recommendedScenario === 'B' ? 'Kit mayor' : 'Recomendado', badgeColor: recommendedScenario === 'B' ? 'bg-gray-500' : 'bg-[#1d65c5]' },
                   B: { title: `PFV ${activeScenarios.kitB?.sizekWp} kW`, sub: 'Sin batería', badge: recommendedScenario === 'B' ? 'Recomendado' : 'Más económico', badgeColor: recommendedScenario === 'B' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
-                  C: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'Con baterías', badge: 'Con baterías',  badgeColor: 'bg-amber-500' },
+                  C: { title: `PFV ${activeScenarios.C.kit.sizekWp} kW`, sub: 'Con baterías', badge: 'Con baterías',  badgeColor: 'bg-amber-500' },
                 }[s];
                 const isActive = effectiveScenario === s;
                 const activeBorder = s === 'C' ? 'border-amber-400 bg-amber-500' : 'border-[#389fe0] bg-[#1d65c5]';
@@ -1011,40 +1371,72 @@ export default function StepResults({ state, config, catalog }: StepResultsProps
         </div>
       )}
 
-      {/* ── Selector de baterías (Escenario C) ─────────────────────────────── */}
-      {isResidential && effectiveScenario === 'C' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-amber-800">Módulos de batería</p>
-            <select
-              value={batteryCount}
-              onChange={(e) => setBatteryCount(Number(e.target.value))}
-              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{n} módulo{n > 1 ? 's' : ''}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center justify-between">
+      {/* ── Configuración de batería (Escenario C) ─────────────────────────── */}
+      {isResidential && effectiveScenario === 'C' && activeScenarios && (
+        <div className="bg-white rounded-2xl ring-1 ring-amber-200/70 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 flex flex-col gap-5">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+              <IconBattery className="w-4.5 h-4.5" />
+            </span>
             <div>
-              <p className="text-xs font-medium text-amber-800">Reserva de emergencia</p>
-              <p className="text-[10px] text-amber-600">Porcentaje que nunca se descarga (cortes de luz)</p>
+              <p className="text-sm font-semibold text-gray-800">Configuración de batería</p>
+              <p className="text-xs text-gray-400">Ajusta la planta, los módulos y la reserva.</p>
             </div>
-            <select
-              value={batteryReservePct}
-              onChange={(e) => setBatteryReservePct(Number(e.target.value))}
-              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
-              {[10, 20, 30, 40, 50].map((pct) => (
-                <option key={pct} value={pct}>{pct}%{pct === 30 ? ' (por defecto)' : ''}</option>
-              ))}
-            </select>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-700 pt-1 border-t border-amber-200">
-            <span>Capacidad total: <strong>{batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh</strong></span>
-            <span>Reserva ({batteryReservePct}%): <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * batteryReservePct / 100).toFixed(1)} kWh</strong></span>
-            <span>Uso nocturno: <strong>{(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * (100 - batteryReservePct) / 100).toFixed(1)} kWh</strong></span>
+
+          {/* Planta sobre la que se monta la batería: recomendada o más económica */}
+          {activeScenarios.kitB && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-gray-500">Planta para la batería</span>
+              <SegmentedControl
+                ariaLabel="Planta para la batería"
+                value={batteryPlant}
+                onChange={setBatteryPlant}
+                options={[
+                  { value: 'recommended', label: `Recomendada · ${activeScenarios.kitA.sizekWp} kW` },
+                  { value: 'economic',    label: `Más económica · ${activeScenarios.kitB.sizekWp} kW` },
+                ]}
+              />
+            </div>
+          )}
+
+          {/* Módulos de batería */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-gray-500">Módulos de batería</span>
+            <SegmentedControl
+              ariaLabel="Módulos de batería"
+              value={batteryCount}
+              onChange={setBatteryCount}
+              options={Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: String(i + 1) }))}
+            />
+          </div>
+
+          {/* Reserva de emergencia */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-gray-500">Reserva de emergencia</span>
+              <span className="text-[10px] text-gray-400">nunca se descarga (cortes de luz)</span>
+            </div>
+            <SegmentedControl
+              ariaLabel="Reserva de emergencia"
+              value={batteryReservePct}
+              onChange={setBatteryReservePct}
+              options={[10, 20, 30, 40, 50].map((pct) => ({ value: pct, label: `${pct}%` }))}
+            />
+          </div>
+
+          {/* Cifras resultantes */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Capacidad total', value: `${batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh` },
+              { label: `Reserva (${batteryReservePct}%)`, value: `${(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * batteryReservePct / 100).toFixed(1)} kWh` },
+              { label: 'Uso nocturno', value: `${(batteryCount * SOLAR_DEFAULTS.batteryModuleKWh * (100 - batteryReservePct) / 100).toFixed(1)} kWh` },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-amber-50/80 px-3 py-2.5 text-center">
+                <p className="text-sm font-bold text-amber-900 tabular-nums">{s.value}</p>
+                <p className="text-[10px] text-amber-700/70 mt-0.5 leading-tight">{s.label}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}

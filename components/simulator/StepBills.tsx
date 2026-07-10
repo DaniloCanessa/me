@@ -103,8 +103,6 @@ function buildProfile(
   manualTarifa: TarifaType,
   isBusiness: boolean,
   consumptionBasis: 'grid' | 'total' | undefined,
-  avgTotalBill?: number,
-  avgPowerCharge?: number,
 ): ConsumptionProfile {
   const distribuidora = supply.distribuidora || manualDistribuidora || undefined;
   const tarifa = supply.tarifa !== 'unknown' ? supply.tarifa : manualTarifa;
@@ -193,8 +191,6 @@ function buildProfile(
     peakMonthKWh: allValues.length > 0 ? Math.max(...allValues) : 0,
     minMonthKWh:  allValues.length > 0 ? Math.min(...allValues) : 0,
     isComplete: realBills.length === 12,
-    avgTotalBillCLP:   avgTotalBill,
-    avgPowerChargeCLP: avgPowerCharge,
     consumptionBasis:  supply.hasExistingSolar ? (consumptionBasis ?? 'grid') : undefined,
   };
 }
@@ -238,13 +234,6 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     supply.tarifa !== 'unknown' ? supply.tarifa : 'unknown',
   );
 
-  const [avgTotalBill, setAvgTotalBill] = useState(
-    initialData?.avgTotalBillCLP?.toString() ?? '',
-  );
-  const [avgPowerCharge, setAvgPowerCharge] = useState(
-    initialData?.avgPowerChargeCLP?.toString() ?? '',
-  );
-
   // Solo si el cliente ya tiene PFV: ¿el consumo ingresado es el de la boleta de
   // la compañía (importación de red) o su consumo total (red + lo que produce su PFV)?
   const [consumptionBasis, setConsumptionBasis] = useState<'grid' | 'total'>(
@@ -269,18 +258,6 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     setOcrMatchCount(matchCount);
     setOcrUsed(true);
     setShowOCR(false);
-
-    // Auto-rellenar monto total y cargo por potencia si el OCR los detectó
-    const totals = periods.map((p) => p.totalAmountCLP).filter((v): v is number => v != null);
-    const powers = periods.map((p) => p.powerChargeCLP).filter((v): v is number => v != null);
-    if (totals.length > 0) {
-      const avg = Math.round(totals.reduce((a, b) => a + b, 0) / totals.length);
-      setAvgTotalBill(String(avg));
-    }
-    if (powers.length > 0) {
-      const avg = Math.round(powers.reduce((a, b) => a + b, 0) / powers.length);
-      setAvgPowerCharge(String(avg));
-    }
 
     if (onUpdateSupply && (billData.distribuidora || billData.tarifa)) {
       onUpdateSupply({
@@ -312,9 +289,6 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     };
   }, [rows]);
 
-  const showTariffAnalysisFields =
-    supply.tarifa !== 'BT1' && supply.tarifa !== 'unknown' && filledCount >= 1;
-
   const canSubmit = filledCount >= 1;
   const showManualFields = !ocrUsed && (!supply.distribuidora || supply.tarifa === 'unknown');
 
@@ -330,8 +304,6 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     onSubmit(buildProfile(
       SLOTS, rows, supply, manualDistribuidora, manualTarifa, isBusinessCustomer,
       supply.hasExistingSolar ? consumptionBasis : undefined,
-      avgTotalBill ? parseFloat(avgTotalBill) : undefined,
-      avgPowerCharge ? parseFloat(avgPowerCharge) : undefined,
     ));
   }
 
@@ -533,60 +505,6 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
                   </select>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Campos opcionales para análisis tarifario (BT2/BT3/BT4.x/AT*) */}
-        {showTariffAnalysisFields && (
-          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 flex flex-col gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-purple-800">Para análisis tarifario (opcional)</h2>
-              <p className="text-xs text-purple-600 mt-0.5">
-                Con esta información podemos comparar si tu tarifa {supply.tarifa} es la más conveniente.
-                Si no los tienes a mano, omítelos — la simulación sigue funcionando.
-              </p>
-            </div>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="avgTotalBill" className="text-xs font-medium text-gray-600">
-                  Monto total promedio mensual (CLP)
-                </label>
-                <input
-                  id="avgTotalBill"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={avgTotalBill}
-                  onChange={(e) => setAvgTotalBill(e.target.value)}
-                  placeholder="Ej: 185000"
-                  className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
-                />
-                <p className="text-xs text-purple-500 leading-relaxed mt-0.5">
-                  Es el <strong>total a pagar</strong> que aparece al final de tu boleta, incluyendo todos los ítems (energía + potencia + cargo fijo + IVA). Suma los últimos meses disponibles y divide por la cantidad de meses.
-                </p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor="avgPowerCharge" className="text-xs font-medium text-gray-600">
-                  Cargo por potencia promedio mensual (CLP)
-                </label>
-                <input
-                  id="avgPowerCharge"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={avgPowerCharge}
-                  onChange={(e) => setAvgPowerCharge(e.target.value)}
-                  placeholder="Ej: 45000"
-                  className="rounded-xl border border-purple-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition max-w-xs"
-                />
-                <p className="text-xs text-purple-500 leading-relaxed mt-0.5">
-                  Busca en tu boleta la línea <strong>&quot;Cargo por demanda máxima&quot;</strong> (BT3) o <strong>&quot;Cargo por potencia contratada&quot;</strong> (BT2). Suele representar el 20–35% del total. Si tienes varias boletas, promedia ese ítem.
-                  {supply.tarifa === 'BT3' && (
-                    <> En BT3 se calcula como: <em>demanda máxima medida (kW) × precio unitario ($/kW)</em>.</>
-                  )}
-                </p>
-              </div>
             </div>
           </div>
         )}
