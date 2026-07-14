@@ -12,6 +12,14 @@ const PROJECTS = [
     map: { x: 63.5, y: 9 },
   },
   {
+    image: '/images/proyecto-las-condes-8kw.jpg',
+    location: 'Las Condes, Región Metropolitana',
+    title: 'Planta fotovoltaica residencial on-grid',
+    description: 'Sistema de 8 kW conectado a la red (on-grid) para una vivienda de Las Condes. Genera energía limpia durante el día e inyecta los excedentes a la red, reduciendo la cuenta de luz.',
+    tags: ['Residencial', 'On-grid', '8 kW'],
+    map: { x: 62.6, y: 41.4 },
+  },
+  {
     image: '/images/casa-carlos-alvarado.jpg',
     location: 'Las Condes, Región Metropolitana',
     title: 'Solución integral residencial premium',
