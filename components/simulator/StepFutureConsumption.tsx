@@ -396,7 +396,7 @@ export default function StepFutureConsumption({
               <p className="text-sm font-medium">{averageMonthlyKWh} kWh/mes</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-gray-400">Con equipos nuevos</p>
+              <p className="text-xs text-gray-400">Con equipos proyectados</p>
               <p className="text-lg font-bold">{averageMonthlyKWh + total} kWh/mes</p>
             </div>
           </div>

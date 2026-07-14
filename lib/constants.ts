@@ -31,7 +31,10 @@ export const SOLAR_DEFAULTS = {
   // Nota: la producción mensual en regions.ts ya incorpora eficiencia del sistema.
   // panelWattage y panelAreaM2 se usan solo para dimensionar cantidad de paneles y área.
   panelWattage: 550,                   // W por panel (estándar residencial)
-  panelAreaM2: 2.5,                    // m² por panel
+  panelAreaM2: 2.5,                    // m² por panel (dimensionamiento simple empresa)
+  panelHeightM: 2.278,                 // alto de un panel estándar 550 W (m)
+  panelWidthM: 1.134,                  // ancho de un panel estándar 550 W (m)
+  panelSideMarginM: 0.02,              // separación de montaje: 2 cm por lado
   co2FactorKgPerKWh: 0.4,             // kg CO₂/kWh (factor red eléctrica Chile)
   systemLifeYears: 25,                 // vida útil del sistema en años
   injectionValueFactor: 0.50,          // valor inyección = 50% precio compra (net billing conservador)
@@ -45,6 +48,17 @@ export const SOLAR_DEFAULTS = {
   batteryModuleKWh: 5,                 // kWh por módulo de batería
   batteryModulePriceCLP: 1_500_000,    // precio referencial por módulo de 5 kWh
 };
+
+/**
+ * Superficie de montaje necesaria (m²) para instalar N paneles.
+ * Se calcula con las dimensiones reales del panel más 2 cm de separación por
+ * lado (alto y ancho), que es el espacio mínimo entre paneles/estructura.
+ */
+export function requiredSurfaceM2(panelCount: number): number {
+  const { panelHeightM, panelWidthM, panelSideMarginM } = SOLAR_DEFAULTS;
+  const perPanelM2 = (panelHeightM + 2 * panelSideMarginM) * (panelWidthM + 2 * panelSideMarginM);
+  return Math.round(panelCount * perPanelM2);
+}
 
 // ─── Parámetros para empresas ─────────────────────────────────────────────────
 

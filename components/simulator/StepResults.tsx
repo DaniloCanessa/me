@@ -16,7 +16,7 @@ import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBat
 import { getRegionById } from '@/lib/regions';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
-import { CHILE_BT1, SOLAR_DEFAULTS, DFL4 } from '@/lib/constants';
+import { CHILE_BT1, SOLAR_DEFAULTS, DFL4, requiredSurfaceM2 } from '@/lib/constants';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
 import { IconCar, IconBattery } from '@/components/landing/icons';
 import dynamic from 'next/dynamic';
@@ -952,7 +952,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
       paybackYears:      r.financial.paybackYears,
       coveragePercent:   r.energyBalance.coveragePercent,
       panelCount:        r.kit.panelCount,
-      areaM2:            r.kit.estimatedAreaM2,
+      areaM2:            requiredSurfaceM2(r.kit.panelCount),
       batteryKWh:        r.batteryCapacityKWh > 0 ? r.batteryCapacityKWh : undefined,
     });
 
@@ -1179,7 +1179,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
           <div className="flex gap-2">
             {([
               { mode: 'base'   as const, label: 'Consumo actual',     kwh: profile.averageMonthlyKWh },
-              { mode: 'future' as const, label: 'Con equipos nuevos', kwh: profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0) },
+              { mode: 'future' as const, label: 'Con equipos proyectados', kwh: profile.averageMonthlyKWh + (future?.totalAdditionalMonthlyKWh ?? 0) },
             ]).map(({ mode, label, kwh }) => {
               const active = consumptionMode === mode;
               return (
@@ -1257,7 +1257,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
               <p className="text-[10px] text-amber-600">Porcentaje que nunca se descarga (cortes de luz)</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {[10, 20, 30, 40, 50].map((pct) => (
+              {[0, 10, 20, 30, 40, 50].map((pct) => (
                 <button
                   key={pct}
                   type="button"
@@ -1421,7 +1421,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
               ariaLabel="Reserva de emergencia"
               value={batteryReservePct}
               onChange={setBatteryReservePct}
-              options={[10, 20, 30, 40, 50].map((pct) => ({ value: pct, label: `${pct}%` }))}
+              options={[0, 10, 20, 30, 40, 50].map((pct) => ({ value: pct, label: `${pct}%` }))}
             />
           </div>
 
@@ -1479,7 +1479,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
             </span>
             <p className="font-semibold text-gray-900 mt-1.5">PFV {activeResult.kit.sizekWp} kW</p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {activeResult.kit.panelCount} paneles · {activeResult.kit.estimatedAreaM2} m²
+              {activeResult.kit.panelCount} paneles · {requiredSurfaceM2(activeResult.kit.panelCount)} m² de superficie
               {activeResult.batteryCapacityKWh > 0 && (
                 <> · {activeResult.batteryCapacityKWh} kWh batería</>
               )}

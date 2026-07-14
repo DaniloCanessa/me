@@ -6,7 +6,7 @@ import type {
   MonthlyBill,
   SimulatorResult,
 } from '@/lib/types';
-import { SOLAR_DEFAULTS, MONTH_NAMES } from '@/lib/constants';
+import { SOLAR_DEFAULTS, MONTH_NAMES, requiredSurfaceM2 } from '@/lib/constants';
 import { runTariffAnalysis } from '@/lib/tariffAnalysis';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -448,7 +448,7 @@ export default function SimulationReportHtml({
               </div>
               <div style={{ fontSize: 18, fontWeight: 700 }}>PFV {kit.sizekWp} kW</div>
               <div style={{ color: C.gray, fontSize: 10, marginTop: 2 }}>
-                {kit.panelCount} paneles · {kit.estimatedAreaM2} m² de techo
+                {kit.panelCount} paneles · {requiredSurfaceM2(kit.panelCount)} m² de superficie
                 {batteryCapacityKWh > 0 ? ` · Batería ${batteryCapacityKWh} kWh` : ''}
               </div>
             </div>
