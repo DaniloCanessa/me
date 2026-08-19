@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
+import { EMAIL, emailShell, emailHeader, emailFooter } from '@/lib/email-brand';
 
 export async function POST(req: NextRequest) {
   // Ruta pública (el simulador la usa para enviar el informe al cliente).
@@ -29,27 +30,28 @@ export async function POST(req: NextRequest) {
     to: clientEmail,
     replyTo: process.env.LEAD_RECIPIENT_EMAIL ?? 'danilo.canessa@gmail.com',
     subject: 'Tu simulación solar — Mercado Energy',
-    html: `
-      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#111827">
-        <div style="background:#16a34a;padding:24px 32px;border-radius:8px 8px 0 0">
-          <p style="color:#fff;font-size:20px;font-weight:700;margin:0">Mercado Energy</p>
-          <p style="color:#bbf7d0;font-size:13px;margin:4px 0 0">Simulador Solar Chile</p>
-        </div>
-        <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-          <p style="font-size:15px;margin:0 0 16px">Hola <strong>${clientName}</strong>,</p>
-          <p style="color:#374151;line-height:1.6;margin:0 0 16px">
+    html: emailShell(`
+${emailHeader({
+  eyebrow: 'Informe de simulación',
+  title: `Hola, ${clientName}`,
+  subtitle: 'Tu informe solar fotovoltaico va adjunto en este correo',
+})}
+
+        <tr><td style="padding:28px 32px 24px">
+          <p style="margin:0 0 16px;font-size:14px;color:${EMAIL.text};line-height:1.6">
             Adjunto encontrarás el informe completo de tu simulación solar fotovoltaica,
             incluyendo la solución recomendada para tu caso, el análisis financiero y la
             comparación de alternativas disponibles.
           </p>
-          <p style="color:#374151;line-height:1.6;margin:0 0 24px">
+          <p style="margin:0 0 24px;font-size:14px;color:${EMAIL.text};line-height:1.6">
             Si tienes preguntas o quieres coordinar una visita técnica gratuita,
             responde este correo y un especialista te contactará a la brevedad.
           </p>
-          <p style="color:#6b7280;font-size:13px;margin:0">Mercado Energy — Equipo técnico</p>
-        </div>
-      </div>
-    `,
+          <p style="margin:0;font-size:13px;color:${EMAIL.gray}">Mercado Energy — Equipo técnico</p>
+        </td></tr>
+
+${emailFooter('<strong>Mercado Energy</strong> · Instaladores certificados · Sin compromiso<br/>Los valores del informe son estimativos y se confirman en la visita técnica.')}
+`),
     attachments: [
       {
         filename: `simulacion-solar-${clientName.toLowerCase().replace(/\s+/g, '-')}.pdf`,

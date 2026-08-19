@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { rateLimit, clientIp, tooMany } from '@/lib/rate-limit';
+import { EMAIL, emailShell, emailHeader, emailFooter } from '@/lib/email-brand';
 
 // ─── Tipos del payload ────────────────────────────────────────────────────────
 
@@ -140,57 +141,56 @@ function buildClientEmailHtml(lead: LeadPayload): string {
     : (lead.contact.contactName ?? lead.contact.companyName);
   const s = lead.simulation;
 
-  return `
-<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;max-width:600px;width:100%">
+  const step = (n: number, html: string) => `
+            <tr>
+              <td style="padding:6px 0;vertical-align:top;width:28px">
+                <span style="display:inline-block;width:22px;height:22px;background:${EMAIL.accent};border-radius:50%;text-align:center;line-height:22px;font-size:11px;color:${EMAIL.white};font-weight:700">${n}</span>
+              </td>
+              <td style="padding:6px 0 6px 8px;font-size:13px;color:${EMAIL.text}">${html}</td>
+            </tr>`;
 
-        <!-- Header -->
-        <tr><td style="background:#16a34a;padding:24px 32px">
-          <p style="margin:0;color:#dcfce7;font-size:13px">Mercado Energy — Propuesta Solar</p>
-          <h1 style="margin:8px 0 0;color:#fff;font-size:22px">Hola, ${displayName ?? 'estimado/a cliente'}</h1>
-          <p style="margin:4px 0 0;color:#bbf7d0;font-size:13px">Gracias por tu interés en energía solar fotovoltaica</p>
-        </td></tr>
+  return emailShell(`
+${emailHeader({
+  eyebrow: 'Propuesta solar',
+  title: `Hola, ${displayName ?? 'estimado/a cliente'}`,
+  subtitle: 'Gracias por tu interés en energía solar fotovoltaica',
+})}
 
         <!-- Mensaje -->
         <tr><td style="padding:24px 32px 16px">
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6">
+          <p style="margin:0 0 16px;font-size:14px;color:${EMAIL.text};line-height:1.6">
             Hemos recibido tu solicitud. Un especialista técnico de <strong>Mercado Energy</strong> se pondrá en contacto contigo a la brevedad para coordinar una <strong>visita técnica gratuita</strong> y entregarte un presupuesto definitivo personalizado, sin costo ni compromiso.
           </p>
-          <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6">
+          <p style="margin:0 0 16px;font-size:14px;color:${EMAIL.text};line-height:1.6">
             A continuación, el resumen de tu propuesta estimada:
           </p>
         </td></tr>
 
         <!-- Propuesta -->
         <tr><td style="padding:0 32px 24px">
-          <table cellpadding="0" cellspacing="0" width="100%" style="background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0">
+          <table cellpadding="0" cellspacing="0" width="100%" style="background:${EMAIL.accentSoft};border-radius:10px;border:1px solid ${EMAIL.accentBdr}">
             <tr>
-              <td style="padding:14px 12px;text-align:center;border-right:1px solid #d1fae5">
-                <p style="margin:0;font-size:11px;color:#6b7280">Sistema recomendado</p>
-                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#15803d">${s.kitSizeKWp} kWp</p>
-                <p style="margin:2px 0 0;font-size:11px;color:#6b7280">Planta Fotovoltaica</p>
+              <td style="padding:14px 12px;text-align:center;border-right:1px solid ${EMAIL.accentBdr}">
+                <p style="margin:0;font-size:11px;color:${EMAIL.gray}">Sistema recomendado</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:${EMAIL.brand}">${s.kitSizeKWp} kWp</p>
+                <p style="margin:2px 0 0;font-size:11px;color:${EMAIL.gray}">Planta Fotovoltaica</p>
               </td>
-              <td style="padding:14px 12px;text-align:center;border-right:1px solid #d1fae5">
-                <p style="margin:0;font-size:11px;color:#6b7280">Ahorro mensual estimado</p>
-                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#15803d">${clp(s.monthlyBenefitCLP)}</p>
-                <p style="margin:2px 0 0;font-size:11px;color:#6b7280">por mes</p>
+              <td style="padding:14px 12px;text-align:center;border-right:1px solid ${EMAIL.accentBdr}">
+                <p style="margin:0;font-size:11px;color:${EMAIL.gray}">Ahorro mensual estimado</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:${EMAIL.brand}">${clp(s.monthlyBenefitCLP)}</p>
+                <p style="margin:2px 0 0;font-size:11px;color:${EMAIL.gray}">por mes</p>
               </td>
               <td style="padding:14px 12px;text-align:center">
-                <p style="margin:0;font-size:11px;color:#6b7280">Período de retorno</p>
-                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#111827">${s.paybackYears % 1 === 0 ? s.paybackYears : s.paybackYears.toFixed(1)} años</p>
-                <p style="margin:2px 0 0;font-size:11px;color:#6b7280">payback estimado</p>
+                <p style="margin:0;font-size:11px;color:${EMAIL.gray}">Período de retorno</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:${EMAIL.dark}">${s.paybackYears % 1 === 0 ? s.paybackYears : s.paybackYears.toFixed(1)} años</p>
+                <p style="margin:2px 0 0;font-size:11px;color:${EMAIL.gray}">payback estimado</p>
               </td>
             </tr>
             <tr>
-              <td colspan="3" style="padding:12px;border-top:1px solid #d1fae5;text-align:center">
-                <p style="margin:0;font-size:13px;color:#374151">
-                  Cobertura solar: <strong style="color:#15803d">${pct(s.coveragePercent)}</strong> de tu consumo &nbsp;·&nbsp;
-                  Ahorro anual: <strong style="color:#15803d">${clp(s.annualBenefitCLP)}</strong>
+              <td colspan="3" style="padding:12px;border-top:1px solid ${EMAIL.accentBdr};text-align:center">
+                <p style="margin:0;font-size:13px;color:${EMAIL.text}">
+                  Cobertura solar: <strong style="color:${EMAIL.brand}">${pct(s.coveragePercent)}</strong> de tu consumo &nbsp;·&nbsp;
+                  Ahorro anual: <strong style="color:${EMAIL.brand}">${clp(s.annualBenefitCLP)}</strong>
                 </p>
               </td>
             </tr>
@@ -199,43 +199,17 @@ function buildClientEmailHtml(lead: LeadPayload): string {
 
         <!-- Próximos pasos -->
         <tr><td style="padding:0 32px 24px">
-          <h2 style="margin:0 0 14px;font-size:14px;color:#374151;font-weight:700">¿Qué sigue?</h2>
+          <h2 style="margin:0 0 14px;font-size:14px;color:${EMAIL.text};font-weight:700">¿Qué sigue?</h2>
           <table cellpadding="0" cellspacing="0" width="100%">
-            <tr>
-              <td style="padding:6px 0;vertical-align:top;width:28px">
-                <span style="display:inline-block;width:22px;height:22px;background:#16a34a;border-radius:50%;text-align:center;line-height:22px;font-size:11px;color:#fff;font-weight:700">1</span>
-              </td>
-              <td style="padding:6px 0 6px 8px;font-size:13px;color:#374151">Un especialista te contactará en menos de <strong>24 horas hábiles</strong>.</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;vertical-align:top">
-                <span style="display:inline-block;width:22px;height:22px;background:#16a34a;border-radius:50%;text-align:center;line-height:22px;font-size:11px;color:#fff;font-weight:700">2</span>
-              </td>
-              <td style="padding:6px 0 6px 8px;font-size:13px;color:#374151">Coordinamos una <strong>visita técnica gratuita</strong> en tu domicilio o empresa.</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0;vertical-align:top">
-                <span style="display:inline-block;width:22px;height:22px;background:#16a34a;border-radius:50%;text-align:center;line-height:22px;font-size:11px;color:#fff;font-weight:700">3</span>
-              </td>
-              <td style="padding:6px 0 6px 8px;font-size:13px;color:#374151">Recibes un <strong>presupuesto definitivo personalizado</strong> sin ningún compromiso.</td>
-            </tr>
+${step(1, 'Un especialista te contactará en menos de <strong>24 horas hábiles</strong>.')}
+${step(2, 'Coordinamos una <strong>visita técnica gratuita</strong> en tu domicilio o empresa.')}
+${step(3, 'Recibes un <strong>presupuesto definitivo personalizado</strong> sin ningún compromiso.')}
           </table>
         </td></tr>
 
-        <!-- Footer -->
-        <tr><td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
-          <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.6">
-            <strong>Mercado Energy</strong> · Instaladores certificados · Sin compromiso<br/>
-            Esta propuesta es estimativa. Los valores reales se determinarán en la visita técnica.
-          </p>
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>
-  `.trim();
+${emailFooter(`<strong>Mercado Energy</strong> · Instaladores certificados · Sin compromiso<br/>
+            Esta propuesta es estimativa. Los valores reales se determinarán en la visita técnica.`)}
+`);
 }
 
 // ─── Route Handler ────────────────────────────────────────────────────────────
