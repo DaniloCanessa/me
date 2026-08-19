@@ -3,6 +3,7 @@ import { getProject, getProjectItems, getProjectCosts, getProjectPayments, getPr
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getReceiptSignedUrl } from '@/lib/db/expenses';
 import ProjectDetail from './ProjectDetail';
+import LinkInvoicesPanel from '@/components/admin/LinkInvoicesPanel';
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -46,15 +47,28 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     }));
   }
 
+  // Facturas de compra vinculadas a este proyecto (centro de costo).
+  const { data: vinculadasRaw } = await db
+    .from('expense_captures')
+    .select('id, proveedor, folio, fecha, total')
+    .eq('project_id', id)
+    .neq('status', 'rechazado')
+    .order('fecha', { ascending: false, nullsFirst: false });
+
   return (
-    <ProjectDetail
-      project={project}
-      items={items}
-      costs={costs}
-      payments={payments}
-      purchases={purchases}
-      quoteItems={quoteItems}
-      receiptUrls={receiptUrls}
-    />
+    <>
+      <ProjectDetail
+        project={project}
+        items={items}
+        costs={costs}
+        payments={payments}
+        purchases={purchases}
+        quoteItems={quoteItems}
+        receiptUrls={receiptUrls}
+      />
+      <div className="px-4 sm:px-6 pb-8">
+        <LinkInvoicesPanel projectId={id} vinculadas={vinculadasRaw ?? []} />
+      </div>
+    </>
   );
 }

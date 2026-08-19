@@ -120,6 +120,7 @@ export async function saveExpenseCapture(id: string, formData: FormData) {
     iva:       numOrNull(formData.get('iva')),
     total:     numOrNull(formData.get('total')),
     con_iva:   formData.get('con_iva') === 'true',
+    account_id: (formData.get('account_id') as string) || null,
     notas:     (formData.get('notas') as string) || null,
     ...(ocrRaw ? { ocr_status: 'ok', ocr_json: JSON.parse(ocrRaw) } : {}),
     updated_at: new Date().toISOString(),
@@ -146,9 +147,9 @@ export async function approveExpenseCapture(id: string, formData: FormData) {
 
   const { projectId, sinProyecto, hasProject } = decodeProjectSelect((formData.get('project_select') as string) || '');
   const itemId = (formData.get('project_item_id') as string) || null;
-  // Categoría solo aplica al gasto general (sin proyecto); con proyecto va a la
-  // cuenta corriente del proyecto y no se categoriza.
-  const categoria = !hasProject ? ((formData.get('categoria') as string) || null) : null;
+  // Toda factura se clasifica en una cuenta del plan de cuentas: eso es lo que
+  // alimenta el balance. El proyecto (centro de costo) se asigna aparte.
+  const accountId = (formData.get('account_id') as string) || null;
 
   // Con proyecto → se crea una compra real (entra a la cuenta corriente).
   let purchaseId: string | null = null;
@@ -188,7 +189,7 @@ export async function approveExpenseCapture(id: string, formData: FormData) {
     project_id:      hasProject ? projectId : null,
     project_item_id: hasProject ? (itemId || null) : null,
     sin_proyecto:    !hasProject || sinProyecto,
-    categoria,
+    account_id:      accountId,
     purchase_id:     purchaseId,
     reviewed_by:     user?.name ?? user?.email ?? null,
     reviewed_at:     new Date().toISOString(),

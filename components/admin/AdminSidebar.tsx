@@ -9,10 +9,9 @@ const NAV_MAIN = [
   { href: '/admin/clients',  label: 'Clientes',      icon: '👥' },
   { href: '/admin/quotes',   label: 'Cotizaciones',  icon: '📋' },
   { href: '/admin/projects', label: 'Proyectos',     icon: '🏗️' },
-  { href: '/admin/gastos',   label: 'Gastos',        icon: '🧾' },
-  { href: '/admin/facturas-venta', label: 'Facturas venta', icon: '📄' },
+  { href: '/admin/facturas', label: 'Facturas',      icon: '📄' },
+  { href: '/admin/gastos',   label: 'Capturar boleta', icon: '🧾' },
   { href: '/admin/finanzas', label: 'Finanzas',      icon: '📊' },
-  { href: '/admin/conciliacion', label: 'Conciliación SII', icon: '🔎' },
   { href: '/admin/balance', label: 'Balance anual', icon: '📒' },
   { href: '/admin/licitaciones', label: 'Licitaciones', icon: '🏛️' },
   { href: '/admin/simulator', label: 'Simulador',    icon: '⚡' },
@@ -64,11 +63,13 @@ export default function AdminSidebar({
   userRole,
   onNavigate,
   pendingExpenses = 0,
+  unclassifiedInvoices = 0,
 }: {
   userName: string;
   userRole: string;
   onNavigate?: () => void;
   pendingExpenses?: number;
+  unclassifiedInvoices?: number;
 }) {
   return (
     <aside className="w-56 h-full shrink-0 bg-white border-r border-gray-100 flex flex-col">
@@ -94,7 +95,11 @@ export default function AdminSidebar({
         </p>
         {NAV_MAIN.map((item) => (
           <NavItem key={item.href} {...item} onNavigate={onNavigate}
-            badge={item.href === '/admin/gastos' ? pendingExpenses : undefined} />
+            badge={
+              item.href === '/admin/gastos' ? pendingExpenses
+              : item.href === '/admin/facturas' ? unclassifiedInvoices
+              : undefined
+            } />
         ))}
 
         <p className="px-3 mt-4 mb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">

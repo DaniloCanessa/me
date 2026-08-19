@@ -40,6 +40,20 @@ export type BalanceAnual = {
   retencionHonorarios: number;
   // Patrimonio
   patrimonioFinal: number; // capital + aportes − pérdida acum − pérdida ejercicio
+  // Desglose por clasificación de las facturas de compra registradas
+  clasificacion: ClasificacionCompras;
+};
+
+// Cómo se reparten las compras del año según la cuenta que se les asignó.
+// El total de compras sigue saliendo del RCV del SII (fuente autoritativa);
+// esta clasificación es la que dice CÓMO se reparten en el balance.
+export type ClasificacionCompras = {
+  costoGiro: number;        // neto → Costo de ventas
+  gastoAdmin: number;       // neto → Gastos de administración
+  activoFijo: number;       // neto → Activo fijo (no es gasto)
+  sinClasificar: number;    // neto de facturas sin cuenta asignada
+  porCuenta: Array<{ cuenta: string; grupo: string; neto: number; docs: number }>;
+  totalRegistrado: number;  // suma de todo lo anterior
 };
 
 const DEFAULT_CONFIG = (anio: number): BalanceConfig => ({
@@ -71,15 +85,17 @@ export async function getBalanceAnual(anio: number): Promise<BalanceAnual> {
   const db = getSupabaseAdmin();
   const desde = `${anio}-01`, hasta = `${anio}-12`;
 
-  const [config, compras, ventas, hon, f29, af] = await Promise.all([
+  const [config, compras, ventas, hon, f29, clasificadas] = await Promise.all([
     getBalanceConfig(anio),
     db.from('sii_rcv_compras').select('periodo, monto_neto, monto_iva').gte('periodo', desde).lte('periodo', hasta),
     db.from('sii_rcv_ventas').select('periodo, monto_neto, monto_iva').gte('periodo', desde).lte('periodo', hasta),
     getHonorarios(anio),
     db.from('f29_periods').select('periodo, ppm_neto, retencion_honorarios').gte('periodo', desde).lte('periodo', hasta),
-    // Facturas marcadas como activo fijo (no son gasto): se restan de costos.
-    db.from('expense_captures').select('neto, total, con_iva, fecha')
-      .eq('status', 'aprobado').eq('activo_fijo', true).gte('fecha', desde + '-01').lte('fecha', hasta + '-31'),
+    // Facturas de compra registradas con su cuenta: de aquí sale el desglose
+    // entre costo del giro, gasto de administración y activo fijo.
+    db.from('expense_captures')
+      .select('neto, total, con_iva, fecha, tipo, purchase_accounts(nombre, grupo)')
+      .eq('status', 'aprobado').gte('fecha', desde + '-01').lte('fecha', hasta + '-31'),
   ]);
 
   // Acumular por mes
@@ -97,13 +113,42 @@ export async function getBalanceAnual(anio: number): Promise<BalanceAnual> {
 
   const mesesArr = [...meses.values()].sort((a, b) => a.periodo.localeCompare(b.periodo));
 
-  // Activo fijo (neto): se identifica por las facturas marcadas activo_fijo y se
-  // descuenta de los costos del giro (es un activo, no un gasto).
+  // Desglose de las compras por la cuenta que se les asignó.
+  const clasif: ClasificacionCompras = {
+    costoGiro: 0, gastoAdmin: 0, activoFijo: 0, sinClasificar: 0,
+    porCuenta: [], totalRegistrado: 0,
+  };
+  const porCuenta = new Map<string, { cuenta: string; grupo: string; neto: number; docs: number }>();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const activoFijo = ((af.data ?? []) as any[]).reduce((s, r) => {
-    const neto = r.neto != null ? Number(r.neto) : (r.con_iva ? Math.round((Number(r.total) || 0) / 1.19) : Number(r.total) || 0);
-    return s + (neto || 0);
-  }, 0);
+  for (const r of ((clasificadas.data ?? []) as any[])) {
+    const netoBruto = r.neto != null
+      ? Number(r.neto)
+      : (r.con_iva ? Math.round((Number(r.total) || 0) / 1.19) : Number(r.total) || 0);
+    // Las notas de crédito recibidas rebajan el gasto de su misma cuenta.
+    const neto = (r.tipo === 'nota_credito' ? -1 : 1) * (netoBruto || 0);
+
+    const cuenta = r.purchase_accounts as { nombre: string; grupo: string } | null;
+    if (!cuenta) {
+      clasif.sinClasificar += neto;
+    } else if (cuenta.grupo === 'activo_fijo') {
+      clasif.activoFijo += neto;
+    } else if (cuenta.grupo === 'gasto_admin') {
+      clasif.gastoAdmin += neto;
+    } else {
+      clasif.costoGiro += neto;
+    }
+
+    const key = cuenta?.nombre ?? 'Sin clasificar';
+    const cur = porCuenta.get(key) ?? { cuenta: key, grupo: cuenta?.grupo ?? 'sin_clasificar', neto: 0, docs: 0 };
+    cur.neto += neto; cur.docs += 1;
+    porCuenta.set(key, cur);
+  }
+  clasif.porCuenta = [...porCuenta.values()].sort((a, b) => b.neto - a.neto);
+  clasif.totalRegistrado = clasif.costoGiro + clasif.gastoAdmin + clasif.activoFijo + clasif.sinClasificar;
+
+  // El activo fijo no es gasto: se descuenta de los costos del giro.
+  const activoFijo = clasif.activoFijo;
 
   const ingresos = mesesArr.reduce((s, m) => s + m.ventasNeto, 0);
   const costos = mesesArr.reduce((s, m) => s + m.comprasNeto, 0) - activoFijo;
@@ -123,5 +168,6 @@ export async function getBalanceAnual(anio: number): Promise<BalanceAnual> {
     ingresos, costos, honorarios, resultadoEjercicio, activoFijo,
     ivaDebito, ivaCredito, ppm, retencionHonorarios,
     patrimonioFinal,
+    clasificacion: clasif,
   };
 }

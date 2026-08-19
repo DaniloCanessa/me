@@ -1,0 +1,28 @@
+name: Cron cobranza (respaldo)
+
+# Respaldo del cron de Vercel para los avisos de facturas de venta por vencer y
+# vencidas. Mismo motivo que el de licitaciones: en plan Hobby el cron de Vercel
+# es "best-effort" y se puede saltar. El escalón de aviso se guarda en cada
+# factura, así que si ambos corren el mismo día NO se envía dos veces.
+# Requiere el secreto de repo CRON_SECRET (mismo valor que en Vercel).
+
+on:
+  schedule:
+    - cron: '30 12 * * *'   # 12:30 UTC = 08:30 Chile (igual que vercel.json)
+  workflow_dispatch:         # permite dispararlo a mano desde la pestaña Actions
+
+jobs:
+  cobranza:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar avisos de cobranza
+        run: |
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://www.mercadoenergy.cl/api/cron/cobranza")
+          echo "HTTP $code"
+          echo "Respuesta:"
+          cat /tmp/resp.txt
+          echo ""
+          # Falla el job (✗ visible en Actions) si no respondió 200.
+          test "$code" = "200"

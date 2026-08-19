@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# Log del servidor de desarrollo (se genera al correr npm run dev en background)
+dev-server.log

@@ -34,11 +34,33 @@ export type RcvVentaRow = {
   tipo_documento: string; total_documentos: number;
   monto_exento: number; monto_neto: number; monto_iva: number; monto_total: number;
 };
+// Una fila por documento emitido (solo cuando el CSV descargado es el detalle).
+export type RcvVentaDetalleRow = {
+  tipo_doc: string; rut_cliente: string; razon_social: string; folio: string;
+  fecha_docto: string | null;
+  monto_exento: number; monto_neto: number; monto_iva: number; monto_total: number;
+};
+
+export type RcvParsed = {
+  kind: RcvKind;
+  compras: RcvCompraRow[];
+  ventas: RcvVentaRow[];
+  ventasDetalle: RcvVentaDetalleRow[];
+};
+
+// El folio se compara sin ceros a la izquierda (el XML del DTE los trae y el
+// RCV no) para que el cruce no falle por un detalle de formato.
+export const normFolio = (s: string | null | undefined): string => {
+  const clean = (s ?? '').trim().replace(/\s/g, '');
+  const stripped = clean.replace(/^0+/, '');
+  return stripped === '' ? clean : stripped;
+};
 
 // Detecta el tipo de CSV por su encabezado y parsea las filas.
-export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRow[]; ventas: RcvVentaRow[] } {
+export function parseRcvCsv(text: string): RcvParsed {
+  const empty: RcvParsed = { kind: 'desconocido', compras: [], ventas: [], ventasDetalle: [] };
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
-  if (lines.length === 0) return { kind: 'desconocido', compras: [], ventas: [] };
+  if (lines.length === 0) return empty;
   const header = lines[0].toLowerCase();
 
   // Compras: "Nro;Tipo Doc;Tipo Compra;RUT Proveedor;Razon Social;Folio;Fecha Docto;..."
@@ -58,7 +80,7 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
         monto_iva: sign * num(c[11]), monto_total: sign * num(c[14]),
       });
     }
-    return { kind: 'compras', compras, ventas: [] };
+    return { kind: 'compras', compras, ventas: [], ventasDetalle: [] };
   }
 
   // Ventas (resumen): "Tipo Documento;Total Documentos;Monto Exento;Monto Neto;Monto IVA;Monto Total"
@@ -73,7 +95,7 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
         monto_iva: num(c[4]), monto_total: num(c[5]),
       });
     }
-    return { kind: 'ventas', compras: [], ventas };
+    return { kind: 'ventas', compras: [], ventas, ventasDetalle: [] };
   }
 
   // Ventas (detalle, una fila por documento): "Nro;Tipo Doc;Tipo Venta;Rut cliente;…;Monto Neto;Monto IVA;Monto total"
@@ -86,6 +108,7 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
       '56': 'Notas de débito (56)', '61': 'Notas de crédito (61)',
     };
     const agg = new Map<string, RcvVentaRow>();
+    const ventasDetalle: RcvVentaDetalleRow[] = [];
     for (const line of lines.slice(1)) {
       const c = line.split(';');
       if (c.length < 14) continue;
@@ -100,11 +123,23 @@ export function parseRcvCsv(text: string): { kind: RcvKind; compras: RcvCompraRo
       cur.monto_iva += sign * num(c[12]);
       cur.monto_total += sign * num(c[13]);
       agg.set(label, cur);
+
+      // Además del resumen (que alimenta el F29) se guarda el documento suelto,
+      // que es lo que permite decir CUÁL factura falta y no solo que no cuadra.
+      ventasDetalle.push({
+        tipo_doc: tipo,
+        rut_cliente: (c[3] ?? '').trim(),
+        razon_social: (c[4] ?? '').trim(),
+        folio: normFolio(c[5]),
+        fecha_docto: parseFecha(c[6]),
+        monto_exento: sign * num(c[10]), monto_neto: sign * num(c[11]),
+        monto_iva: sign * num(c[12]), monto_total: sign * num(c[13]),
+      });
     }
-    return { kind: 'ventas', compras: [], ventas: [...agg.values()] };
+    return { kind: 'ventas', compras: [], ventas: [...agg.values()], ventasDetalle };
   }
 
-  return { kind: 'desconocido', compras: [], ventas: [] };
+  return empty;
 }
 
 // Importa (upsert) un CSV del RCV para el período. Devuelve qué se cargó.
@@ -123,6 +158,17 @@ export async function importRcv(periodo: string, text: string): Promise<{ kind: 
     if (rows.length === 0) return { kind: 'ventas', count: 0, error: 'El CSV de ventas no tiene filas' };
     const { error } = await db.from('sii_rcv_ventas').upsert(rows, { onConflict: 'periodo,tipo_documento' });
     if (error) return { kind: 'ventas', count: 0, error: error.message };
+
+    // Si el CSV era el DETALLE, se guarda además documento por documento para
+    // poder conciliar por folio. Con el CSV resumen esto viene vacío y la
+    // conciliación de ventas se queda en la comparación de totales.
+    if (parsed.ventasDetalle.length > 0) {
+      const det = parsed.ventasDetalle.map((r) => ({ periodo, ...r }));
+      const { error: errDet } = await db.from('sii_rcv_ventas_detalle')
+        .upsert(det, { onConflict: 'periodo,tipo_doc,rut_cliente,folio' });
+      if (errDet) return { kind: 'ventas', count: rows.length, error: 'Resumen importado, pero falló el detalle: ' + errDet.message };
+      return { kind: 'ventas', count: parsed.ventasDetalle.length };
+    }
     return { kind: 'ventas', count: rows.length };
   }
   return { kind: 'desconocido', count: 0, error: 'No se reconoció el formato del CSV (¿es un RCV del SII?)' };
@@ -157,14 +203,33 @@ export type ConciliacionCompra = {
   app?: { id: string; proveedor: string | null; rut: string | null; folio: string | null; fecha: string | null; iva: number | null; total: number | null };
 };
 
+// Mismo semáforo para las ventas, documento por documento.
+export type ConciliacionVenta = {
+  estado: ConciliacionEstado;
+  sii?: { tipo_doc: string; rut_cliente: string; razon_social: string; folio: string; fecha_docto: string | null; monto_neto: number; monto_iva: number; monto_total: number };
+  app?: { id: string; client_nombre: string | null; client_rut: string | null; folio: string | null; fecha: string; iva: number; total: number };
+};
+
+// Veredicto del mes: lo que responde "¿está todo cuadrado para declarar?"
+export type Veredicto = {
+  cuadra: boolean;
+  comprasOk: number; comprasTotal: number;
+  ventasOk: number;  ventasTotal: number;
+  problemas: string[];
+};
+
 export type ConciliacionResult = {
   compras: ConciliacionCompra[];
   resumen: { calza: number; faltaEnApp: number; faltaEnSii: number; montoDistinto: number };
   creditoSii: number;       // IVA total compras SII
   creditoApp: number;       // IVA total facturas de gasto en la app (período)
   ventas: { debitoSii: number; debitoApp: number; docsSii: number; calza: boolean };
+  ventasDocs: ConciliacionVenta[];
+  resumenVentas: { calza: number; faltaEnApp: number; faltaEnSii: number; montoDistinto: number };
   tieneRcvCompras: boolean;
   tieneRcvVentas: boolean;
+  tieneDetalleVentas: boolean;   // false = el CSV subido era el resumen
+  veredicto: Veredicto;
 };
 
 function monthRange(periodo: string) {
@@ -173,23 +238,39 @@ function monthRange(periodo: string) {
   return { desde: `${periodo}-01`, hasta: `${periodo}-${String(last).padStart(2, '0')}` };
 }
 
-const ivaFromCapture = (total: number | null, conIva: boolean): number => {
-  const t = total ?? 0;
-  return conIva ? Math.round(t - t / 1.19) : Math.round(t * 0.19);
+// IVA de una factura de la app. Se usa el IVA DECLARADO en el documento cuando
+// existe: derivarlo del total (÷1,19) inventaría crédito en las facturas
+// exentas, donde el IVA es cero aunque el total no lo sea. Solo se deriva
+// cuando el dato no viene (boletas antiguas cargadas sin desglose).
+// Las notas de crédito recibidas RESTAN al crédito fiscal, igual que en el RCV
+// del SII (donde vienen en negativo).
+const ivaFromCapture = (
+  total: number | null, conIva: boolean, tipo?: string | null, ivaDeclarado?: number | null,
+): number => {
+  const iva = ivaDeclarado != null
+    ? Math.round(Number(ivaDeclarado))
+    : (() => {
+        const t = total ?? 0;
+        return conIva ? Math.round(t - t / 1.19) : Math.round(t * 0.19);
+      })();
+  return tipo === 'nota_credito' ? -Math.abs(iva) : iva;
 };
 
 export async function getConciliacion(periodo: string): Promise<ConciliacionResult> {
   const db = getSupabaseAdmin();
   const { desde, hasta } = monthRange(periodo);
 
-  const [comprasSii, ventasSii, gastos, ventasApp] = await Promise.all([
+  const [comprasSii, ventasSii, gastos, ventasApp, ventasSiiDet] = await Promise.all([
     db.from('sii_rcv_compras').select('*').eq('periodo', periodo),
     db.from('sii_rcv_ventas').select('monto_iva, total_documentos').eq('periodo', periodo),
-    // Facturas registradas en la app (bandeja de gastos, aprobadas, tipo factura)
-    db.from('expense_captures').select('id, proveedor, rut, folio, fecha, total, con_iva')
-      .eq('status', 'aprobado').eq('tipo', 'factura').gte('fecha', desde).lte('fecha', hasta),
-    db.from('sales_invoices').select('iva_clp').eq('estado', 'emitida')
-      .gte('fecha_emision', desde).lte('fecha_emision', hasta),
+    // Facturas de compra registradas en la app. Se consideran TODAS las
+    // aprobadas con folio (antes solo las de tipo 'factura', y eso dejaba fuera
+    // las notas de crédito y las que quedaron con otro tipo).
+    db.from('expense_captures').select('id, proveedor, rut, folio, fecha, total, con_iva, tipo, iva')
+      .eq('status', 'aprobado').gte('fecha', desde).lte('fecha', hasta),
+    db.from('sales_invoices').select('id, client_nombre, client_rut, folio, fecha_emision, iva_clp, total_clp')
+      .eq('estado', 'emitida').gte('fecha_emision', desde).lte('fecha_emision', hasta),
+    db.from('sii_rcv_ventas_detalle').select('*').eq('periodo', periodo),
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -199,17 +280,17 @@ export async function getConciliacion(periodo: string): Promise<ConciliacionResu
 
   // Índice de facturas de la app por rut+folio
   const appByKey = new Map<string, (typeof app)[number]>();
-  for (const a of app) appByKey.set(`${normRut(a.rut)}|${(a.folio ?? '').trim()}`, a);
+  for (const a of app) appByKey.set(`${normRut(a.rut)}|${normFolio(a.folio)}`, a);
   const appMatched = new Set<string>();
 
   const compras: ConciliacionCompra[] = [];
   for (const s of sii) {
-    const key = `${normRut(s.rut_proveedor)}|${(s.folio ?? '').trim()}`;
+    const key = `${normRut(s.rut_proveedor)}|${normFolio(s.folio)}`;
     const a = appByKey.get(key);
     const siiData = { rut_proveedor: s.rut_proveedor, razon_social: s.razon_social, folio: s.folio, fecha_docto: s.fecha_docto, monto_neto: Number(s.monto_neto) || 0, monto_iva: Number(s.monto_iva) || 0, monto_total: Number(s.monto_total) || 0 };
     if (a) {
       appMatched.add(a.id);
-      const appIva = ivaFromCapture(a.total, !!a.con_iva);
+      const appIva = ivaFromCapture(a.total, !!a.con_iva, a.tipo, a.iva);
       const estado: ConciliacionEstado = Math.abs(appIva - siiData.monto_iva) <= 2 ? 'calza' : 'monto_distinto';
       compras.push({ estado, sii: siiData, app: { id: a.id, proveedor: a.proveedor, rut: a.rut, folio: a.folio, fecha: a.fecha, iva: appIva, total: a.total } });
     } else {
@@ -219,7 +300,7 @@ export async function getConciliacion(periodo: string): Promise<ConciliacionResu
   // Facturas en la app que NO están en el RCV del SII (crédito que el SII podría haber omitido)
   for (const a of app) {
     if (appMatched.has(a.id)) continue;
-    compras.push({ estado: 'falta_en_sii', app: { id: a.id, proveedor: a.proveedor, rut: a.rut, folio: a.folio, fecha: a.fecha, iva: ivaFromCapture(a.total, !!a.con_iva), total: a.total } });
+    compras.push({ estado: 'falta_en_sii', app: { id: a.id, proveedor: a.proveedor, rut: a.rut, folio: a.folio, fecha: a.fecha, iva: ivaFromCapture(a.total, !!a.con_iva, a.tipo, a.iva), total: a.total } });
   }
 
   const resumen = {
@@ -230,20 +311,97 @@ export async function getConciliacion(periodo: string): Promise<ConciliacionResu
   };
 
   const creditoSii = sii.reduce((s, r) => s + (Number(r.monto_iva) || 0), 0);
-  const creditoApp = app.reduce((s, a) => s + ivaFromCapture(a.total, !!a.con_iva), 0);
+  const creditoApp = app.reduce((s, a) => s + ivaFromCapture(a.total, !!a.con_iva, a.tipo, a.iva), 0);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const debitoSii = ((ventasSii.data ?? []) as any[]).reduce((s, r) => s + (Number(r.monto_iva) || 0), 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const docsSii = ((ventasSii.data ?? []) as any[]).reduce((s, r) => s + (Number(r.total_documentos) || 0), 0);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const debitoApp = ((ventasApp.data ?? []) as any[]).reduce((s, r) => s + (Number(r.iva_clp) || 0), 0);
+  const ventasAppRows = (ventasApp.data ?? []) as any[];
+  const debitoApp = ventasAppRows.reduce((s, r) => s + (Number(r.iva_clp) || 0), 0);
+
+  // ─── Ventas documento por documento ────────────────────────────────────────
+  // Solo es posible si el CSV subido fue el DETALLE de ventas. Con el resumen
+  // se cae de vuelta a comparar totales (lo que hacía antes).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const siiVentasDet = (ventasSiiDet.data ?? []) as any[];
+
+  const ventasAppByKey = new Map<string, (typeof ventasAppRows)[number]>();
+  for (const v of ventasAppRows) ventasAppByKey.set(normFolio(v.folio), v);
+  const ventasMatched = new Set<string>();
+
+  const ventasDocs: ConciliacionVenta[] = [];
+  for (const s of siiVentasDet) {
+    const folio = normFolio(s.folio);
+    const a = ventasAppByKey.get(folio);
+    const siiData = {
+      tipo_doc: s.tipo_doc, rut_cliente: s.rut_cliente, razon_social: s.razon_social,
+      folio: s.folio, fecha_docto: s.fecha_docto,
+      monto_neto: Number(s.monto_neto) || 0, monto_iva: Number(s.monto_iva) || 0,
+      monto_total: Number(s.monto_total) || 0,
+    };
+    if (a) {
+      ventasMatched.add(a.id);
+      const appIva = Number(a.iva_clp) || 0;
+      const estado: ConciliacionEstado = Math.abs(appIva - siiData.monto_iva) <= 2 ? 'calza' : 'monto_distinto';
+      ventasDocs.push({
+        estado, sii: siiData,
+        app: { id: a.id, client_nombre: a.client_nombre, client_rut: a.client_rut, folio: a.folio, fecha: a.fecha_emision, iva: appIva, total: Number(a.total_clp) || 0 },
+      });
+    } else {
+      ventasDocs.push({ estado: 'falta_en_app', sii: siiData });
+    }
+  }
+  // Emitidas en la app que el SII no informa (típicamente un folio anulado mal
+  // marcado, o una factura emitida en otro período).
+  for (const a of ventasAppRows) {
+    if (ventasMatched.has(a.id)) continue;
+    if (siiVentasDet.length === 0) break;   // sin detalle no hay con qué comparar
+    ventasDocs.push({
+      estado: 'falta_en_sii',
+      app: { id: a.id, client_nombre: a.client_nombre, client_rut: a.client_rut, folio: a.folio, fecha: a.fecha_emision, iva: Number(a.iva_clp) || 0, total: Number(a.total_clp) || 0 },
+    });
+  }
+
+  const resumenVentas = {
+    calza: ventasDocs.filter((v) => v.estado === 'calza').length,
+    faltaEnApp: ventasDocs.filter((v) => v.estado === 'falta_en_app').length,
+    faltaEnSii: ventasDocs.filter((v) => v.estado === 'falta_en_sii').length,
+    montoDistinto: ventasDocs.filter((v) => v.estado === 'monto_distinto').length,
+  };
+
+  // ─── Veredicto del mes ─────────────────────────────────────────────────────
+  const problemas: string[] = [];
+  if (sii.length === 0) problemas.push('Falta subir el RCV de compras del SII');
+  if ((ventasSii.data ?? []).length === 0) problemas.push('Falta subir el RCV de ventas del SII');
+  if (resumen.faltaEnApp > 0) problemas.push(`${resumen.faltaEnApp} factura(s) de compra están en el SII pero no en la app`);
+  if (resumen.faltaEnSii > 0) problemas.push(`${resumen.faltaEnSii} factura(s) de compra están en la app pero el SII no las informa`);
+  if (resumen.montoDistinto > 0) problemas.push(`${resumen.montoDistinto} factura(s) de compra con monto distinto al del SII`);
+  if (resumenVentas.faltaEnApp > 0) problemas.push(`${resumenVentas.faltaEnApp} factura(s) de venta están en el SII pero no en la app`);
+  if (resumenVentas.faltaEnSii > 0) problemas.push(`${resumenVentas.faltaEnSii} factura(s) de venta están en la app pero no en el SII`);
+  if (resumenVentas.montoDistinto > 0) problemas.push(`${resumenVentas.montoDistinto} factura(s) de venta con monto distinto al del SII`);
+  if (siiVentasDet.length === 0 && (ventasSii.data ?? []).length > 0 && Math.abs(debitoSii - debitoApp) > 2) {
+    problemas.push(`El IVA débito no cuadra: SII ${debitoSii} vs app ${debitoApp}`);
+  }
+
+  const veredicto: Veredicto = {
+    cuadra: problemas.length === 0,
+    comprasOk: resumen.calza, comprasTotal: compras.length,
+    ventasOk: resumenVentas.calza,
+    ventasTotal: ventasDocs.length || docsSii,
+    problemas,
+  };
 
   return {
     compras: compras.sort((a, b) => (a.sii?.fecha_docto ?? a.app?.fecha ?? '').localeCompare(b.sii?.fecha_docto ?? b.app?.fecha ?? '')),
     resumen, creditoSii, creditoApp,
     ventas: { debitoSii, debitoApp, docsSii, calza: Math.abs(debitoSii - debitoApp) <= 2 },
+    ventasDocs: ventasDocs.sort((a, b) => (a.sii?.fecha_docto ?? a.app?.fecha ?? '').localeCompare(b.sii?.fecha_docto ?? b.app?.fecha ?? '')),
+    resumenVentas,
     tieneRcvCompras: sii.length > 0,
     tieneRcvVentas: (ventasSii.data ?? []).length > 0,
+    tieneDetalleVentas: siiVentasDet.length > 0,
+    veredicto,
   };
 }

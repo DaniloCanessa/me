@@ -34,7 +34,7 @@ export async function getFinanzas(desde: string, hasta: string): Promise<Finanza
     db.from('project_payments').select('monto_clp, fecha').gte('fecha', desde).lte('fecha', hasta),
     db.from('project_purchases').select('id, monto_clp, con_iva, fecha').gte('fecha', desde).lte('fecha', hasta),
     db.from('project_costs').select('monto_clp, con_iva, created_at').gte('created_at', desde).lte('created_at', hastaFin),
-    db.from('expense_captures').select('total, con_iva, categoria, fecha')
+    db.from('expense_captures').select('total, con_iva, categoria, fecha, purchase_accounts(nombre)')
       .eq('status', 'aprobado').eq('sin_proyecto', true)
       .gte('fecha', desde).lte('fecha', hasta),
     // Anticipos absorbidos por una factura (su monto ya está en la factura): no
@@ -75,7 +75,9 @@ export async function getFinanzas(desde: string, hasta: string): Promise<Finanza
   for (const g of (generales.data ?? []) as any[]) {
     const s = split(g.total ?? 0, !!g.con_iva);
     ggConIva += s.conIva; ggNeto += s.neto;
-    const cat = (g.categoria as string) || 'Sin categoría';
+    // Se agrupa por la cuenta del plan de cuentas; `categoria` es el campo
+    // legado de los gastos cargados antes del módulo de Facturas.
+    const cat = (g.purchase_accounts?.nombre as string) || (g.categoria as string) || 'Sin clasificar';
     const cur = catMap.get(cat) ?? { conIva: 0, neto: 0 };
     cur.conIva += s.conIva; cur.neto += s.neto;
     catMap.set(cat, cur);

@@ -88,6 +88,38 @@ export default function BalanceView({ balance, honorarios, anio }: { balance: Ba
         </div>
       </div>
 
+      {/* Desglose de las compras por cuenta */}
+      {b.clasificacion.totalRegistrado !== 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Compras por cuenta (neto)</p>
+            {b.clasificacion.sinClasificar !== 0 && (
+              <a href="/admin/facturas" className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 hover:bg-amber-100">
+                ⚠ {clp(b.clasificacion.sinClasificar)} sin clasificar — asignar cuenta
+              </a>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100">
+            <GrupoTile label="Costo del giro" value={b.clasificacion.costoGiro} hint="→ Costo de ventas" />
+            <GrupoTile label="Gasto de administración" value={b.clasificacion.gastoAdmin} hint="→ Gastos de admin. y ventas" />
+            <GrupoTile label="Activo fijo" value={b.clasificacion.activoFijo} hint="→ Activos (se deprecia)" />
+          </div>
+
+          <div className="px-5 py-3">
+            {b.clasificacion.porCuenta.map((c) => (
+              <div key={c.cuenta} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                <span className="text-sm text-gray-700">
+                  {c.cuenta}
+                  <span className="text-xs text-gray-400 ml-2">{c.docs} doc.</span>
+                </span>
+                <span className="text-sm tabular-nums text-gray-900">{clp(c.neto)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* IVA + PPM */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <MiniCard title="Situación IVA (acumulado)" rows={[
@@ -297,6 +329,17 @@ function Field({ label, value, onChange, type, text }: { label: string; value: s
       <label className="text-xs text-gray-500 mb-1 block">{label}</label>
       <input type={type ?? 'text'} inputMode={text || type === 'date' ? undefined : 'numeric'} value={value} onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 tabular-nums focus:border-[#389fe0] focus:ring-1 focus:ring-[#389fe0] outline-none" />
+    </div>
+  );
+}
+
+// Tarjeta de un grupo contable en el desglose de compras.
+function GrupoTile({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="bg-white px-5 py-3">
+      <p className="text-[11px] text-gray-400 uppercase tracking-wide">{label}</p>
+      <p className="text-lg font-bold text-gray-900 tabular-nums mt-0.5">{clp(value)}</p>
+      <p className="text-[11px] text-gray-400">{hint}</p>
     </div>
   );
 }

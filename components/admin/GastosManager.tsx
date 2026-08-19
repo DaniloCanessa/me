@@ -3,14 +3,14 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ExpenseCapture } from '@/lib/db/expenses';
-import { GENERAL_EXPENSE_CATEGORIES } from '@/lib/db/expenses';
+import type { PurchaseAccount, AccountGroup } from '@/lib/db/accounts';
+import { ACCOUNT_GROUP_LABEL } from '@/lib/db/accounts';
 import {
   saveExpenseCapture, approveExpenseCapture, rejectExpenseCapture,
-  deleteExpenseCapture, getProjectItemsForExpense,
+  deleteExpenseCapture,
 } from '@/app/admin/gastos/actions';
 
 type Row = ExpenseCapture & { signedUrl: string | null };
-type ProjectOpt = { id: string; nombre: string };
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   pendiente: { label: 'Pendiente', color: 'bg-amber-100 text-amber-700' },
@@ -31,7 +31,7 @@ function isPdfPath(path: string | null | undefined): boolean {
 type Draft = {
   proveedor: string; rut: string; tipo: string; folio: string; fecha: string;
   neto: string; iva: string; total: string; con_iva: boolean; notas: string;
-  project_select: string; project_item_id: string; categoria: string;
+  account_id: string;
 };
 
 function draftFrom(c: Row): Draft {
@@ -40,9 +40,7 @@ function draftFrom(c: Row): Draft {
     folio: c.folio ?? '', fecha: c.fecha ?? '', neto: c.neto?.toString() ?? '',
     iva: c.iva?.toString() ?? '', total: c.total?.toString() ?? '', con_iva: c.con_iva,
     notas: c.notas ?? '',
-    project_select: c.sin_proyecto ? '__sin__' : (c.project_id ?? ''),
-    project_item_id: c.project_item_id ?? '',
-    categoria: c.categoria ?? '',
+    account_id: c.account_id ?? '',
   };
 }
 
@@ -51,13 +49,15 @@ function draftToFormData(d: Draft, extra?: Record<string, string>): FormData {
   fd.set('proveedor', d.proveedor); fd.set('rut', d.rut); fd.set('tipo', d.tipo);
   fd.set('folio', d.folio); fd.set('fecha', d.fecha); fd.set('neto', d.neto);
   fd.set('iva', d.iva); fd.set('total', d.total); fd.set('con_iva', String(d.con_iva));
-  fd.set('notas', d.notas); fd.set('project_select', d.project_select);
-  fd.set('project_item_id', d.project_item_id); fd.set('categoria', d.categoria);
+  fd.set('notas', d.notas); fd.set('account_id', d.account_id);
+  // El proyecto ya no se pide al aprobar: es un centro de costo que se asigna
+  // después desde la ficha del proyecto.
+  fd.set('project_select', '__sin__');
   for (const [k, v] of Object.entries(extra ?? {})) fd.set(k, v);
   return fd;
 }
 
-export default function GastosManager({ captures, projects }: { captures: Row[]; projects: ProjectOpt[] }) {
+export default function GastosManager({ captures, accounts }: { captures: Row[]; accounts: PurchaseAccount[] }) {
   const router = useRouter();
   const [filter, setFilter] = useState<'pendiente' | 'aprobado' | 'rechazado'>('pendiente');
   const [active, setActive] = useState<Row | null>(null);
@@ -123,7 +123,7 @@ export default function GastosManager({ captures, projects }: { captures: Row[];
         <ReviewModal
           key={active.id}
           capture={active}
-          projects={projects}
+          accounts={accounts}
           onClose={() => setActive(null)}
           onDone={() => { setActive(null); router.refresh(); }}
         />
@@ -135,12 +135,11 @@ export default function GastosManager({ captures, projects }: { captures: Row[];
 // ─── Modal de revisión ────────────────────────────────────────────────────────
 
 function ReviewModal({
-  capture, projects, onClose, onDone,
+  capture, accounts, onClose, onDone,
 }: {
-  capture: Row; projects: ProjectOpt[]; onClose: () => void; onDone: () => void;
+  capture: Row; accounts: PurchaseAccount[]; onClose: () => void; onDone: () => void;
 }) {
   const [d, setD] = useState<Draft>(() => draftFrom(capture));
-  const [items, setItems] = useState<Array<{ id: string; description: string }>>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrMock, setOcrMock] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,17 +149,9 @@ function ReviewModal({
   const isPdf = isPdfPath(capture.image_path);
 
   const set = (patch: Partial<Draft>) => setD((prev) => ({ ...prev, ...patch }));
-  const hasProject = d.project_select !== '' && d.project_select !== '__sin__';
-
-  // Carga ítems del proyecto seleccionado
-  useEffect(() => {
-    if (!hasProject) { setItems([]); return; }
-    let alive = true;
-    getProjectItemsForExpense(d.project_select).then((rows) => { if (alive) setItems(rows); });
-    return () => { alive = false; };
-  }, [d.project_select, hasProject]);
 
   async function runOcr() {
+    if (!capture.image_path) { setError('Esta boleta no tiene imagen para leer'); return; }
     setError(null); setOcrLoading(true);
     try {
       const fd = new FormData();
@@ -319,36 +310,22 @@ function ReviewModal({
             </label>
 
             <div className="border-t border-gray-100 pt-3">
-              <label className="text-xs text-gray-500 mb-1 block">Proyecto</label>
-              <select className={inputCls} value={d.project_select} disabled={readOnly}
-                onChange={(e) => set({ project_select: e.target.value, project_item_id: '' })}>
-                <option value="">— Elegir —</option>
-                <option value="__sin__">Sin proyecto (gasto general)</option>
-                <optgroup label="Proyectos">
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </optgroup>
+              <label className="text-xs text-gray-500 mb-1 block">¿Qué tipo de factura es?</label>
+              <select className={inputCls} value={d.account_id} disabled={readOnly}
+                onChange={(e) => set({ account_id: e.target.value })}>
+                <option value="">— Sin clasificar —</option>
+                {(['costo_giro', 'gasto_admin', 'activo_fijo'] as AccountGroup[]).map((g) => (
+                  <optgroup key={g} label={ACCOUNT_GROUP_LABEL[g]}>
+                    {accounts.filter((a) => a.grupo === g).map((a) => (
+                      <option key={a.id} value={a.id}>{a.nombre}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                El proyecto se asigna después desde la ficha del proyecto, si corresponde.
+              </p>
             </div>
-            {hasProject && items.length > 0 && (
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Ítem de la lista de compra (opcional)</label>
-                <select className={inputCls} value={d.project_item_id} disabled={readOnly}
-                  onChange={(e) => set({ project_item_id: e.target.value })}>
-                  <option value="">Sin ítem específico</option>
-                  {items.map((it) => <option key={it.id} value={it.id}>{it.description}</option>)}
-                </select>
-              </div>
-            )}
-            {d.project_select === '__sin__' && (
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Categoría del gasto general</label>
-                <select className={inputCls} value={d.categoria} disabled={readOnly}
-                  onChange={(e) => set({ categoria: e.target.value })}>
-                  <option value="">— Sin categoría —</option>
-                  {GENERAL_EXPENSE_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-            )}
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Nota</label>
               <input className={inputCls} value={d.notas} disabled={readOnly} onChange={(e) => set({ notas: e.target.value })} />
@@ -370,7 +347,7 @@ function ReviewModal({
               </button>
               <button onClick={doApprove} disabled={isPending}
                 className="bg-[#389fe0] hover:bg-[#1d65c5] text-white px-5 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50">
-                {isPending ? 'Guardando…' : hasProject ? 'Aprobar → crear compra' : 'Aprobar (gasto general)'}
+                {isPending ? 'Guardando…' : 'Aprobar'}
               </button>
             </div>
           ) : (
