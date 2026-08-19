@@ -5,7 +5,7 @@ import type { ConsumptionProfile, MonthlyBill, SupplyData, TarifaType } from '@/
 import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route';
 import { MONTH_NAMES, DISTRIBUTORS, CHILE_BT1 } from '@/lib/constants';
 import { extrapolateSeasonalKWh } from '@/lib/consumption';
-import BillOCRUpload from './BillOCRUpload';
+import BillOCRUpload, { type BoletaArchivadaLocal } from './BillOCRUpload';
 import { IconUpload } from '@/components/landing/icons';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,8 @@ interface StepBillsProps {
    *  Residencial usa la extrapolación estacional (perfil nacional BT1). */
   isBusinessCustomer?: boolean;
   onSubmit: (profile: ConsumptionProfile) => void;
+  /** Boletas archivadas + identificación del documento, para guardarlas en la ficha. */
+  onBillsArchived?: (info: { archivadas: BoletaArchivadaLocal[]; fechaBoleta: string | null; numeroBoleta: string | null; distribuidora: string | null }) => void;
   onUpdateSupply?: (partial: Pick<SupplyData, 'distribuidora' | 'tarifa'>) => void;
 }
 
@@ -211,13 +213,18 @@ const TARIFA_OPTIONS: { value: TarifaType; label: string }[] = [
 
 const SLOTS = generateMonthSlots();
 
-export default function StepBills({ initialData, supply, ocrEnabled = false, isBusinessCustomer = false, onSubmit, onUpdateSupply }: StepBillsProps) {
+export default function StepBills({ initialData, supply, ocrEnabled = false, isBusinessCustomer = false, onSubmit, onUpdateSupply, onBillsArchived }: StepBillsProps) {
   const [rows, setRows] = useState<Record<string, RowValues>>(
     () => initRowsFromProfile(SLOTS, initialData),
   );
   const [showOCR, setShowOCR] = useState(false);
   const [ocrMatchCount, setOcrMatchCount] = useState<number | null>(null);
   const [ocrUsed, setOcrUsed] = useState(false);
+  // Meses que vinieron de la boleta y cómo estaba la tabla antes, para poder
+  // deshacer la lectura completa si el OCR se equivocó.
+  const [ocrSlots, setOcrSlots] = useState<string[]>([]);
+  const [rowsBeforeOcr, setRowsBeforeOcr] = useState<typeof rows | null>(null);
+  const [ocrMock, setOcrMock] = useState(false);
 
   const [distribuidoraSelect, setDistribuidoraSelect] = useState<string>(() => {
     const d = supply.distribuidora ?? '';
@@ -244,8 +251,9 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     setRows((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }
 
-  function handleOCRConfirm(periods: ExtractedPeriod[], matchCount: number, billData: ExtractedBill) {
+  function handleOCRConfirm(periods: ExtractedPeriod[], matchCount: number, billData: ExtractedBill, isMock = false, archivadas: BoletaArchivadaLocal[] = []) {
     const updated = { ...rows };
+    const tocados: string[] = [];
     periods.forEach((p) => {
       const key = `${p.year}-${String(p.month).padStart(2, '0')}`;
       if (updated[key] === undefined || p.consumptionKWh == null) return;
@@ -253,11 +261,29 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
         kWh: String(p.consumptionKWh),
         clp: p.variableAmountCLP != null ? String(p.variableAmountCLP) : '',
       };
+      tocados.push(key);
     });
+    setRowsBeforeOcr(rows);
+    setOcrSlots(tocados);
     setRows(updated);
     setOcrMatchCount(matchCount);
+    setOcrMock(isMock);
     setOcrUsed(true);
     setShowOCR(false);
+
+    // El período principal de la boleta identifica de qué documento salió esta
+    // simulación; junto con el n° permite detectar que ya se simuló antes.
+    const principal = periods.find((p) => p.isCurrent) ?? periods[periods.length - 1];
+    const fechaBoleta = principal
+      ? `${principal.year}-${String(principal.month).padStart(2, '0')}-01`
+      : null;
+    onBillsArchived?.({
+      archivadas,
+      fechaBoleta,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      numeroBoleta: ((billData as any).numeroBoleta as string) ?? null,
+      distribuidora: billData.distribuidora ?? null,
+    });
 
     if (onUpdateSupply && (billData.distribuidora || billData.tarifa)) {
       onUpdateSupply({
@@ -339,8 +365,31 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
               </span>
             </button>
             {ocrMatchCount !== null && (
-              <p className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-xl px-3 py-2 text-center">
-                ✓ Se pre-rellenaron <strong>{ocrMatchCount} mes{ocrMatchCount !== 1 ? 'es' : ''}</strong> desde la boleta. Puedes editar los valores si es necesario.
+              <div className="text-xs text-[#1d65c5] bg-[#dde3e9]/50 rounded-xl px-3 py-2 flex items-center justify-center gap-3 flex-wrap">
+                <span>
+                  ✓ Se cargaron <strong>{ocrMatchCount} mes{ocrMatchCount !== 1 ? 'es' : ''}</strong> desde la boleta
+                  {' '}(marcados abajo). Corrige lo que haga falta y continúa.
+                </span>
+                {rowsBeforeOcr && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRows(rowsBeforeOcr);
+                      setRowsBeforeOcr(null);
+                      setOcrSlots([]);
+                      setOcrMatchCount(null);
+                      setOcrUsed(false);
+                    }}
+                    className="underline text-gray-500 hover:text-gray-700 whitespace-nowrap"
+                  >
+                    Deshacer lectura
+                  </button>
+                )}
+              </div>
+            )}
+            {ocrMock && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2 text-center">
+                OCR en modo de prueba: los valores son simulados, revísalos antes de continuar.
               </p>
             )}
           </div>
@@ -414,6 +463,9 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
             const hasKWh = !!row.kWh && parseFloat(row.kWh) > 0;
             const hasClp = !!row.clp && parseFloat(row.clp) > 0;
             const isFilled = hasKWh || hasClp;
+            // Marca los meses que llegaron de la boleta, para que se distingan
+            // de un vistazo de los que se escribieron a mano.
+            const fromOcr = ocrSlots.includes(slot.key);
             return (
               <div
                 key={slot.key}
@@ -423,8 +475,13 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
                   isFilled ? 'bg-[#389fe0]/5' : '',
                 ].join(' ')}
               >
-                <span className={['text-sm', isFilled ? 'text-gray-800 font-medium' : 'text-gray-500'].join(' ')}>
+                <span className={['text-sm flex items-center gap-1.5', isFilled ? 'text-gray-800 font-medium' : 'text-gray-500'].join(' ')}>
                   {slot.label}
+                  {fromOcr && (
+                    <span title="Leído de la boleta" className="text-[10px] text-[#1d65c5] bg-white border border-[#b0cedd] rounded px-1 py-0.5 leading-none">
+                      boleta
+                    </span>
+                  )}
                 </span>
                 <input
                   type="number" min="1" max="99999" step="1"

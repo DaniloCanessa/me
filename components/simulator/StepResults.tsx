@@ -17,6 +17,9 @@ import { getRegionById } from '@/lib/regions';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
 import { CHILE_BT1, SOLAR_DEFAULTS, DFL4, requiredSurfaceM2 } from '@/lib/constants';
+import QuoteFromSimulation from './QuoteFromSimulation';
+import SaveSimulation from './SaveSimulation';
+import type { BoletaArchivadaLocal } from './BillOCRUpload';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
 import { IconCar, IconBattery } from '@/components/landing/icons';
 import dynamic from 'next/dynamic';
@@ -31,6 +34,16 @@ interface StepResultsProps {
   catalog?: SolarKit[];
   /** true solo con sesión de admin: habilita el selector manual de tamaño de PFV. */
   adminMode?: boolean;
+  /** Cliente del CRM para el que se simula (habilita crear la cotización). */
+  clientId?: string;
+  installationId?: string;
+  /** Boletas archivadas por el OCR + identificación del documento. */
+  billInfo?: {
+    archivadas: BoletaArchivadaLocal[];
+    fechaBoleta: string | null;
+    numeroBoleta: string | null;
+    distribuidora: string | null;
+  } | null;
 }
 
 // ─── PFV existente: saldo de empalme y consumo residual a cubrir ──────────────
@@ -149,6 +162,11 @@ function buildBaseInput(state: WizardState, config?: SimulatorConfig): Simulator
     panelWattageWp:         config?.panelWattageWp,
     panelAreaM2:            config?.panelAreaM2,
     co2FactorKgPerKWh:      config?.co2FactorKgPerKWh,
+    // Cada tipo de cliente tiene su propio perfil horario: una casa consume
+    // sobre todo de tarde/noche, una empresa en horario de trabajo.
+    dayConsumptionRatio:    state.customerCategory === 'business'
+      ? config?.dayConsumptionRatioBusiness
+      : config?.dayConsumptionRatio,
   };
 }
 
@@ -483,95 +501,109 @@ function MonthlyLineChart({ monthly }: { monthly: SimulatorResult['energyBalance
 }
 
 // ─── Gráfico de barras apiladas del balance mensual ───────────────────────────
-// Cada barra = producción del mes, dividida en autoconsumo (base) + inyección
-// (arriba). Una línea gris marca lo que se sigue tomando de la red. Reemplaza la
-// tabla densa como vista principal; los números quedan en el detalle colapsable.
+
+// Franjas horizontales para rayar una barra (la inyección). Se dibujan como
+// rects en vez de usar <pattern> porque el informe se rasteriza con
+// html2canvas, donde los patrones SVG no renderizan de forma confiable.
+function franjas(y0: number, alto: number, paso = 4, grosor = 1.6): number[] {
+  const out: number[] = [];
+  for (let y = y0 + 1; y < y0 + alto - grosor; y += paso) out.push(y);
+  return out;
+}
+
+// Sobre el eje, el consumo del mes partido en autoconsumo (verde) + lo que se
+// sigue comprando a la red (gris). Bajo el eje, el excedente inyectado. Cada
+// barra suma una magnitud real: antes la barra era producción y la red iba como
+// línea, lo que mezclaba dos escalas en el mismo gráfico.
 
 function StackedBalanceChart({ monthly }: { monthly: SimulatorResult['energyBalance']['monthly'] }) {
-  const W = 560, H = 180;
-  const PAD = { top: 16, right: 10, bottom: 24, left: 34 };
+  const W = 560, H = 200;
+  const PAD = { top: 14, right: 10, bottom: 26, left: 34 };
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top - PAD.bottom;
 
-  const maxVal = Math.max(1, ...monthly.map((m) => Math.max(m.productionKWh, m.consumedFromGridKWh)));
+  const maxArriba = Math.max(1, ...monthly.map((m) => m.selfConsumptionKWh + m.consumedFromGridKWh));
+  const maxAbajo  = Math.max(1, ...monthly.map((m) => m.injectedToGridKWh));
+  // Reparto del eje según el peso de cada lado, con un piso de 25% abajo para
+  // que la inyección siempre sea visible.
+  const fracAbajo = Math.min(0.5, Math.max(0.25, maxAbajo / (maxArriba + maxAbajo)));
+  const altoAbajo = chartH * fracAbajo;
+  const altoArriba = chartH - altoAbajo;
+  const zeroY = PAD.top + altoArriba;
+
   const n = monthly.length;
   const slot = chartW / n;
   const barW = Math.min(slot * 0.62, 26);
-  const baseY = PAD.top + chartH;
-  const h = (v: number) => (v / maxVal) * chartH;
-
-  const gridPath = monthly
-    .map((m, i) => {
-      const cx = PAD.left + slot * i + slot / 2;
-      return `${i === 0 ? 'M' : 'L'}${cx.toFixed(1)},${(baseY - h(m.consumedFromGridKWh)).toFixed(1)}`;
-    })
-    .join(' ');
-
-  const yTicks = [0, 0.5, 1];
+  const hUp = (v: number) => (v / maxArriba) * altoArriba;
+  const hDn = (v: number) => (v / maxAbajo) * altoAbajo;
 
   return (
     <div className="mt-1">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
-        {/* Rejilla y eje Y */}
-        {yTicks.map((t) => {
-          const yy = PAD.top + chartH * (1 - t);
+        {[0.5, 1].map((t) => {
+          const yy = zeroY - altoArriba * t;
           return (
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
               <text x={PAD.left - 4} y={yy + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
-                {Math.round(maxVal * t)}
+                {Math.round(maxArriba * t)}
               </text>
             </g>
           );
         })}
+        <text x={PAD.left - 4} y={zeroY + altoAbajo + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
+          {Math.round(maxAbajo)}
+        </text>
 
-        {/* Barras apiladas: autoconsumo (base) + inyección (arriba) */}
         {monthly.map((m, i) => {
           const x = PAD.left + slot * i + (slot - barW) / 2;
-          const selfH = h(m.selfConsumptionKWh);
-          const injH = h(m.injectedToGridKWh);
+          const selfH = hUp(m.selfConsumptionKWh);
+          const gridH = hUp(m.consumedFromGridKWh);
+          const injH  = hDn(m.injectedToGridKWh);
           return (
             <g key={m.month}>
-              <rect x={x} y={baseY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
-              <rect
-                x={x}
-                y={baseY - selfH - injH}
-                width={barW}
-                height={Math.max(injH, 0)}
-                fill="#2563eb"
-                opacity={0.8}
-                rx={1.5}
-              />
-              <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">
+              {/* Consumo del mes */}
+              <rect x={x} y={zeroY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
+              <rect x={x} y={zeroY - selfH - gridH} width={barW} height={Math.max(gridH, 0)} fill="#9ca3af" opacity={0.75} rx={1.5} />
+              {/* Excedente inyectado: mantiene su celeste, rayado para
+                  distinguirlo del consumo sin cambiarle el color */}
+              <rect x={x} y={zeroY} width={barW} height={Math.max(injH, 0)} fill="#2563eb" opacity={0.18} rx={1.5} />
+              {franjas(zeroY, Math.max(injH, 0)).map((fy, k) => (
+                <rect key={k} x={x} y={fy} width={barW} height={1.6} fill="#2563eb" opacity={0.8} />
+              ))}
+              <text x={x + barW / 2} y={H - 6} textAnchor="middle" fontSize={8} fill="#9ca3af">
                 {m.monthName.slice(0, 3)}
               </text>
             </g>
           );
         })}
 
-        {/* Línea de consumo desde la red */}
-        <path d={gridPath} fill="none" stroke="#9ca3af" strokeWidth={1.75} strokeDasharray="3 2" strokeLinejoin="round" strokeLinecap="round" />
-        {monthly.map((m, i) => {
-          const cx = PAD.left + slot * i + slot / 2;
-          return <circle key={m.month} cx={cx} cy={baseY - h(m.consumedFromGridKWh)} r={1.8} fill="#9ca3af" />;
-        })}
+        <line x1={PAD.left} x2={W - PAD.right} y1={zeroY} y2={zeroY} stroke="#d1d5db" strokeWidth={1} />
       </svg>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
         {[
-          { color: '#16a34a', label: 'Autoconsumo' },
-          { color: '#2563eb', label: 'Inyección a la red' },
+          { color: '#16a34a', label: 'Autoconsumo', hatched: false },
+          { color: '#9ca3af', label: 'Consumo desde la red', hatched: false },
+          { color: '#2563eb', label: 'Inyección (bajo el eje)', hatched: true },
         ].map((s) => (
           <div key={s.label} className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: s.color }} />
+            {s.hatched ? (
+              <svg width={12} height={8} className="block">
+                <rect width={12} height={8} fill={s.color} opacity={0.18} rx={2} />
+                {[1, 4, 7].map((y) => <rect key={y} y={y} width={12} height={1.6} fill={s.color} opacity={0.75} />)}
+              </svg>
+            ) : (
+              <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: s.color }} />
+            )}
             <span className="text-[10px] text-gray-500">{s.label}</span>
           </div>
         ))}
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: '#9ca3af' }} />
-          <span className="text-[10px] text-gray-500">Consumo desde la red</span>
-        </div>
       </div>
+      <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
+        Sobre el eje, tu consumo del mes: la parte verde la cubren los paneles y la gris se sigue
+        comprando. Bajo el eje, el excedente que se inyecta a la red.
+      </p>
     </div>
   );
 }
@@ -727,7 +759,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
       <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5">
         <div className="flex items-center justify-between gap-2 mb-1">
           <h2 className="text-sm font-semibold text-gray-700">Balance energético mensual</h2>
-          <span className="text-xs text-gray-400">producción · en kWh</span>
+          <span className="text-xs text-gray-400">consumo e inyección · en kWh</span>
         </div>
 
         {/* Vista principal: gráfico apilado (limpio, se lee de una) */}
@@ -798,7 +830,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function StepResults({ state, config, catalog, adminMode = false }: StepResultsProps) {
+export default function StepResults({ state, config, catalog, adminMode = false, clientId, installationId, billInfo }: StepResultsProps) {
   const contact = state.contact!;
   const supply  = state.supply!;
   const profile = state.consumptionProfile!;
@@ -806,6 +838,12 @@ export default function StepResults({ state, config, catalog, adminMode = false 
   const isResidential = state.customerCategory === 'natural';
 
   const [userScenarioOverride, setUserScenarioOverride] = useState<'A' | 'B' | 'C' | null>(null);
+  // Escenario que se presenta como recomendado en el informe. Por defecto es el
+  // que calcula el motor, pero tras conversar con el cliente puede convenir
+  // destacar otro (una planta mayor, o la que lleva batería).
+  const [featuredScenario, setFeaturedScenario] = useState<'A' | 'B' | 'C' | null>(null);
+  // Id de la simulación si ya se guardó en esta sesión.
+  const [savedSimulationId, setSavedSimulationId] = useState<string | null>(null);
   const [batteryCount, setBatteryCount]       = useState(1);
   const [batteryReservePct, setBatteryReservePct] = useState(30); // % de reserva; default 30%
   const [businessBattery, setBusinessBattery] = useState(false);
@@ -884,7 +922,34 @@ export default function StepResults({ state, config, catalog, adminMode = false 
   }, [state, isResidential, batteryCount, batteryReservePct, businessBattery, adminSizeKWp, batteryPlant]);
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
-  const effectiveScenario = userScenarioOverride ?? recommendedScenario;
+  // Fracción diurna que aplica a este cliente (residencial o empresa).
+  const perfilDiurno = isResidential
+    ? (config?.dayConsumptionRatio ?? SOLAR_DEFAULTS.dayConsumptionRatio)
+    : (config?.dayConsumptionRatioBusiness ?? SOLAR_DEFAULTS.businessDayConsumptionRatio);
+
+  // Datos del cliente derivados del wizard: los comparten el bloque de guardar
+  // la simulación y el de crear la cotización.
+  const datosCliente = useMemo(() => ({
+    nombre:   isResidential ? (contact as PersonContact).name : (contact as BusinessContact).companyName,
+    email:    contactEmail ?? '',
+    telefono: (contact as PersonContact).phone ?? '',
+    empresa:  isResidential ? null : (contact as BusinessContact).companyName,
+    atencionA: isResidential ? null : (contact as BusinessContact).contactName,
+    customerType: (isResidential ? 'natural' : 'business') as 'natural' | 'business',
+    direccion: contact.address || null,
+    comuna:    contact.commune || null,
+    ciudad:    contact.city || null,
+    regionId:  contact.regionId || null,
+    distribuidora: supply.distribuidora ?? null,
+    tarifa:        supply.tarifa ?? null,
+    amperajeA:     supply.amperajeA ?? null,
+    potenciaContratadaKW: supply.potenciaContratadaKW ?? null,
+    tensionSuministro:    supply.tensionSuministro ?? null,
+    consumoPromedioMensualKWh: Math.round(profile.averageMonthlyKWh),
+  }), [isResidential, contact, contactEmail, supply, profile.averageMonthlyKWh]);
+
+  const effectiveRecommended = featuredScenario ?? recommendedScenario;
+  const effectiveScenario = userScenarioOverride ?? effectiveRecommended;
 
   // Regla 2: sobredimensionamiento — kit genera >130% del consumo anual
   const isOversized = (result: SimulatorResult) =>
@@ -1141,8 +1206,8 @@ export default function StepResults({ state, config, catalog, adminMode = false 
             <p className="font-semibold">{formatPayback(activeResult.financial.paybackYears)}</p>
           </div>
           <div>
-            <p className="text-xs opacity-60">Cobertura</p>
-            <p className="font-semibold">{formatPercent(activeResult.energyBalance.coveragePercent)}</p>
+            <p className="text-xs opacity-60">Dejas de pagar</p>
+            <p className="font-semibold">{formatPercent(activeResult.financial.billSavingsPercent)}</p>
           </div>
           <div>
             <p className="text-xs opacity-60">Consumo</p>
@@ -1337,9 +1402,9 @@ export default function StepResults({ state, config, catalog, adminMode = false 
               .filter((s) => s !== 'B' || activeScenarios.kitB !== null)
               .map((s) => {
                 const meta = {
-                  A: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'Sin batería', badge: recommendedScenario === 'B' ? 'Kit mayor' : 'Recomendado', badgeColor: recommendedScenario === 'B' ? 'bg-gray-500' : 'bg-[#1d65c5]' },
-                  B: { title: `PFV ${activeScenarios.kitB?.sizekWp} kW`, sub: 'Sin batería', badge: recommendedScenario === 'B' ? 'Recomendado' : 'Más económico', badgeColor: recommendedScenario === 'B' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
-                  C: { title: `PFV ${activeScenarios.C.kit.sizekWp} kW`, sub: 'Con baterías', badge: 'Con baterías',  badgeColor: 'bg-amber-500' },
+                  A: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'A' ? 'Recomendado' : 'Kit mayor', badgeColor: effectiveRecommended === 'A' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
+                  B: { title: `PFV ${activeScenarios.kitB?.sizekWp} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'B' ? 'Recomendado' : 'Más económico', badgeColor: effectiveRecommended === 'B' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
+                  C: { title: `PFV ${activeScenarios.C.kit.sizekWp} kW`, sub: 'Con baterías', badge: effectiveRecommended === 'C' ? 'Recomendado' : 'Con baterías', badgeColor: effectiveRecommended === 'C' ? 'bg-[#1d65c5]' : 'bg-amber-500' },
                 }[s];
                 const isActive = effectiveScenario === s;
                 const activeBorder = s === 'C' ? 'border-amber-400 bg-amber-500' : 'border-[#389fe0] bg-[#1d65c5]';
@@ -1367,6 +1432,40 @@ export default function StepResults({ state, config, catalog, adminMode = false 
                   </button>
                 );
               })}
+          </div>
+
+          {/* Qué escenario se presenta como recomendado en el informe. Por
+              defecto el que calcula el motor; tras hablar con el cliente puede
+              convenir destacar otro. */}
+          <div className="mt-3">
+            {effectiveRecommended === effectiveScenario ? (
+              <div className="rounded-xl border border-[#1d65c5]/30 bg-[#eaf4fb] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#1d65c5]">
+                  <span className="text-base leading-none">★</span>
+                  Este escenario es el que sale destacado en el informe
+                </span>
+                {featuredScenario && (
+                  <button type="button" onClick={() => setFeaturedScenario(null)}
+                    className="text-xs font-medium text-gray-500 hover:text-gray-700 underline whitespace-nowrap">
+                    Volver al automático
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setFeaturedScenario(effectiveScenario)}
+                className="w-full rounded-xl border-2 border-dashed border-[#389fe0] bg-white hover:bg-[#eaf4fb] px-4 py-3 flex items-center justify-center gap-2 transition-colors group"
+              >
+                <span className="text-lg leading-none text-[#389fe0] group-hover:scale-110 transition-transform">★</span>
+                <span className="text-sm font-semibold text-[#1d65c5]">
+                  Destacar este escenario en el informe
+                </span>
+                <span className="text-xs text-gray-400 hidden sm:inline">
+                  — pasa a ser el recomendado
+                </span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1444,25 +1543,26 @@ export default function StepResults({ state, config, catalog, adminMode = false 
       {/* ── KPIs ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
-          label="Ahorro mensual"
-          value={formatCLP(activeResult.financial.monthlyBenefitCLP)}
-          sub="autoconsumo + inyección"
+          label="Dejas de pagar"
+          value={formatPercent(activeResult.financial.billSavingsPercent)}
+          sub="de tu cuenta de luz anual"
           accent="text-[#389fe0]"
         />
         <StatCard
           label="Ahorro anual"
           value={formatCLP(activeResult.financial.annualBenefitCLP)}
+          sub="autoconsumo + inyección"
           accent="text-[#389fe0]"
+        />
+        <StatCard
+          label="Gasto actual"
+          value={formatCLP(activeResult.financial.annualBillCLP)}
+          sub="lo que pagas hoy al año"
         />
         <StatCard
           label="Período de retorno"
           value={formatPayback(activeResult.financial.paybackYears)}
           sub="payback simple"
-        />
-        <StatCard
-          label="Cobertura solar"
-          value={formatPercent(activeResult.energyBalance.coveragePercent)}
-          sub="de tu consumo cubierto"
         />
       </div>
 
@@ -1474,7 +1574,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
               {effectiveScenario === 'C'
                 ? `Con ${batteryCount} batería${batteryCount > 1 ? 's' : ''} · ${batteryCount * SOLAR_DEFAULTS.batteryModuleKWh} kWh`
                 : effectiveScenario === 'B'
-                  ? (recommendedScenario === 'B' ? 'Recomendado' : 'Opción económica')
+                  ? (effectiveRecommended === 'B' ? 'Recomendado' : 'Opción económica')
                   : 'Recomendado'}
             </span>
             <p className="font-semibold text-gray-900 mt-1.5">PFV {activeResult.kit.sizekWp} kW</p>
@@ -1496,6 +1596,86 @@ export default function StepResults({ state, config, catalog, adminMode = false 
           </div>
         </div>
       </div>
+
+      {/* ── Crear cotización (solo back-office) ────────────────────────────── */}
+      {adminMode && (
+        <>
+          <SaveSimulation
+            clienteNombre={datosCliente.nombre}
+            yaGuardada={savedSimulationId}
+            onGuardada={setSavedSimulationId}
+            payload={{
+              clientId,
+              installationId: installationId ?? null,
+              clientData: datosCliente,
+              fechaBoleta:  billInfo?.fechaBoleta ?? null,
+              numeroBoleta: billInfo?.numeroBoleta ?? null,
+              escenario: isResidential ? effectiveScenario : 'empresa',
+              kitSizeKWp: activeResult.kit.sizekWp,
+              panelCount: activeResult.kit.panelCount,
+              systemCostCLP: activeResult.financial.systemCostCLP,
+              batteryKWh: activeResult.batteryCapacityKWh,
+              annualBenefitCLP: activeResult.financial.annualBenefitCLP,
+              paybackYears: activeResult.financial.paybackYears,
+              billSavingsPercent: activeResult.financial.billSavingsPercent,
+              averageMonthlyKWh: Math.round(profile.averageMonthlyKWh),
+              // El estado del wizard permite reabrir la simulación y corregirla.
+              inputJson: state,
+              resultJson: {
+                escenario: isResidential ? effectiveScenario : 'empresa',
+                kitSizeKWp: activeResult.kit.sizekWp,
+                panelCount: activeResult.kit.panelCount,
+                systemCostCLP: activeResult.financial.systemCostCLP,
+                batteryCapacityKWh: activeResult.batteryCapacityKWh,
+                annualBenefitCLP: activeResult.financial.annualBenefitCLP,
+                paybackYears: activeResult.financial.paybackYears,
+                billSavingsPercent: activeResult.financial.billSavingsPercent,
+                coveragePercent: activeResult.energyBalance.coveragePercent,
+                regionName: activeResult.region.name,
+                averageMonthlyKWh: Math.round(profile.averageMonthlyKWh),
+              },
+              boletas: (billInfo?.archivadas ?? []).map((b) => ({
+                filePath: b.filePath,
+                fileName: b.fileName,
+                contentType: b.contentType,
+                fechaBoleta: billInfo?.fechaBoleta ?? null,
+                numeroBoleta: billInfo?.numeroBoleta ?? null,
+                distribuidora: billInfo?.distribuidora ?? null,
+              })),
+            }}
+          />
+
+          <QuoteFromSimulation
+            clientId={clientId}
+            installationId={installationId}
+            clientData={datosCliente}
+            escenario={isResidential ? effectiveScenario : 'empresa'}
+            escenarioLabel={
+              activeResult.batteryCapacityKWh > 0
+                ? `PFV ${activeResult.kit.sizekWp} kW con ${activeResult.batteryCapacityKWh} kWh de batería`
+                : `PFV ${activeResult.kit.sizekWp} kW sin batería`
+            }
+            kitSizeKWp={activeResult.kit.sizekWp}
+            kitPanelCount={activeResult.kit.panelCount}
+            kitPriceNetoCLP={activeResult.kit.priceReferenceCLP}
+            batteryKWh={activeResult.batteryCapacityKWh || undefined}
+            batteryModules={activeResult.batteryCapacityKWh > 0 ? batteryCount : undefined}
+            batteryCostNetoCLP={Math.max(0, activeResult.financial.systemCostCLP - activeResult.kit.priceReferenceCLP)}
+            simulationData={{
+              escenario: isResidential ? effectiveScenario : 'empresa',
+              kitSizeKWp: activeResult.kit.sizekWp,
+              panelCount: activeResult.kit.panelCount,
+              systemCostCLP: activeResult.financial.systemCostCLP,
+              batteryCapacityKWh: activeResult.batteryCapacityKWh,
+              annualBenefitCLP: activeResult.financial.annualBenefitCLP,
+              paybackYears: activeResult.financial.paybackYears,
+              coveragePercent: activeResult.energyBalance.coveragePercent,
+              regionName: activeResult.region.name,
+              averageMonthlyKWh: profile.averageMonthlyKWh,
+            }}
+          />
+        </>
+      )}
 
       {/* ── Aviso sobredimensionamiento (Regla 2) ──────────────────────────── */}
       {isOversized(activeResult) && effectiveScenario !== 'B' && (
@@ -1669,7 +1849,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
       <p className="text-xs text-gray-400 leading-relaxed">
         Simulación estimativa basada en irradiación histórica de {activeResult.region.name}.
         Precio de inyección = {SOLAR_DEFAULTS.injectionValueFactor * 100}% del kWh de compra (net billing, Art. 149 bis DFL 4).
-        Perfil: {SOLAR_DEFAULTS.dayConsumptionRatio * 100}% diurno / {SOLAR_DEFAULTS.nightConsumptionRatio * 100}% nocturno.
+        Perfil {isResidential ? 'residencial' : 'empresa'}: {Math.round(perfilDiurno * 100)}% diurno / {Math.round((1 - perfilDiurno) * 100)}% nocturno.
         VAN calculado con tasa {DFL4.discountRateReal * 100}% real anual (Arts. 165d y 182 bis DFL 4).
         Los valores reales dependen de la instalación específica.
       </p>
@@ -1687,7 +1867,7 @@ export default function StepResults({ state, config, catalog, adminMode = false 
         <PDFDownloadButton
           state={state}
           scenarios={activeScenarios}
-          recommendedScenario={recommendedScenario}
+          recommendedScenario={effectiveRecommended}
           clientName={contactName}
           clientEmail={contactEmail}
         />

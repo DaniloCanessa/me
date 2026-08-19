@@ -30,6 +30,22 @@ export default function PDFDownloadButton({
   const [emailStatus,  setEmailStatus]  = useState<EmailStatus>('idle');
   const [downloading,  setDownloading]  = useState(false);
 
+  // Firma de lo que el informe muestra. El PDF se cachea para no regenerarlo
+  // entre la descarga y el envío por correo, pero ese caché hay que tirarlo
+  // cuando cambia el contenido: si no, cambiar el kit actualiza la pantalla y
+  // la descarga sigue entregando el PDF viejo.
+  const firmaInforme = JSON.stringify({
+    rec:  recommendedScenario,
+    a:    [scenarios?.A?.kit.sizekWp, scenarios?.A?.financial.systemCostCLP],
+    b:    [scenarios?.B?.kit.sizekWp, scenarios?.B?.financial.systemCostCLP],
+    c:    [scenarios?.C?.kit.sizekWp, scenarios?.C?.financial.systemCostCLP, scenarios?.C?.batteryCapacityKWh],
+    biz:  [businessResult?.kit.sizekWp, businessResult?.financial.systemCostCLP],
+  });
+
+  useEffect(() => {
+    pdfCache.current = null;
+  }, [firmaInforme]);
+
   // ── Genera el PDF como base64 (con caché) ──────────────────────────────────
   const generatePdf = useCallback(async (): Promise<string> => {
     if (pdfCache.current) return pdfCache.current;
@@ -69,7 +85,10 @@ export default function PDFDownloadButton({
     return dataUri;
   }, []);
 
-  // ── Envía el informe por email (una sola vez por ciclo de vida) ────────────
+  // ── Envía el informe por email (solo cuando el usuario lo pide) ────────────
+  // Antes salía solo al abrir la vista previa: bastaba con mirar el informe
+  // para que al cliente le llegara esa versión, aunque después se cambiara el
+  // kit. Ahora es un botón explícito.
   const sendEmail = useCallback(async () => {
     if (emailSent.current) return;
     emailSent.current = true;
@@ -88,10 +107,12 @@ export default function PDFDownloadButton({
     }
   }, [generatePdf, clientEmail, clientName]);
 
-  // ── Dispara el email cuando abre el modal ──────────────────────────────────
+  // Si cambia el contenido del informe, se puede volver a enviar: el cliente
+  // debe poder recibir la versión corregida.
   useEffect(() => {
-    if (isOpen) sendEmail();
-  }, [isOpen, sendEmail]);
+    emailSent.current = false;
+    setEmailStatus('idle');
+  }, [firmaInforme]);
 
   // ── Descarga el PDF desde el botón del modal ──────────────────────────────
   async function handleDownload() {
@@ -112,7 +133,7 @@ export default function PDFDownloadButton({
 
   const emailLabel: Record<EmailStatus, string> = {
     idle:    '',
-    sending: 'Enviando informe a tu correo...',
+    sending: 'Enviando el informe…',
     sent:    `Informe enviado a ${clientEmail}`,
     error:   'No pudimos enviar el informe por email',
   };
@@ -199,6 +220,24 @@ export default function PDFDownloadButton({
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={sendEmail}
+                  disabled={emailStatus === 'sending' || emailStatus === 'sent' || !clientEmail}
+                  title={clientEmail ? `Enviar a ${clientEmail}` : 'El cliente no tiene correo registrado'}
+                  style={{
+                    fontSize: 12, fontWeight: 600,
+                    color: emailStatus === 'sent' ? '#1d65c5' : '#1d65c5',
+                    border: '1px solid #b0cedd', borderRadius: 8,
+                    padding: '6px 14px', backgroundColor: '#eaf4fb',
+                    cursor: (emailStatus === 'sending' || emailStatus === 'sent' || !clientEmail) ? 'not-allowed' : 'pointer',
+                    opacity: (emailStatus === 'sending' || !clientEmail) ? 0.6 : 1,
+                  }}
+                >
+                  {emailStatus === 'sending' ? 'Enviando…'
+                    : emailStatus === 'sent' ? '✓ Enviado al cliente'
+                    : '✉ Enviar al cliente'}
+                </button>
                 <button
                   type="button"
                   onClick={handleDownload}

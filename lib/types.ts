@@ -211,6 +211,8 @@ export interface SimulatorConfig {
   kwhPriceCLP: number;
   injectionFactor: number;
   dayConsumptionRatio: number;
+  /** Fracción diurna para clientes empresa (su consumo es en horario laboral). */
+  dayConsumptionRatioBusiness: number;
   systemLifeYears: number;
   panelWattageWp: number;
   panelAreaM2: number;
@@ -275,6 +277,8 @@ export interface SimulatorInput {
   panelWattageWp?: number;
   panelAreaM2?: number;
   co2FactorKgPerKWh?: number;
+  /** Fracción del consumo que ocurre de día. La nocturna se deriva (1 − esta). */
+  dayConsumptionRatio?: number;
 }
 
 // ─── Kit fotovoltaico ─────────────────────────────────────────────────────────
@@ -367,6 +371,12 @@ export interface FinancialSummary {
   vanCLP: number;                 // valor actual neto a 25 años con tasa 10% real
   roi25YearsPercent: number;
   injectionValuePerKWhCLP: number;
+  /** Gasto eléctrico anual SIN la planta (lo que paga hoy). */
+  annualBillCLP: number;
+  /** Porcentaje de la cuenta anual que deja de pagar. Es la métrica que se
+   *  muestra al cliente: se explica sola, a diferencia de la "cobertura", que
+   *  se satura en el ratio de consumo diurno y confunde. */
+  billSavingsPercent: number;
 }
 
 // ─── Resumen ambiental ────────────────────────────────────────────────────────

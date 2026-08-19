@@ -147,60 +147,103 @@ function GenVsConsumptionChart({ result }: { result: SimulatorResult }) {
   );
 }
 
+
+// Franjas horizontales para rayar una barra (la inyección). Se dibujan como
+// rects en vez de usar <pattern> porque el informe se rasteriza con
+// html2canvas, donde los patrones SVG no renderizan de forma confiable.
+function franjas(y0: number, alto: number, paso = 4, grosor = 1.6): number[] {
+  const out: number[] = [];
+  for (let y = y0 + 1; y < y0 + alto - grosor; y += paso) out.push(y);
+  return out;
+}
+
 // ─── Balance energético mensual (barras apiladas) ─────────────────────────────
-// Producción dividida en autoconsumo (base) + inyección (arriba); la línea marca
-// lo que se sigue tomando de la red.
+// Sobre el eje, TU CONSUMO del mes partido en dos: lo que cubres con los
+// paneles (autoconsumo) y lo que sigues comprando (red). Bajo el eje, el
+// excedente que se inyecta. Así cada barra suma una magnitud real — antes la
+// barra era producción (autoconsumo + inyección) y la red iba como línea, lo
+// que obligaba a leer dos escalas distintas en el mismo gráfico.
 
 function BalanceChart({ result }: { result: SimulatorResult }) {
   const { monthly } = result.energyBalance;
-  const W = 714, H = 150;
-  const PAD = { top: 16, right: 10, bottom: 22, left: 40 };
+  const W = 714, H = 172;
+  const PAD = { top: 14, right: 10, bottom: 26, left: 40 };
   const cW = W - PAD.left - PAD.right;
   const cH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...monthly.map((m) => Math.max(m.productionKWh, m.consumedFromGridKWh)), 1);
+
+  const maxArriba = Math.max(...monthly.map((m) => m.selfConsumptionKWh + m.consumedFromGridKWh), 1);
+  const maxAbajo  = Math.max(...monthly.map((m) => m.injectedToGridKWh), 1);
+  // El eje cero se reparte según cuánto pesa cada lado, con un mínimo de 25%
+  // abajo para que la inyección siempre se vea.
+  const fracAbajo = Math.min(0.5, Math.max(0.25, maxAbajo / (maxArriba + maxAbajo)));
+  const altoAbajo = cH * fracAbajo;
+  const altoArriba = cH - altoAbajo;
+  const zeroY = PAD.top + altoArriba;
+
   const n = monthly.length;
   const slot = cW / n;
   const barW = Math.min(slot * 0.6, 26);
-  const baseY = PAD.top + cH;
-  const h = (v: number) => (v / maxVal) * cH;
-  const gridPath = monthly
-    .map((m, i) => `${i === 0 ? 'M' : 'L'}${(PAD.left + slot * i + slot / 2).toFixed(1)},${(baseY - h(m.consumedFromGridKWh)).toFixed(1)}`)
-    .join(' ');
-  const yTicks = [0, 0.5, 1];
+  const hUp = (v: number) => (v / maxArriba) * altoArriba;
+  const hDn = (v: number) => (v / maxAbajo) * altoAbajo;
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block' }}>
-      {yTicks.map((t) => {
-        const yy = (PAD.top + cH * (1 - t)).toFixed(1);
+      {/* Guías: mitad y tope del consumo */}
+      {[0.5, 1].map((t) => {
+        const yy = (zeroY - altoArriba * t).toFixed(1);
         return (
           <g key={t}>
             <line x1={PAD.left} x2={W - PAD.right} y1={yy} y2={yy} stroke="#f3f4f6" strokeWidth={1} />
-            <text x={PAD.left - 5} y={+yy + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">{Math.round(maxVal * t)}</text>
+            <text x={PAD.left - 5} y={+yy + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">{Math.round(maxArriba * t)}</text>
           </g>
         );
       })}
+      {/* Tope de la inyección */}
+      <text x={PAD.left - 5} y={zeroY + altoAbajo + 3} textAnchor="end" fontSize={7.5} fill="#9ca3af">
+        {Math.round(maxAbajo)}
+      </text>
+
       {monthly.map((m, i) => {
         const x = PAD.left + slot * i + (slot - barW) / 2;
-        const selfH = h(m.selfConsumptionKWh);
-        const injH = h(m.injectedToGridKWh);
+        const selfH = hUp(m.selfConsumptionKWh);
+        const gridH = hUp(m.consumedFromGridKWh);
+        const injH  = hDn(m.injectedToGridKWh);
         return (
           <g key={m.month}>
-            <rect x={x} y={baseY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
-            <rect x={x} y={baseY - selfH - injH} width={barW} height={Math.max(injH, 0)} fill="#2563eb" opacity={0.8} rx={1.5} />
-            <text x={x + barW / 2} y={H - 5} textAnchor="middle" fontSize={8} fill="#9ca3af">{m.monthName.slice(0, 3)}</text>
+            {/* Consumo: autoconsumo abajo, red encima */}
+            <rect x={x} y={zeroY - selfH} width={barW} height={Math.max(selfH, 0)} fill="#16a34a" opacity={0.85} />
+            <rect x={x} y={zeroY - selfH - gridH} width={barW} height={Math.max(gridH, 0)} fill="#9ca3af" opacity={0.75} rx={1.5} />
+            {/* Inyección: mantiene su celeste, rayado para distinguirla del
+                consumo sin cambiarle el color */}
+            <rect x={x} y={zeroY} width={barW} height={Math.max(injH, 0)} fill="#2563eb" opacity={0.18} rx={1.5} />
+            {franjas(zeroY, Math.max(injH, 0)).map((fy, k) => (
+              <rect key={k} x={x} y={fy} width={barW} height={1.6} fill="#2563eb" opacity={0.8} />
+            ))}
+            <text x={x + barW / 2} y={H - 6} textAnchor="middle" fontSize={8} fill="#9ca3af">{m.monthName.slice(0, 3)}</text>
           </g>
         );
       })}
-      <path d={gridPath} fill="none" stroke="#9ca3af" strokeWidth={1.75} strokeDasharray="3 2" strokeLinejoin="round" strokeLinecap="round" />
-      {monthly.map((m, i) => (
-        <circle key={m.month} cx={PAD.left + slot * i + slot / 2} cy={baseY - h(m.consumedFromGridKWh)} r={1.8} fill="#9ca3af" />
-      ))}
+
+      {/* Eje cero */}
+      <line x1={PAD.left} x2={W - PAD.right} y1={zeroY} y2={zeroY} stroke="#d1d5db" strokeWidth={1} />
     </svg>
   );
 }
 
 // Chip de leyenda reutilizable para los gráficos del informe.
-function LegendItem({ color, label, line, dashed }: { color: string; label: string; line?: boolean; dashed?: boolean }) {
+function LegendItem({ color, label, line, dashed, hatched }: { color: string; label: string; line?: boolean; dashed?: boolean; hatched?: boolean }) {
+  // El recuadro rayado replica el tratamiento de la inyección en el gráfico.
+  if (hatched) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <svg width={12} height={8} style={{ display: 'block' }}>
+          <rect width={12} height={8} fill={color} opacity={0.18} rx={2} />
+          {[1, 4, 7].map((y) => <rect key={y} y={y} width={12} height={1.6} fill={color} opacity={0.75} />)}
+        </svg>
+        <span style={{ fontSize: 8, color: C.gray }}>{label}</span>
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <div style={{
@@ -261,6 +304,10 @@ export default function SimulationReportHtml({
   const commune      = contact.commune;
 
   const recommended = businessResult ?? scenarios![recommendedScenario!]!;
+  // Fracción diurna realmente usada en el cálculo; el respaldo depende del tipo
+  // de cliente porque una empresa consume mucho más de día que una casa.
+  const perfilDiurno = recommended.input.dayConsumptionRatio
+    ?? (businessResult ? SOLAR_DEFAULTS.businessDayConsumptionRatio : SOLAR_DEFAULTS.dayConsumptionRatio);
   const { kit, batteryCapacityKWh, energyBalance, financial, environmental, region } = recommended;
 
   // Parámetros vivos de la simulación (config de BD con fallback a constants)
@@ -286,8 +333,8 @@ export default function SimulationReportHtml({
 
   const explanatoryText = [
     `Con una PFV de ${kit.sizekWp} kW instalada en ${region.name},`,
-    ` cubrirás el ${Math.round(energyBalance.coveragePercent)}% de tu consumo eléctrico mensual`,
-    ` (promedio ${profile.averageMonthlyKWh} kWh/mes).`,
+    ` dejarás de pagar cerca del ${Math.round(financial.billSavingsPercent)}% de tu cuenta de luz`,
+    ` (hoy gastas unos ${clp(financial.annualBillCLP)} al año, con un consumo promedio de ${profile.averageMonthlyKWh} kWh/mes).`,
     ` Recuperarás la inversión en aproximadamente ${payback(financial.paybackYears, lifeYears)}`,
     ` y ahorrarás ${clp(financial.annualBenefitCLP)} al año durante los`,
     ` ${lifeYears} años de vida útil del sistema.`,
@@ -461,9 +508,9 @@ export default function SimulationReportHtml({
           {/* KPIs en 4 columnas */}
           <div style={{ display: 'flex', gap: 8 }}>
             {[
-              { label: 'Cobertura solar',    value: pct(energyBalance.coveragePercent),       sub: 'de tu consumo cubierto' },
-              { label: 'Ahorro mensual',      value: clp(financial.monthlyBenefitCLP),         sub: hasBattery ? 'autoconsumo + inyección + batería' : 'autoconsumo + inyección' },
-              { label: 'Ahorro anual',        value: clp(financial.annualBenefitCLP),          sub: '' },
+              { label: 'Dejas de pagar',     value: pct(financial.billSavingsPercent),        sub: 'de tu cuenta de luz anual' },
+              { label: 'Ahorro anual',        value: clp(financial.annualBenefitCLP),          sub: hasBattery ? 'autoconsumo + inyección + batería' : 'autoconsumo + inyección' },
+              { label: 'Gasto actual',        value: clp(financial.annualBillCLP),             sub: 'lo que pagas hoy al año' },
               { label: 'Período de retorno', value: payback(financial.paybackYears, lifeYears), sub: 'payback simple' },
             ].map((kpi) => (
               <div key={kpi.label} style={{ flex: 1, backgroundColor: C.accentSoft, borderRadius: 8, padding: 9 }}>
@@ -504,10 +551,14 @@ export default function SimulationReportHtml({
             Balance energético mensual · PFV {kit.sizekWp} kW (kWh)
           </div>
           <BalanceChart result={recommended} />
-          <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-            <LegendItem color="#16a34a" label="Autoconsumo" />
-            <LegendItem color="#2563eb" label="Inyección a la red" />
-            <LegendItem color="#9ca3af" label="Consumo desde la red" line dashed />
+          <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
+            <LegendItem color="#16a34a" label="Autoconsumo (arriba)" />
+            <LegendItem color="#9ca3af" label="Consumo desde la red (arriba)" />
+            <LegendItem color="#2563eb" label="Inyección a la red (bajo el eje)" hatched />
+          </div>
+          <div style={{ fontSize: 8, color: C.gray, marginTop: 5, lineHeight: 1.5 }}>
+            Sobre el eje, tu consumo del mes: la parte verde la cubren los paneles y la gris se
+            sigue comprando a la distribuidora. Bajo el eje, el excedente que se inyecta a la red.
           </div>
         </div>
 
@@ -587,8 +638,7 @@ export default function SimulationReportHtml({
 
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
                       {[
-                        { label: 'Cobertura',      value: pct(r!.energyBalance.coveragePercent) },
-                        { label: 'Ahorro mensual',  value: clp(r!.financial.monthlyBenefitCLP) },
+                        { label: 'Dejas de pagar',  value: pct(r!.financial.billSavingsPercent) },
                         { label: 'Ahorro anual',    value: clp(r!.financial.annualBenefitCLP) },
                         { label: 'Payback',         value: payback(r!.financial.paybackYears, lifeYears) },
                         { label: 'Precio ref. + IVA', value: clp(r!.financial.systemCostCLP) },
@@ -694,7 +744,7 @@ export default function SimulationReportHtml({
         * Simulación estimativa basada en irradiación histórica de {region.name}.
         Los precios indicados son netos y no incluyen IVA.
         Precio de inyección = {injectionPct}% del kWh de compra (net billing, Art. 149 bis DFL 4 — Ley 21.118).
-        Perfil de consumo: {SOLAR_DEFAULTS.dayConsumptionRatio * 100}% diurno / {SOLAR_DEFAULTS.nightConsumptionRatio * 100}% nocturno.
+        Perfil de consumo {isBusiness ? 'empresa' : 'residencial'}: {Math.round(perfilDiurno * 100)}% diurno / {Math.round((1 - perfilDiurno) * 100)}% nocturno.
         Los valores reales dependen de la instalación específica, orientación del techo, sombreado y tarifa vigente.
       </div>
 

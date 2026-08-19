@@ -1,3 +1,4 @@
+import { uploadElectricityBill } from '@/lib/db/bills';
 import * as XLSX from 'xlsx';
 import { isAdminAuthenticated } from '@/lib/auth';
 
@@ -29,6 +30,10 @@ export interface ExtractedBill {
   distribuidora?: string;
   tarifa?: string;
   direccionSuministro?: string;
+  /** N° del documento. Junto con la fecha permite detectar que una boleta ya se
+   *  simuló antes y evitar simulaciones duplicadas del mismo período. */
+  numeroBoleta?: string;
+  numeroCliente?: string;
 
   // Capacidad del empalme — crítico para dimensionar la planta
   potenciaConectadaKW?: number;      // en kW (ej: 8.8)
@@ -70,6 +75,8 @@ Analiza la imagen o PDF adjunto y extrae TODA la información disponible en el s
   "distribuidora": "nombre de la empresa distribuidora o null",
   "tarifa": "código de tarifa (BT1, BT2, BT3, BT4.1, BT4.2, BT4.3, AT2, AT3, AT4.1, etc.) o null",
   "direccionSuministro": "dirección del punto de suministro/medidor o null",
+  "numeroBoleta": "número del documento/boleta tal como aparece impreso, o null — busca 'N° Boleta', 'Nro. Documento', 'Folio', 'N° de documento'",
+  "numeroCliente": "número de cliente/servicio/suministro o null — busca 'N° Cliente', 'N° Servicio', 'Rol', 'N° Suministro'",
 
   "potenciaConectadaKW": número en kW (ej: 8.8) o null — busca 'Potencia conectada', 'Potencia contratada', 'Cap. instalada',
   "amperajeA": número en amperes (ej: 40) o null — busca 'Amperaje', 'Amp', 'A' junto al empalme,
@@ -138,6 +145,8 @@ function mockExtraction(): ExtractedBill {
     distribuidora: 'Enel Distribución',
     tarifa: 'BT1',
     direccionSuministro: 'Av. Providencia 1234, Santiago',
+    numeroBoleta: '123456789',
+    numeroCliente: '9876543',
     potenciaConectadaKW: 8.8,
     amperajeA: 40,
     fechaLimiteCambioTarifa: '06/2026',
@@ -194,9 +203,23 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, reason: 'error', message: 'Formato no soportado. Usa JPG, PNG, PDF o Excel.' }, { status: 400 });
   }
 
+  // La boleta se archiva SIEMPRE que se procesa, para que quede en el CRM junto
+  // a la simulación. Si la subida falla, el OCR sigue: perder el respaldo no
+  // debe impedir simular.
+  let storagePath: string | null = null;
+  try {
+    storagePath = await uploadElectricityBill(
+      await file.arrayBuffer(),
+      file.name || 'boleta',
+      file.type || 'application/octet-stream',
+    );
+  } catch (e) {
+    console.error('[parse-bill] no se pudo archivar la boleta:', e);
+  }
+
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 1800));
-    return Response.json({ ok: true, data: mockExtraction(), mock: true });
+    return Response.json({ ok: true, data: mockExtraction(), mock: true, storagePath, fileName: file.name });
   }
 
   try {
@@ -274,7 +297,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, reason: 'unreadable', message: 'No se pudo leer la boleta con suficiente claridad' });
     }
 
-    return Response.json({ ok: true, data: extracted });
+    return Response.json({ ok: true, data: extracted, storagePath, fileName: file.name });
 
   } catch (err) {
     console.error('[parse-bill] Unexpected error:', err);

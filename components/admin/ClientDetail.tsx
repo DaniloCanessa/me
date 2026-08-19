@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import type { SimulationRow } from '@/lib/db/simulations';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Client, Installation, Activity, Quote } from '@/lib/types';
@@ -48,14 +49,18 @@ export default function ClientDetail({
   activities,
   quotes,
   projects,
+  simulations,
+  billUrls,
 }: {
   client: Client;
   activities: Activity[];
   quotes: Quote[];
   projects: ProjectRow[];
+  simulations: SimulationRow[];
+  billUrls: Record<string, string>;
 }) {
   const router = useRouter();
-  const [tab, setTab]                = useState<'info' | 'instalaciones' | 'actividades' | 'cotizaciones' | 'proyectos'>('info');
+  const [tab, setTab]                = useState<'info' | 'instalaciones' | 'actividades' | 'cotizaciones' | 'simulaciones' | 'proyectos'>('info');
   const [editMode, setEditMode]      = useState(false);
   const [showActForm, setShowActForm] = useState(false);
   const [showInstForm, setShowInstForm]   = useState(false);
@@ -106,6 +111,7 @@ export default function ClientDetail({
           ['instalaciones', `Instalaciones (${client.installations?.length ?? 0})`],
           ['actividades', `Actividades (${activities.length})`],
           ['cotizaciones', `Cotizaciones (${quotes.length})`],
+          ['simulaciones', `Simulaciones (${simulations.length})`],
           ['proyectos', `Proyectos (${projects.length})`],
         ] as const).map(([t, label]) => (
           <button
@@ -552,6 +558,77 @@ export default function ClientDetail({
               })}
             </>
           )}
+        </div>
+      )}
+
+      {/* Tab: Simulaciones */}
+      {tab === 'simulaciones' && (
+        <div className="flex flex-col gap-3">
+          {simulations.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-12 text-center">
+              <p className="text-sm text-gray-400">Este cliente no tiene simulaciones guardadas.</p>
+              <a href="/admin/simulator" className="text-sm text-[#1d65c5] hover:underline mt-2 inline-block">
+                Ir al simulador →
+              </a>
+            </div>
+          ) : simulations.map((s) => (
+            <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-900">
+                      PFV {s.kit_size_kwp ?? '—'} kW
+                      {s.battery_kwh > 0 && ` · ${s.battery_kwh} kWh batería`}
+                    </span>
+                    {s.corrige_id && (
+                      <span className="text-[10px] uppercase tracking-wide bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded"
+                        title="Es la corrección de una simulación anterior">
+                        Corregida
+                      </span>
+                    )}
+                    {s.quote_id && (
+                      <span className="text-[10px] uppercase tracking-wide bg-green-50 text-green-700 px-1.5 py-0.5 rounded">
+                        Cotizada
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Simulada el {new Date(s.fecha_simulacion).toLocaleString('es-CL', {
+                      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {s.fecha_boleta && ` · boleta de ${s.fecha_boleta}`}
+                    {s.numero_boleta && ` · N° ${s.numero_boleta}`}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {[s.installation_nombre, s.direccion, s.comuna].filter(Boolean).join(' · ') || 'Sin instalación'}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-gray-900 tabular-nums">
+                    {s.annual_benefit_clp != null
+                      ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(s.annual_benefit_clp)
+                      : '—'}
+                  </p>
+                  <p className="text-xs text-gray-400">ahorro anual · payback {s.payback_years ?? '—'} a</p>
+                </div>
+              </div>
+
+              {/* Boletas archivadas de esta simulación */}
+              {s.bills && s.bills.length > 0 && (
+                <div className="mt-2.5 pt-2.5 border-t border-gray-50 flex flex-wrap gap-2">
+                  {s.bills.map((b) => (
+                    billUrls[b.id] ? (
+                      <a key={b.id} href={billUrls[b.id]} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-[#1d65c5] hover:underline inline-flex items-center gap-1">
+                        📄 {b.file_name ?? 'boleta'}
+                      </a>
+                    ) : (
+                      <span key={b.id} className="text-xs text-gray-400">📄 {b.file_name ?? 'boleta'}</span>
+                    )
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

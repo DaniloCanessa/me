@@ -11,6 +11,11 @@ import StepSupply from '@/components/simulator/StepSupply';
 import StepBills from '@/components/simulator/StepBills';
 import StepFutureConsumption from '@/components/simulator/StepFutureConsumption';
 import StepResults from '@/components/simulator/StepResults';
+import type { SimulatorClientOption } from '@/lib/db/clients';
+import { buildPrefill, type Prefill } from '@/lib/simulator-prefill';
+import type { BoletaArchivadaLocal } from '@/components/simulator/BillOCRUpload';
+
+type Installation = SimulatorClientOption['installations'][number];
 
 const STEP_ORDER: WizardStep[] = [
   'customer-type',
@@ -38,10 +43,42 @@ interface Props {
   ocrEnabled?: boolean;
   /** true cuando se renderiza dentro del backoffice (junto al sidebar): oculta el navbar público. */
   embedded?: boolean;
+  /** Clientes del CRM para arrancar la simulación con sus datos. Solo back-office. */
+  clients?: SimulatorClientOption[];
 }
 
-export default function SimulatorClient({ config, catalog, ocrEnabled = false, embedded = false }: Props) {
+export default function SimulatorClient({ config, catalog, ocrEnabled = false, embedded = false, clients }: Props) {
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
+  // Cliente del CRM para el que se está simulando (habilita crear la cotización
+  // al final sin volver a pedir los datos).
+  const [prefill, setPrefill] = useState<Prefill | null>(null);
+
+  // El formulario de contacto guarda su propio estado interno, así que al
+  // cargar un cliente hay que remontarlo para que muestre los datos nuevos.
+  const [contactKey, setContactKey] = useState(0);
+  // Boletas archivadas al procesarlas con OCR + identificación del documento.
+  // Se retienen para poder guardarlas junto a la simulación en la ficha.
+  const [billInfo, setBillInfo] = useState<{
+    archivadas: BoletaArchivadaLocal[];
+    fechaBoleta: string | null;
+    numeroBoleta: string | null;
+    distribuidora: string | null;
+  } | null>(null);
+
+  // Al elegir un cliente en el campo de nombre se cargan sus datos y los de su
+  // instalación, SIN reiniciar el wizard ni cambiar de paso.
+  function pickClient(client: SimulatorClientOption, installation: Installation | null) {
+    const p = buildPrefill(client, installation, state.customerCategory ?? undefined);
+    setPrefill(p);
+    setState((prev) => ({ ...prev, contact: p.contact, supply: p.supply }));
+    setContactKey((k) => k + 1);
+  }
+
+  // Desvincular deja los datos ya cargados en el formulario: solo corta la
+  // relación con el CRM, para que la cotización no se le atribuya a ese cliente.
+  function clearPrefill() {
+    setPrefill(null);
+  }
 
   function goTo(step: WizardStep) {
     setState((prev) => ({ ...prev, step }));
@@ -109,8 +146,13 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
 
         {state.step === 'contact' && (
           <StepContact
+            key={contactKey}
             category={state.customerCategory!}
             initialData={state.contact}
+            clients={clients}
+            selectedClient={prefill ? { nombre: prefill.clientLabel, instalacion: null } : null}
+            onPickClient={pickClient}
+            onClearClient={clearPrefill}
             onSubmit={(contact) => {
               update({ contact });
               goNext();
@@ -140,6 +182,7 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
               update({ consumptionProfile });
               goNext();
             }}
+            onBillsArchived={setBillInfo}
             onUpdateSupply={(partial) =>
               update({ supply: { ...state.supply!, ...partial } })
             }
@@ -159,7 +202,9 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
         )}
 
         {state.step === 'results' && (
-          <StepResults state={state} config={config} catalog={catalog} adminMode={ocrEnabled} />
+          <StepResults state={state} config={config} catalog={catalog} adminMode={ocrEnabled}
+            clientId={prefill?.clientId} installationId={prefill?.installationId ?? undefined}
+            billInfo={billInfo} />
         )}
 
       </div>

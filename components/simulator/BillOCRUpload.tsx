@@ -8,25 +8,26 @@ import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route'
 interface BillOCRUploadProps {
   /** Slots disponibles en la tabla (para informar cuántos coinciden) */
   availableSlotKeys: string[];          // ["2026-03", "2026-02", ...]
-  onConfirm: (periods: ExtractedPeriod[], matchCount: number, billData: ExtractedBill) => void;
+  onConfirm: (periods: ExtractedPeriod[], matchCount: number, billData: ExtractedBill, isMock: boolean, archivadas: BoletaArchivadaLocal[]) => void;
   onCancel: () => void;
 }
+
+// Boleta que quedó archivada en el bucket al procesarla, para poder guardarla
+// junto a la simulación en la ficha del cliente.
+export type BoletaArchivadaLocal = {
+  filePath: string;
+  fileName: string | null;
+  contentType: string | null;
+};
 
 // ─── Tipos de estado ──────────────────────────────────────────────────────────
 
 type UploadState =
   | { stage: 'idle' }
   | { stage: 'loading'; fileName: string; current: number; total: number }
-  | { stage: 'review'; data: ExtractedBill; edited: ExtractedPeriod[]; matchCount: number; isMock: boolean }
   | { stage: 'error'; reason: string };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const MONTH_NAMES: Record<number, string> = {
-  1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr',
-  5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Ago',
-  9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
-};
 
 function slotKey(month: number, year: number) {
   return `${year}-${String(month).padStart(2, '0')}`;
@@ -52,6 +53,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
     const allPeriods: Map<string, ExtractedPeriod> = new Map();
     let lastBillData: ExtractedBill | null = null;
     let anyMock = false;
+    const archivadas: BoletaArchivadaLocal[] = [];
 
     for (let i = 0; i < valid.length; i++) {
       const file = valid[i];
@@ -62,7 +64,7 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
       try {
         const res = await fetch('/api/parse-bill', { method: 'POST', body: formData });
         const json = await res.json() as
-          | { ok: true; data: ExtractedBill; mock?: boolean }
+          | { ok: true; data: ExtractedBill; mock?: boolean; storagePath?: string | null; fileName?: string | null }
           | { ok: false; message: string };
 
         if (!json.ok) {
@@ -72,6 +74,9 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
 
         if (json.mock) anyMock = true;
         lastBillData = json.data;
+        if (json.storagePath) {
+          archivadas.push({ filePath: json.storagePath, fileName: json.fileName ?? file.name, contentType: file.type || null });
+        }
 
         for (const p of json.data.periods) {
           const key = slotKey(p.month, p.year);
@@ -98,22 +103,11 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
     ).length;
     const mergedBill: ExtractedBill = { ...lastBillData, periods: edited };
 
-    setState({ stage: 'review', data: mergedBill, edited, matchCount, isMock: anyMock });
-  }, [availableSlotKeys]);
-
-  function handleChange(idx: number, field: keyof ExtractedPeriod, value: string) {
-    if (state.stage !== 'review') return;
-    const num = value === '' ? undefined : parseFloat(value);
-    const updated = state.edited.map((p, i) =>
-      i === idx ? { ...p, [field]: isNaN(num as number) ? undefined : num } : p
-    );
-    setState({ ...state, edited: updated });
-  }
-
-  function handleConfirm() {
-    if (state.stage !== 'review') return;
-    onConfirm(state.edited, state.matchCount, state.data);
-  }
+    // Antes esto abría una pantalla de revisión con su propio "Confirmar N
+    // meses". Era revisar dos veces la misma grilla: ahora se vuelca directo a
+    // la tabla de 12 meses, donde igual se iba a revisar y corregir.
+    onConfirm(edited, matchCount, mergedBill, anyMock, archivadas);
+  }, [availableSlotKeys, onConfirm]);
 
   // ── Idle: zona de upload ────────────────────────────────────────────────────
 
@@ -199,119 +193,8 @@ export default function BillOCRUpload({ availableSlotKeys, onConfirm, onCancel }
     );
   }
 
-  // ── Review ──────────────────────────────────────────────────────────────────
-
-  const { data, edited, matchCount, isMock } = state;
-  const outsideRange = edited.filter((p) => !availableSlotKeys.includes(slotKey(p.month, p.year)));
-
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Header */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <p className="text-sm font-bold text-gray-900">Datos extraídos</p>
-          <span className={[
-            'text-xs font-medium px-2 py-0.5 rounded-full',
-            data.confidence === 'high' ? 'bg-[#b0cedd]/20 text-[#1d65c5]' :
-            data.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
-            'bg-red-100 text-red-600',
-          ].join(' ')}>
-            {data.confidence === 'high' ? 'Lectura clara' : data.confidence === 'medium' ? 'Lectura parcial' : 'Lectura dudosa'}
-          </span>
-        </div>
-
-        {data.distribuidora && (
-          <p className="text-xs text-gray-500">
-            {data.distribuidora}{data.tarifa ? ` · Tarifa ${data.tarifa}` : ''}
-          </p>
-        )}
-
-        {/* Resumen de coincidencias */}
-        <div className={[
-          'mt-3 rounded-xl px-3 py-2 text-xs font-medium',
-          matchCount > 0 ? 'bg-[#dde3e9]/50 text-[#1d65c5]' : 'bg-amber-50 text-amber-700',
-        ].join(' ')}>
-          {matchCount > 0
-            ? `${matchCount} mes${matchCount !== 1 ? 'es' : ''} coinciden con tu período de simulación y se pre-rellenarán.`
-            : 'Ningún mes de esta boleta coincide con el período de tu simulación.'}
-          {outsideRange.length > 0 && (
-            <span className="text-gray-400 font-normal">
-              {' '}({outsideRange.length} mes{outsideRange.length !== 1 ? 'es' : ''} fuera de rango, ignorado{outsideRange.length !== 1 ? 's' : ''})
-            </span>
-          )}
-        </div>
-
-        {isMock && (
-          <p className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">
-            Modo de prueba — datos simulados
-          </p>
-        )}
-      </div>
-
-      {/* Tabla de períodos dentro del rango */}
-      {matchCount > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="grid grid-cols-[90px_1fr_1fr] gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            <span>Mes</span>
-            <span className="text-right">kWh</span>
-            <span className="text-right">Monto ($)</span>
-          </div>
-          {edited
-            .filter((p) => availableSlotKeys.includes(slotKey(p.month, p.year)))
-            .map((p) => {
-              const idx = edited.indexOf(p);
-              return (
-                <div key={slotKey(p.month, p.year)}
-                  className={['grid grid-cols-[90px_1fr_1fr] gap-2 items-center px-4 py-2 border-b border-gray-50 last:border-0', p.isCurrent ? 'bg-[#dde3e9]/50/30' : ''].join(' ')}
-                >
-                  <span className="text-xs text-gray-700 font-medium">
-                    {MONTH_NAMES[p.month]} {p.year}
-                    {p.isCurrent && <span className="ml-1 text-[#389fe0]">·</span>}
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={p.consumptionKWh ?? ''}
-                    onChange={(e) => handleChange(idx, 'consumptionKWh', e.target.value)}
-                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 transition"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    value={p.variableAmountCLP ?? ''}
-                    onChange={(e) => handleChange(idx, 'variableAmountCLP', e.target.value)}
-                    placeholder="opcional"
-                    className="w-full text-right rounded-lg border border-gray-200 px-2 py-1 text-sm placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 transition"
-                  />
-                </div>
-              );
-            })}
-        </div>
-      )}
-
-      {/* Acciones */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={matchCount === 0}
-          className={[
-            'flex-1 rounded-xl font-semibold py-2.5 text-sm transition-colors',
-            matchCount > 0
-              ? 'bg-[#389fe0] hover:bg-[#1d65c5] text-white'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed',
-          ].join(' ')}
-        >
-          {matchCount > 0 ? `Confirmar ${matchCount} mes${matchCount !== 1 ? 'es' : ''}` : 'Sin coincidencias'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium py-2.5 text-sm transition-colors"
-        >
-          Cancelar
-        </button>
-      </div>
-    </div>
-  );
+  // Ya no hay etapa de revisión: al terminar la lectura los meses se vuelcan
+  // directo a la tabla de 12 meses y ahí se corrigen. Este punto solo se
+  // alcanza en el instante entre que termina el OCR y el padre cierra el panel.
+  return null;
 }

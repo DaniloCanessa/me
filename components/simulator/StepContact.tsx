@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import type { CustomerCategory, PersonContact, BusinessContact } from '@/lib/types';
 import { REGIONS } from '@/lib/regions';
+import ClientNameField from './ClientNameField';
+import type { SimulatorClientOption } from '@/lib/db/clients';
+
+type Installation = SimulatorClientOption['installations'][number];
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -10,7 +14,15 @@ interface StepContactProps {
   category: CustomerCategory;
   initialData: PersonContact | BusinessContact | null;
   onSubmit: (contact: PersonContact | BusinessContact) => void;
+  /** Clientes del CRM para autocompletar el nombre. Solo back-office. */
+  clients?: SimulatorClientOption[];
+  /** Cliente ya vinculado a esta simulación. */
+  selectedClient?: { nombre: string; instalacion?: string | null } | null;
+  onPickClient?: (client: SimulatorClientOption, installation: Installation | null) => void;
+  onClearClient?: () => void;
 }
+
+type ClientFieldProps = Pick<StepContactProps, 'clients' | 'selectedClient' | 'onPickClient' | 'onClearClient'>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,9 +97,11 @@ function RegionSelect({
 function NaturalForm({
   initial,
   onSubmit,
+  clientField,
 }: {
   initial: PersonContact | null;
   onSubmit: (c: PersonContact) => void;
+  clientField: ClientFieldProps;
 }) {
   const [form, setForm] = useState<PersonContact>({
     name: (initial as PersonContact)?.name ?? '',
@@ -110,7 +124,11 @@ function NaturalForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Field label="Nombre completo" id="name" value={form.name} onChange={set('name')} placeholder="Juan Pérez" required />
+      <ClientNameField
+        label="Nombre completo" id="name" value={form.name} onChange={set('name')}
+        placeholder="Juan Pérez" required matchOn="nombre"
+        clients={clientField.clients} selected={clientField.selectedClient}
+        onPickClient={clientField.onPickClient} onClearClient={clientField.onClearClient} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="juan@ejemplo.cl" required />
         <Field label="Teléfono" id="phone" type="tel" value={form.phone} onChange={set('phone')} placeholder="+56 9 1234 5678" required />
@@ -137,9 +155,11 @@ function NaturalForm({
 function BusinessForm({
   initial,
   onSubmit,
+  clientField,
 }: {
   initial: BusinessContact | null;
   onSubmit: (c: BusinessContact) => void;
+  clientField: ClientFieldProps;
 }) {
   const [form, setForm] = useState<BusinessContact>({
     companyName: (initial as BusinessContact)?.companyName ?? '',
@@ -163,7 +183,11 @@ function BusinessForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <Field label="Razón social / Nombre empresa" id="companyName" value={form.companyName} onChange={set('companyName')} placeholder="Empresa S.A." required />
+      <ClientNameField
+        label="Razón social / Nombre empresa" id="companyName" value={form.companyName}
+        onChange={set('companyName')} placeholder="Empresa S.A." required matchOn="empresa"
+        clients={clientField.clients} selected={clientField.selectedClient}
+        onPickClient={clientField.onPickClient} onClearClient={clientField.onClearClient} />
       <Field label="Nombre de contacto" id="contactName" value={form.contactName} onChange={set('contactName')} placeholder="María González" required />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Correo electrónico" id="email" type="email" value={form.email} onChange={set('email')} placeholder="contacto@empresa.cl" required />
@@ -188,8 +212,9 @@ function BusinessForm({
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function StepContact({ category, initialData, onSubmit }: StepContactProps) {
+export default function StepContact({ category, initialData, onSubmit, clients, selectedClient, onPickClient, onClearClient }: StepContactProps) {
   const isNatural = category === 'natural';
+  const clientField: ClientFieldProps = { clients, selectedClient, onPickClient, onClearClient };
 
   return (
     <div>
@@ -207,11 +232,13 @@ export default function StepContact({ category, initialData, onSubmit }: StepCon
           <NaturalForm
             initial={initialData as PersonContact | null}
             onSubmit={onSubmit}
+            clientField={clientField}
           />
         ) : (
           <BusinessForm
             initial={initialData as BusinessContact | null}
             onSubmit={onSubmit}
+            clientField={clientField}
           />
         )}
       </div>
