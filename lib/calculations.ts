@@ -120,9 +120,13 @@ function calcMonthlyBalance(
   daysInMonth: number,
   batteryUsableFraction: number,
   batteryCycleEfficiency: number,
+  dayConsumptionRatio: number,
 ): MonthlyEnergyBalance {
-  const daytimeConsumption  = consumptionKWh * SOLAR_DEFAULTS.dayConsumptionRatio;
-  const nighttimeConsumption = consumptionKWh * SOLAR_DEFAULTS.nightConsumptionRatio;
+  // El reparto día/noche debe sumar 1: la fracción nocturna se deriva de la
+  // diurna en vez de leerse de otra constante, porque si se configuran por
+  // separado y no suman 1 se pierde (o se duplica) parte del consumo.
+  const daytimeConsumption   = consumptionKWh * dayConsumptionRatio;
+  const nighttimeConsumption = consumptionKWh * (1 - dayConsumptionRatio);
   const originalGridCostCLP = Math.round(consumptionKWh * kWhPriceCLP + fixedChargeCLP);
 
   let selfConsumptionKWh: number;
@@ -228,6 +232,7 @@ export function runSimulation(
         DAYS_IN_MONTH[m],
         batteryUsableFraction,
         batteryCycleEff,
+        input.dayConsumptionRatio ?? SOLAR_DEFAULTS.dayConsumptionRatio,
       ),
     );
   }
@@ -284,6 +289,10 @@ export function runSimulation(
       ((annualBenefit * n - systemCostCLP) / systemCostCLP) * 100,
     ),
     injectionValuePerKWhCLP: Math.round(injectionValueCLP),
+    annualBillCLP: Math.round(energyBalance.totalOriginalGridCostCLP),
+    billSavingsPercent: energyBalance.totalOriginalGridCostCLP > 0
+      ? Math.min(100, Math.round((annualBenefit / energyBalance.totalOriginalGridCostCLP) * 100))
+      : 0,
   };
 
   const co2Factor = input.co2FactorKgPerKWh ?? SOLAR_DEFAULTS.co2FactorKgPerKWh;

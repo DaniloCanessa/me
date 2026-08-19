@@ -42,8 +42,12 @@ export const SOLAR_DEFAULTS = {
   minAlternativeCoveragePercent: 65,   // cobertura mínima para mostrar kit alternativo
   businessCoverageTarget: 0.90,        // % del consumo anual que se intenta cubrir en clientes empresa
   evConsumptionIncreasePerCar: 0.33,
+  // Residencial: buena parte del consumo es de tarde/noche.
   dayConsumptionRatio: 0.70,
   nightConsumptionRatio: 0.30,
+  // Empresa: el consumo se concentra en horario de trabajo, así que la
+  // fracción diurna es bastante mayor que en una casa.
+  businessDayConsumptionRatio: 0.85,
   batteryUsableFraction: 0.70,         // fracción de la batería disponible para descarga nocturna (30% = reserva cortes)
   batteryModuleKWh: 5,                 // kWh por módulo de batería
   batteryModulePriceCLP: 1_500_000,    // precio referencial por módulo de 5 kWh
