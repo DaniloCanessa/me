@@ -44,6 +44,8 @@ interface StepResultsProps {
     numeroBoleta: string | null;
     distribuidora: string | null;
   } | null;
+  /** Id de la simulación que se está corrigiendo, si se reabrió una guardada. */
+  corrigeId?: string;
 }
 
 // ─── PFV existente: saldo de empalme y consumo residual a cubrir ──────────────
@@ -830,7 +832,7 @@ function FinancialDetail({ result }: { result: SimulatorResult }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function StepResults({ state, config, catalog, adminMode = false, clientId, installationId, billInfo }: StepResultsProps) {
+export default function StepResults({ state, config, catalog, adminMode = false, clientId, installationId, billInfo, corrigeId }: StepResultsProps) {
   const contact = state.contact!;
   const supply  = state.supply!;
   const profile = state.consumptionProfile!;
@@ -1610,6 +1612,10 @@ export default function StepResults({ state, config, catalog, adminMode = false,
               clientData: datosCliente,
               fechaBoleta:  billInfo?.fechaBoleta ?? null,
               numeroBoleta: billInfo?.numeroBoleta ?? null,
+              corrigeId: corrigeId ?? null,
+              // Al corregir siempre se guarda versión nueva: la boleta es la misma
+              // y el aviso de duplicado no aporta.
+              confirmarDuplicado: !!corrigeId,
               escenario: isResidential ? effectiveScenario : 'empresa',
               kitSizeKWp: activeResult.kit.sizekWp,
               panelCount: activeResult.kit.panelCount,
@@ -1872,10 +1878,13 @@ export default function StepResults({ state, config, catalog, adminMode = false,
           clientEmail={contactEmail}
         />
       )}
-      {!isResidential && businessResult && (
+      {/* `activeResult`, no `businessResult`: este último es siempre el escenario
+          CON equipos proyectados, así que al elegir "Consumo actual" la pantalla
+          mostraba una cosa y el informe del cliente salía con otra. */}
+      {!isResidential && activeResult && (
         <PDFDownloadButton
           state={state}
-          businessResult={businessResult}
+          businessResult={activeResult}
           clientName={contactName}
           clientEmail={contactEmail}
         />
