@@ -1,4 +1,34 @@
-import type { SolarKit } from './types';
+import type { SolarKit, TarifaType } from './types';
+
+/**
+ * Normaliza el código de tarifa que viene de una boleta.
+ *
+ * Las boletas residenciales traen el tramo de Equidad Tarifaria Residencial
+ * pegado al código: BT1-T1, BT1-T6, etc. Ese sufijo indica el tramo de
+ * descuento por ley según el consumo promedio del año anterior — NO es una
+ * tarifa distinta: todas son BT1, que además no tiene bloques de precio por
+ * cantidad consumida.
+ *
+ * Sin normalizar, cualquier comparación `tarifa === 'BT1'` fallaba con un
+ * BT1-T6 y el análisis tarifario terminaba declarándose no concluyente.
+ */
+export function normalizeTarifa(raw?: string | null): TarifaType | 'unknown' {
+  const t = (raw ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!t) return 'unknown';
+
+  // BT1 con cualquier tramo de ETR (BT1-T1 … BT1-T6, BT1T4, BT1 T2…)
+  if (/^BT1(-|_)?T?\d*$/.test(t)) return 'BT1';
+
+  // El resto conserva su código; el punto decimal puede venir como coma.
+  const normalizado = t.replace(',', '.');
+  const validas: TarifaType[] = [
+    'BT1', 'BT2', 'BT3', 'BT4.1', 'BT4.2', 'BT4.3',
+    'AT2', 'AT3', 'AT4.1', 'AT4.2', 'AT4.3',
+  ];
+  return (validas as string[]).includes(normalizado)
+    ? (normalizado as TarifaType)
+    : 'unknown';
+}
 
 // ─── Tarifa BT1 Chile (valores referenciales) ─────────────────────────────────
 

@@ -2,6 +2,7 @@ import type {
   CustomerCategory, PersonContact, BusinessContact, SupplyData, TarifaType, PropertyType,
 } from '@/lib/types';
 import type { SimulatorClientOption } from '@/lib/db/clients';
+import { normalizeTarifa } from '@/lib/constants';
 
 // ─── Prellenado del simulador desde un cliente del CRM ───────────────────────
 //
@@ -30,8 +31,12 @@ const TARIFAS_VALIDAS: TarifaType[] = [
   'BT1', 'BT2', 'BT3', 'BT4.1', 'BT4.2', 'BT4.3', 'AT2', 'AT3', 'AT4.1', 'AT4.2', 'AT4.3',
 ];
 
-const esTarifa = (s: string | null): s is TarifaType =>
-  !!s && (TARIFAS_VALIDAS as string[]).includes(s);
+// Normaliza además del chequeo: la ficha puede tener guardado 'BT1-T6', que es
+// BT1 con su tramo de Equidad Tarifaria.
+const aTarifa = (s: string | null): TarifaType | null => {
+  const n = normalizeTarifa(s);
+  return n !== 'unknown' && (TARIFAS_VALIDAS as string[]).includes(n) ? n : null;
+};
 
 // El tipo de propiedad no vive en la ficha: se asume el más habitual según el
 // tipo de cliente y el usuario lo corrige en el paso de suministro si aplica.
@@ -65,7 +70,7 @@ export function buildPrefill(
       }
     : { name: client.nombre, email, phone, address, city, commune, regionId };
 
-  const tarifaGuardada = esTarifa(installation?.tarifa ?? null) ? (installation!.tarifa as TarifaType) : null;
+  const tarifaGuardada = aTarifa(installation?.tarifa ?? null);
 
   const supply: SupplyData = {
     propertyType: propertyTypePorDefecto(customerCategory),

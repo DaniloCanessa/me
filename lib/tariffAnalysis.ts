@@ -1,5 +1,5 @@
 import type { TarifaType } from './types';
-import { TARIFF_REFERENCE_PRICES } from './constants';
+import { TARIFF_REFERENCE_PRICES, normalizeTarifa } from './constants';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ export interface TariffAnalysisResult {
 
 export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisResult {
   const {
-    tarifa,
+    tarifa: tarifaCruda,
     avgMonthlyKWh,
     potenciaContratadaKW,
     avgPowerChargeCLP,
@@ -57,6 +57,10 @@ export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisRes
     operatingHours,
     flexibleEquipment,
   } = input;
+
+  // Última defensa: si el código llega con el tramo de ETR pegado (BT1-T6),
+  // se normaliza acá. Todas las BT1-Tx son BT1.
+  const tarifa = normalizeTarifa(tarifaCruda);
 
   const hasRealBillData = !!avgTotalBillCLP || !!avgPowerChargeCLP;
   const prices = TARIFF_REFERENCE_PRICES[tarifa] ?? TARIFF_REFERENCE_PRICES['BT1'];
@@ -129,8 +133,12 @@ export function runTariffAnalysis(input: TariffAnalysisInput): TariffAnalysisRes
   if (!hasRealBillData && !potenciaContratadaKW && tarifa !== 'BT1') {
     tariffStatus = 'informative-only';
     tariffMessage =
-      'Ingresa el monto total de tu boleta o la potencia contratada para comparar tarifas con precisión.';
-  } else if (tarifa === 'BT1' || tarifa === 'unknown') {
+      'No pudimos evaluar si tu tarifa es la más conveniente: para compararla necesitamos el monto total de tu boleta o tu potencia contratada. No significa que la actual sea inadecuada, solo que falta ese dato.';
+  } else if (tarifa === 'unknown') {
+    tariffStatus = 'informative-only';
+    tariffMessage =
+      'No tenemos registrada tu tarifa, así que no la comparamos. Se asumió BT1 como referencia para los cálculos, que es la estándar residencial.';
+  } else if (tarifa === 'BT1') {
     tariffStatus = 'optimal';
     tariffMessage = isResidential
       ? 'La tarifa BT1 es la estándar para consumo residencial.'

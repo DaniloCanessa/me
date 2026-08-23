@@ -6,6 +6,7 @@ import type { ExtractedBill, ExtractedPeriod } from '@/app/api/parse-bill/route'
 import { MONTH_NAMES, DISTRIBUTORS, CHILE_BT1 } from '@/lib/constants';
 import { extrapolateSeasonalKWh } from '@/lib/consumption';
 import BillOCRUpload, { type BoletaArchivadaLocal } from './BillOCRUpload';
+import { normalizeTarifa } from '@/lib/constants';
 import { IconUpload } from '@/components/landing/icons';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -286,9 +287,12 @@ export default function StepBills({ initialData, supply, ocrEnabled = false, isB
     });
 
     if (onUpdateSupply && (billData.distribuidora || billData.tarifa)) {
+      // La boleta trae la tarifa con el tramo de ETR pegado (BT1-T6): se
+      // normaliza antes de guardarla, si no las comparaciones por código fallan.
+      const tarifaLeida = normalizeTarifa(billData.tarifa);
       onUpdateSupply({
         distribuidora: billData.distribuidora ?? supply.distribuidora,
-        tarifa: (billData.tarifa as TarifaType) ?? supply.tarifa,
+        tarifa: tarifaLeida !== 'unknown' ? tarifaLeida : supply.tarifa,
       });
     }
   }
