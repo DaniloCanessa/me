@@ -68,17 +68,38 @@ export type SimulatorClientOption = {
     tension_suministro: 'BT' | 'AT' | null;
     consumo_promedio_mensual_kwh: number | null;
   }>;
+  /** Resumen de sus simulaciones guardadas, para ofrecer retomar una. */
+  simulations: Array<{
+    id: string;
+    fecha_simulacion: string;
+    fecha_boleta: string | null;
+    kit_size_kwp: number | null;
+    battery_kwh: number;
+    annual_benefit_clp: number | null;
+    installation_id: string | null;
+  }>;
 };
 
 export async function getClientsForSimulator(): Promise<SimulatorClientOption[]> {
   const db = getSupabaseAdmin();
-  const [{ data: clients }, { data: installations }] = await Promise.all([
+  const [{ data: clients }, { data: installations }, { data: sims }] = await Promise.all([
     db.from('clients').select('id, nombre, empresa, atencion_a, email, telefono, ciudad').order('nombre'),
     db.from('installations')
       .select('id, client_id, nombre_instalacion, direccion, comuna, ciudad, region_id, customer_type, distribuidora, tarifa, amperaje_a, potencia_contratada_kw, tension_suministro, consumo_promedio_mensual_kwh')
       .eq('is_active', true)
       .order('created_at'),
+    db.from('simulations')
+      .select('id, client_id, fecha_simulacion, fecha_boleta, kit_size_kwp, battery_kwh, annual_benefit_clp, installation_id')
+      .order('fecha_simulacion', { ascending: false }),
   ]);
+
+  const simsPorCliente = new Map<string, SimulatorClientOption['simulations']>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const s of ((sims ?? []) as any[])) {
+    const list = simsPorCliente.get(s.client_id) ?? [];
+    list.push(s);
+    simsPorCliente.set(s.client_id, list);
+  }
 
   const porCliente = new Map<string, SimulatorClientOption['installations']>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,5 +113,6 @@ export async function getClientsForSimulator(): Promise<SimulatorClientOption[]>
   return ((clients ?? []) as any[]).map((c) => ({
     ...c,
     installations: porCliente.get(c.id) ?? [],
+    simulations:   simsPorCliente.get(c.id) ?? [],
   }));
 }

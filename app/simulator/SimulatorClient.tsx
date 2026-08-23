@@ -45,13 +45,38 @@ interface Props {
   embedded?: boolean;
   /** Clientes del CRM para arrancar la simulación con sus datos. Solo back-office. */
   clients?: SimulatorClientOption[];
+  /** Simulación guardada que se está reabriendo para corregir. */
+  reabrir?: {
+    state: WizardState;
+    simulationId: string;
+    clientId: string;
+    installationId: string | null;
+    clienteNombre: string;
+    instalacionNombre: string | null;
+    fechaSimulacion: string;
+    fechaBoleta: string | null;
+    numeroBoleta: string | null;
+  } | null;
 }
 
-export default function SimulatorClient({ config, catalog, ocrEnabled = false, embedded = false, clients }: Props) {
-  const [state, setState] = useState<WizardState>(INITIAL_STATE);
+export default function SimulatorClient({ config, catalog, ocrEnabled = false, embedded = false, clients, reabrir }: Props) {
+  // Al reabrir una simulación se parte del estado guardado, no del inicial.
+  const [state, setState] = useState<WizardState>(reabrir?.state ?? INITIAL_STATE);
   // Cliente del CRM para el que se está simulando (habilita crear la cotización
   // al final sin volver a pedir los datos).
-  const [prefill, setPrefill] = useState<Prefill | null>(null);
+  const [prefill, setPrefill] = useState<Prefill | null>(
+    reabrir
+      ? {
+          customerCategory: reabrir.state.customerCategory ?? 'natural',
+          contact: reabrir.state.contact!,
+          supply: reabrir.state.supply!,
+          clientId: reabrir.clientId,
+          installationId: reabrir.installationId,
+          clientLabel: [reabrir.clienteNombre, reabrir.instalacionNombre].filter(Boolean).join(' · '),
+          faltantes: [],
+        }
+      : null,
+  );
 
   // El formulario de contacto guarda su propio estado interno, así que al
   // cargar un cliente hay que remontarlo para que muestre los datos nuevos.
@@ -115,6 +140,35 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
             </span>
           </div>
         </nav>
+      )}
+
+      {/* Aviso de que se está trabajando sobre una simulación guardada */}
+      {reabrir && (
+        <div className="max-w-3xl mx-auto px-4 pt-6">
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                Trabajando sobre una simulación guardada
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {reabrir.clienteNombre}
+                {reabrir.instalacionNombre && ` · ${reabrir.instalacionNombre}`}
+                {' · simulada el '}
+                {new Date(reabrir.fechaSimulacion).toLocaleString('es-CL', {
+                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                {reabrir.fechaBoleta && ` · boleta de ${reabrir.fechaBoleta}`}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Corrige lo que necesites y vuelve a guardar: se creará una versión nueva,
+                la original no se toca.
+              </p>
+            </div>
+            <a href="/admin/simulator"
+              className="text-xs font-medium text-amber-900 hover:underline whitespace-nowrap">
+              Empezar de cero
+            </a>
+          </div>
+        </div>
       )}
 
       {/* Barra de progreso */}
@@ -204,7 +258,8 @@ export default function SimulatorClient({ config, catalog, ocrEnabled = false, e
         {state.step === 'results' && (
           <StepResults state={state} config={config} catalog={catalog} adminMode={ocrEnabled}
             clientId={prefill?.clientId} installationId={prefill?.installationId ?? undefined}
-            billInfo={billInfo} />
+            billInfo={billInfo ?? (reabrir ? { archivadas: [], fechaBoleta: reabrir.fechaBoleta, numeroBoleta: reabrir.numeroBoleta, distribuidora: null } : null)}
+            corrigeId={reabrir?.simulationId} />
         )}
 
       </div>

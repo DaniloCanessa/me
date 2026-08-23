@@ -36,6 +36,9 @@ export default function ClientNameField({
   const [abierto, setAbierto] = useState(false);
   // Cliente elegido a la espera de que se defina la instalación.
   const [pendiente, setPendiente] = useState<SimulatorClientOption | null>(null);
+  // Cliente elegido que ya tiene simulaciones: primero se pregunta si se
+  // retoma una o se parte de cero, porque rehacerla a mano es el error caro.
+  const [conHistorial, setConHistorial] = useState<SimulatorClientOption | null>(null);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const etiqueta = (c: SimulatorClientOption) =>
@@ -54,6 +57,16 @@ export default function ClientNameField({
   }, [clients, value, matchOn]);
 
   function elegirCliente(c: SimulatorClientOption) {
+    if (c.simulations.length > 0) {
+      setConHistorial(c);
+      setAbierto(false);
+      return;
+    }
+    continuarConCliente(c);
+  }
+
+  function continuarConCliente(c: SimulatorClientOption) {
+    setConHistorial(null);
     if (c.installations.length > 1) {
       setPendiente(c);      // hay que preguntar cuál instalación
       setAbierto(false);
@@ -69,7 +82,12 @@ export default function ClientNameField({
     setPendiente(null);
   }
 
-  const mostrarLista = abierto && sugerencias.length > 0 && !pendiente;
+  const mostrarLista = abierto && sugerencias.length > 0 && !pendiente && !conHistorial;
+
+  const fechaHora = (iso: string) =>
+    new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const clp = (n: number | null) =>
+    n == null ? '—' : new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -116,6 +134,37 @@ export default function ClientNameField({
         )}
       </div>
 
+      {/* Cliente con simulaciones previas: retomar una o empezar de cero */}
+      {conHistorial && (
+        <div className="rounded-xl border border-[#b0cedd] bg-[#eaf4fb] p-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-[#1d65c5]">
+            {etiqueta(conHistorial)} ya tiene {conHistorial.simulations.length} simulación
+            {conHistorial.simulations.length > 1 ? 'es' : ''} guardada
+            {conHistorial.simulations.length > 1 ? 's' : ''}. ¿Retomas una o empiezas de cero?
+          </p>
+          {conHistorial.simulations.slice(0, 5).map((sim) => (
+            <a key={sim.id}
+              href={`/admin/simulator?simulacion=${sim.id}`}
+              className="text-left rounded-lg bg-white border border-gray-200 px-3 py-2 hover:border-[#389fe0] transition-colors block"
+            >
+              <span className="text-sm text-gray-800 block">
+                PFV {sim.kit_size_kwp ?? '—'} kW
+                {sim.battery_kwh > 0 && ` · ${sim.battery_kwh} kWh batería`}
+                <span className="text-gray-400 font-normal"> · {clp(sim.annual_benefit_clp)}/año</span>
+              </span>
+              <span className="text-xs text-gray-400">
+                Simulada el {fechaHora(sim.fecha_simulacion)}
+                {sim.fecha_boleta && ` · boleta de ${sim.fecha_boleta}`}
+              </span>
+            </a>
+          ))}
+          <button type="button" onClick={() => continuarConCliente(conHistorial)}
+            className="text-left rounded-lg border border-dashed border-gray-300 px-3 py-2 text-xs text-gray-600 hover:border-[#389fe0] hover:text-[#1d65c5] transition-colors">
+            Empezar una simulación nueva con sus datos
+          </button>
+        </div>
+      )}
+
       {/* Cliente con varias instalaciones: hay que elegir una */}
       {pendiente && (
         <div className="rounded-xl border border-[#b0cedd] bg-[#eaf4fb] p-3 flex flex-col gap-1.5">
@@ -140,7 +189,7 @@ export default function ClientNameField({
       )}
 
       {/* Confirmación de que la simulación quedó ligada a un cliente del CRM */}
-      {selected && !pendiente && (
+      {selected && !pendiente && !conHistorial && (
         <p className="text-xs text-[#1d65c5] flex items-center gap-2">
           <span>✓ {selected.nombre} — datos cargados desde el CRM</span>
           {onClearClient && (

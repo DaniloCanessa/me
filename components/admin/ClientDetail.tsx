@@ -609,6 +609,12 @@ export default function ClientDetail({
                       : '—'}
                   </p>
                   <p className="text-xs text-gray-400">ahorro anual · payback {s.payback_years ?? '—'} a</p>
+                  {/* Reabrir carga el wizard tal como quedó, para corregir un
+                      consumo mal leído o cambiar el kit sin rehacerla. */}
+                  <a href={`/admin/simulator?simulacion=${s.id}`}
+                    className="inline-block mt-1.5 text-xs font-semibold text-[#1d65c5] hover:underline">
+                    Reabrir y corregir →
+                  </a>
                 </div>
               </div>
 

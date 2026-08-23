@@ -28,10 +28,17 @@ export default function SaveSimulation({
   const [duplicada, setDuplicada] = useState<SimulacionPrevia | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
 
+  // Al corregir una simulación reabierta la boleta es la misma a propósito, así
+  // que el payload ya trae confirmarDuplicado: no debe pisarse con el del botón.
+  const esCorreccion = !!payload.corrigeId;
+
   function guardar(confirmarDuplicado = false) {
     setError(null);
     start(async () => {
-      const res = await guardarSimulacion({ ...payload, confirmarDuplicado });
+      const res = await guardarSimulacion({
+        ...payload,
+        confirmarDuplicado: confirmarDuplicado || !!payload.confirmarDuplicado,
+      });
       if (res.error) { setError(res.error); return; }
       if (res.duplicada) {
         setDuplicada(res.duplicada);
@@ -49,7 +56,7 @@ export default function SaveSimulation({
       <div className="bg-white rounded-2xl border border-green-200 shadow-sm p-4">
         <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap">
           <span className="text-sm text-green-800 font-medium">
-            ✓ Simulación guardada en la ficha de {clienteNombre}
+            ✓ {esCorreccion ? 'Corrección guardada' : 'Simulación guardada'} en la ficha de {clienteNombre}
           </span>
           {clientId && (
             <a href={`/admin/clients/${clientId}`} target="_blank" rel="noopener noreferrer"
@@ -119,8 +126,11 @@ export default function SaveSimulation({
   const nBoletas = payload.boletas?.length ?? 0;
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-      <p className="text-sm font-semibold text-gray-900">Guardar simulación en la ficha</p>
+      <p className="text-sm font-semibold text-gray-900">
+        {esCorreccion ? 'Guardar la corrección' : 'Guardar simulación en la ficha'}
+      </p>
       <p className="text-xs text-gray-500 mt-0.5">
+        {esCorreccion && 'Se guarda como versión nueva; la original queda intacta. '}
         Queda en el historial de {clienteNombre || 'el cliente'} con la fecha y hora de hoy
         {payload.fechaBoleta && `, asociada a la boleta de ${payload.fechaBoleta}`}.
         {nBoletas > 0 && ` Se archivan también ${nBoletas} boleta${nBoletas > 1 ? 's' : ''} subida${nBoletas > 1 ? 's' : ''}.`}
@@ -139,7 +149,7 @@ export default function SaveSimulation({
         disabled={pending || !payload.clientData.nombre?.trim()}
         className="mt-3 w-full rounded-xl border-2 border-[#389fe0] bg-white hover:bg-[#eaf4fb] text-[#1d65c5] text-sm font-semibold px-4 py-3 transition-colors disabled:opacity-50"
       >
-        {pending ? 'Guardando…' : '💾 Guardar simulación'}
+        {pending ? 'Guardando…' : esCorreccion ? '💾 Guardar como versión corregida' : '💾 Guardar simulación'}
       </button>
     </div>
   );
