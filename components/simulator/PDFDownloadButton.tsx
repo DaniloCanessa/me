@@ -55,29 +55,28 @@ export default function PDFDownloadButton({
       import('jspdf'),
     ]);
 
-    const canvas = await html2canvas(reportRef.current!, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
+    // Se captura CADA PÁGINA por separado. Antes se capturaba el informe
+    // completo como una sola imagen y se cortaba cada 297 mm, así que cualquier
+    // gráfico o tabla que cayera en el límite quedaba partido por la mitad.
+    const paginas = Array.from(
+      reportRef.current!.querySelectorAll<HTMLElement>('[data-page]'),
+    );
+    if (paginas.length === 0) throw new Error('El informe no tiene páginas definidas');
 
-    const imgData   = canvas.toDataURL('image/png');
-    const pdf       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW     = pdf.internal.pageSize.getWidth();
-    const pageH     = pdf.internal.pageSize.getHeight();
-    const imgW      = pageW;
-    const imgH      = (canvas.height * pageW) / canvas.width;
+    const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
 
-    let heightLeft = imgH;
-    let position   = 0;
-    pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-    heightLeft -= pageH;
-    while (heightLeft > 0) {
-      position  -= pageH;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgW, imgH);
-      heightLeft -= pageH;
+    for (let i = 0; i < paginas.length; i++) {
+      const canvas = await html2canvas(paginas[i], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      if (i > 0) pdf.addPage();
+      // Cada página del informe ya tiene proporción A4, así que entra completa.
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageH);
     }
 
     const dataUri = pdf.output('datauristring');
