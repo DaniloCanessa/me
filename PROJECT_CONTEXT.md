@@ -1,6 +1,8 @@
 # Mercado Energy — Contexto del Proyecto
 
-> Última actualización: 23 de agosto 2026 (sesión 33 — **simulaciones guardadas e informe rediseñado**: reabrir una simulación con `?simulacion=<id>` para corregir inputs o cambiar el kit (guardar crea versión nueva, nunca sobrescribe) + el autocompletado ofrece retomar una simulación previa; **informe PDF de exactamente 2 páginas** con paginación real (captura por página, no un lienzo cortado a ciegas), cabecera fotográfica, generación-vs-consumo, balance energético en 1/3+2/3, banda azul de KPIs y bloque de comparación de la cuenta cuando hay equipos proyectados; se elimina la "cobertura solar" (saturaba en la fracción diurna: era un parámetro del modelo disfrazado de resultado). **Dos bugs de dato al cliente:** las boletas `BT1-T6` caían como tarifa desconocida pero se pintaban en verde "Tarifa adecuada" → `normalizeTarifa()`; y el informe de **empresa** ignoraba el toggle de equipos proyectados, así que la pantalla mostraba una cosa y el PDF otra. **Todo commiteado y desplegado** — `0f6689a`, `cea367f`, `82b8dc0`, `f526882`. Sin migraciones nuevas.)
+> Última actualización: 23 de agosto 2026 (sesión 34 — **catálogo de paneles**: el panel pasa a ser entidad propia (`solar_panels`: marca, potencia, peso, ancho, largo, espesor) y cada kit apunta a uno vía `products.panel_id`. **La potencia del kit deja de escribirse a mano y se deriva** (paneles × W del panel), igual que los m² (medidas reales del panel + 2 cm por lado). Sección nueva `/admin/paneles` con matriz kits × paneles por checkbox, columnas ordenadas por potencia, y bloqueo de borrado nombrando los kits a reasignar. En las specs de cada kit solo se edita la cantidad de paneles: kWp y m² se recalculan en vivo (en la ficha completa y en el modal del listado). Los nombres comerciales se conservan; cuando la diferencia supera 0,25 kW el informe muestra ambas — *PFV 8,8 kW (8,4 kW)*. **Motivo:** `pfv-8.8kw` tenía 12 paneles y 8,8 kWp declarados (12×550=6,6 · 12×700=8,4), y la simulación generaba con 8,8 → sobreestimaba el ahorro ~4,8 %. Migración `supabase/paneles.sql` **ya corrida**; catálogo migrado a **Astroenergy 700 W** (2384×1303×33 mm, 38 kg) con cantidades ajustadas por el usuario. Commits `201c6cd`, `acb24c4`, `95d0406`. 🔴 **Efecto colateral: al guardar un kit el precio se recalcula desde `costo_proveedor_clp × margen_pct`** y se sobrescribieron 5 precios — ver "PARA RETOMAR".)
+>
+> Sesión 33 — **simulaciones guardadas e informe rediseñado**: reabrir una simulación con `?simulacion=<id>` para corregir inputs o cambiar el kit (guardar crea versión nueva, nunca sobrescribe) + el autocompletado ofrece retomar una simulación previa; **informe PDF de exactamente 2 páginas** con paginación real (captura por página, no un lienzo cortado a ciegas), cabecera fotográfica, generación-vs-consumo, balance energético en 1/3+2/3, banda azul de KPIs y bloque de comparación de la cuenta cuando hay equipos proyectados; se elimina la "cobertura solar" (saturaba en la fracción diurna: era un parámetro del modelo disfrazado de resultado). **Dos bugs de dato al cliente:** las boletas `BT1-T6` caían como tarifa desconocida pero se pintaban en verde "Tarifa adecuada" → `normalizeTarifa()`; y el informe de **empresa** ignoraba el toggle de equipos proyectados, así que la pantalla mostraba una cosa y el PDF otra. **Todo commiteado y desplegado** — `0f6689a`, `cea367f`, `82b8dc0`, `f526882`. Sin migraciones nuevas.)
 >
 > Sesión 32 — **rediseño del sistema de facturas estilo ERP**: módulo único `/admin/facturas` con pestañas Compras · Ventas · Cobranza · Conciliación; ingreso de compras por **XML del DTE** (sin OCR); **plan de cuentas editable** con clasificación obligatoria y memoria por proveedor; **el proyecto deja de pedirse al ingresar** y pasa a ser centro de costo opcional; **anti-duplicados** por RUT+folio+tipo; **estado de pago y cobranza automática** de facturas de venta; **conciliación de ventas documento por documento** + veredicto del mes; balance desglosado por cuenta. Commits `db53ce7`, `9488632`, `24f25e1`, `47bfbfe` — **desplegados en la sesión 33**. Migraciones `supabase/facturas_v2.sql` y `supabase/simulaciones.sql` **ya corridas por el usuario**.
 >
@@ -14,8 +16,12 @@
 
 **Sesiones 17 a 24 completadas, commiteadas y desplegadas.** Sesión 23: `c0bb683` redirects 301 + PWA, `3c21cfc` ícono PWA, `9088990` responsive listas, `360a378` responsive detalle. **Sesión 24:** `2aad819` flujo de captura de gastos + `874fc1a` enlace "ver boleta" + `5b4d522` 301 del `.vercel.app` al dominio nuevo (cambio de dominio en vivo). Requiere la migración `supabase/expense_captures.sql` (ya ejecutada por el usuario). **Sesión 25:** `ed03406` contraste móvil (light-only), `dd84b23` seguridad (sesión 12h + rate-limits + fix relay `send-report`), `29a98af` política de contraseñas. **Sesión 26:** `33ab4b6` badge de gastos pendientes, `5828c67` módulo de Finanzas + gastos generales manuales (requiere la migración `supabase/finanzas_gastos_generales.sql`, ya ejecutada por el usuario; **el usuario revisa el P&L con datos reales mañana**). **Sesión 27:** `d244580` correo diario de licitaciones (heartbeat los días sin novedades), `f77608d` preview de PDF + lightbox en la revisión de gastos, `1ca96d7` extrapolación estacional del consumo residencial (sin migraciones). Los 3 commiteados y desplegados. **`9e64c54`** corrige la coherencia del Paso de revisión con la estacionalidad y **`cdf14a9`** agrega el respaldo de cron por GitHub Actions + hardening del heartbeat (ver bloque de la sesión 27). **El cron de Vercel (Hobby) no se disparó la mañana del 16 jun** → se montó respaldo en GitHub Actions y se **rotó `CRON_SECRET`** (nuevo valor en Vercel Production + secreto de repo de GitHub; verificado verde por el usuario). La estacionalidad se **verificó en local** (función real `extrapolateSeasonalKWh`) **y en la UI real** (Chrome headless por CDP, wizard residencial completo): con un solo mes (abril=390) reproduce el ejemplo del modelo (media 408 · jul 466 · dic 370 · total ≈4.890 · peak julio); el mes ingresado se conserva exacto y los 11 faltantes salen estimados. **Sesión 28:** `d47e8e1` "Atención a" en clientes empresa + RUT/atención en el PDF de cotización (migración `supabase/cliente_atencion_rut_cotizacion.sql`, **ya ejecutada y verificada por el usuario**, desplegado). **Sesión 29 (21 jun):** Simulador con lógica de **PFV existente** (saldo de empalme / complemento / mantención) **commiteado y desplegado** (`9848928`) tras revisión del usuario — `tsc` y build limpios, verificado en la UI por CDP. Fotos de proyectos **comprimidas y desplegadas** (`0a9d88b`): casa-carlos-alvarado 9 MB→677 KB, panaderia-san-bernardo 3 MB→820 KB, poroma-img 3,6 MB→628 KB. **Sesión 30 (21-24 jun) — MÓDULO TRIBUTARIO F29 COMPLETO (13 commits SIN PUSHEAR, ver bloque sesión 30):** primero se validó el P&L de caja con datos reales (se corrigieron 2 datos en Supabase: comisión Transbank $99.151 → gasto general cat. Comisiones; duplicado Sodimac eliminado) y se agregó categoría al aprobar gasto general (`1876a13`). Luego el F29: facturas de venta (`5bd571b`), planilla F29 mensual (`6d2090d`), ciclo anticipo→factura (`2df6e5e`), Conciliación SII que importa el RCV del SII y cruza contra la app (`6ae247d`, `5a53bb3`), registro de gasto general + activo fijo desde la conciliación (`6acd8ad`), verificación del remanente + F29 oficial + fix de notas de crédito (`c7972bf`), cuadratura del balance (`42708fc`), export a Excel (`a7399bd`). **HALLAZGO CLAVE:** el crédito/débito del F29 deben salir del **RCV del SII** (CSV que el usuario descarga), NO de `project_purchases` — ver memoria [[f29-reconciliacion-real]]. Datos 2026 ene–may + F29 oficial cargados en Supabase (punto de partida). La verificación del remanente **flagueó marzo 2026** ($7.006 de remanente que febrero no dejó — revisar con contador). **Todo verificado end-to-end contra datos reales; NADA desplegado aún (el usuario revisa en local).**
 
-**▶ PARA RETOMAR (sesión 34):**
-0. 🔴 **BUG DE PRECIO EN EL CATÁLOGO DE KITS — afecta cotizaciones reales.** `pfv-11kw` ($13.200.000) y `pfv-13.9kw` ($16.680.000) siguen al precio original de **$1.200.000/kWp**, mientras el resto bajó a ~$631.059/kWp. El precio **se duplica** al pasar del kit de 10 kW al de 11 kW. Corregir antes de cotizar cualquier planta sobre 10 kW.
+**▶ PARA RETOMAR (sesión 35):**
+0. 🔴 **`pfv-2.2kw-battery` quedó en $439.530 — más barato que el mismo kit SIN batería ($2.287.815).** Su `costo_proveedor_clp` es $338.100, que no puede ser correcto (un módulo de batería solo ya son ~$1.500.000 en la config). El costo malo estaba desde antes; salió a la luz al guardar el kit, porque **el precio se recalcula desde `costo_proveedor_clp × margen_pct`** (campo oculto `base_price_clp` en `ProductEditForm`/`ProductsManager`). ⚠️ **Supabase es la misma base en local y producción, así que ese precio ya está vivo en el sitio** — no depende del despliegue.
+0a. 🔴 **Otros 4 precios se sobrescribieron** al ajustar las cantidades de paneles (sesión 34), por el mismo recálculo: `pfv-11kw-battery` 17.700.000 → 13.703.300 · `pfv-3.3kw-battery` 5.460.000 → 6.138.352 · `pfv-13.9kw` 16.680.000 → 16.900.000 · `pfv-11kw` 13.200.000 → 13.000.000. Validar los cuatro contra la lista de precios real. **Considerar avisar en la UI cuando guardar vaya a cambiar el precio**, porque hoy ocurre en silencio al editar cualquier otro campo.
+0b. 🔴 **La anomalía de precio del 11 y 13,9 kW persiste, ahora en el costo:** `pfv-11kw` tiene costo $10.000.000 (30 % margen) contra $5.634.454 del kit de 10 kW. En $/kWp real: 10 kW = $643.938 vs 11 kW = $1.238.095. Sigue duplicándose entre un escalón y el siguiente.
+0c. **Kits cuyo nombre comercial ya no calza con lo real** (se muestran con paréntesis en el informe): `pfv-11kw` = 15 paneles → **10,5 kW** y `pfv-1.1kw` = 2 paneles → **1,4 kW**. Con paneles de 700 W no hay forma de llegar a 1,1 kW (1 panel = 0,7; 2 = 1,4): ese kit conviene renombrarlo o darlo de baja.
+0d. **Panel de 550 W eliminado del catálogo** en la sesión 34: hoy los 14 kits usan Astroenergy 700 W. Si vuelve a haber stock de 550, se re-crea en `/admin/paneles` y se reasignan los kits que corresponda.
 0b. ✅ **Migraciones al día:** `supabase/facturas_v2.sql` y `supabase/simulaciones.sql` **ya corridas y verificadas por el usuario** (la limpieza de duplicados dejó 0 filas; `simulaciones.sql` recuperó 2 simulaciones). El módulo `/admin/facturas` y las simulaciones guardadas están operativos y desplegados.
 0c. **Rediseño del catálogo de kits (pospuesto por el usuario, "tengo que pensar más cómo quiero trabajar con eso"):** pasar de 550 W a **paneles de 700 W**, con panel activo configurable, kit definido por cantidad de paneles, catálogo de inversores con ratio DC/AC y precio compuesto. **Falta que el usuario defina:** modelo y dimensiones del panel de 700 W, catálogo de inversores y ratio DC/AC objetivo.
 0d. **Limpieza de datos en facturas (sesión 32, sin hacer):** reclasificar las compras de junio (el backfill las dejó todas como "Materiales y equipos"); corregir la factura de la Universidad de Chile (total $39.960 con neto e IVA en 0 — es exenta); cargar la fecha de compromiso de pago de Aleol; y cosmético, `origen` muestra "OCR" en facturas que en realidad vinieron del RCV.
@@ -378,7 +384,7 @@ Contribuyente: **BIZNEXUS GROUP SPA, RUT 77.958.683-9**, Régimen **Pro PyME 14D
   - Cita legal corregida: "Ley 20.936" → "Art. 149 bis DFL 4 — Ley 21.118"
   - Botón "Descargar PDF" del modal en azul de marca
 - **Precios "+ IVA" (netos, sin cambiar cálculos):** etiqueta en Paso 7 (tarjeta PFV + bloque CTA) e informe (tarjeta kit + comparación A/B/C) + nota metodológica "Los precios indicados son netos y no incluyen IVA"
-- **Config actualizada por el usuario en `/admin/config`:** panel 550 Wp → **650 Wp**, área 2,5 → **2,7 m²**. Solo afecta dimensionamiento de **empresas** (`buildBusinessKit`); los kits residenciales tienen specs propios en `products` (siguen en base 550 Wp — decisión consciente, no se regeneró el catálogo)
+- **Config actualizada por el usuario en `/admin/config`:** panel 550 Wp → **650 Wp**, área 2,5 → **2,7 m²**. Solo afecta dimensionamiento de **empresas** (`buildBusinessKit`); los kits residenciales tienen specs propios en `products` (siguen en base 550 Wp — decisión consciente, no se regeneró el catálogo). **Superado en la sesión 34:** los kits residenciales ahora derivan su potencia del panel asignado en `solar_panels` (hoy Astroenergy 700 W), no de esta config. `panelWattageWp`/`panelAreaM2` de `/admin/config` quedan aplicando **solo a empresas**
 
 **Desarrollos sesión 7 (24 abril 2026) — Cotizador + catálogo + flujo lead:**
 
@@ -863,29 +869,46 @@ export const DFL4 = {
 
 ## Catálogo PFV Residencial
 
+> ⚠️ La tabla de abajo es el **estado real en Supabase al 23 ago 2026** (sesión 34).
+> Desde esa sesión **los kWp y los m² NO se escriben**: se derivan de `paneles ×
+> potencia del panel` y de las medidas del panel asignado. Lo único editable en las
+> specs de un kit es la cantidad de paneles. El respaldo en código (`KIT_CATALOG` en
+> `lib/constants.ts`) solo se usa si la base no responde, y tiene precios distintos.
+
+**Panel en uso:** Astroenergy **700 W** — 2384 × 1303 × 33 mm, 38 kg.
+Se administra en `/admin/paneles` (tabla `solar_panels` + `products.panel_id`).
+El panel de 550 W se eliminó del catálogo; si vuelve a haber stock, se re-crea ahí.
+
 ### Sin batería
-| ID | kWp | Paneles | Área | Precio ref. |
-|---|---|---|---|---|
-| pfv-1.1kw  | 1.1  | 2  | 5 m²  | $1.320.000 |
-| pfv-2.2kw  | 2.2  | 4  | 10 m² | $2.640.000 |
-| pfv-3.3kw  | 3.3  | 6  | 15 m² | $3.960.000 |
-| pfv-5.5kw  | 5.5  | 10 | 25 m² | $6.600.000 |
-| pfv-6.6kw  | 6.6  | 12 | 30 m² | $7.920.000 |
-| pfv-8.8kw  | 8.8  | 16 | 40 m² | $10.560.000 |
-| pfv-10kw   | 10   | 18 | 45 m² | $12.000.000 |
-| pfv-11kw   | 11   | 20 | 50 m² | $13.200.000 |
-| pfv-13.9kw | 13.9 | 26 | 65 m² | $16.680.000 |
+| ID | Nombre comercial | Paneles | kWp reales | m² | Precio ref. |
+|---|---|---|---|---|---|
+| pfv-1.1kw  | 1.1 kW  | 2  | **1.4**  | 7  | $2.246.219 |
+| pfv-2.2kw  | 2.2 kW  | 3  | 2.1      | 10 | $2.287.815 |
+| pfv-3.3kw  | 3.3 kW  | 5  | 3.5      | 16 | $3.078.151 |
+| pfv-5.5kw  | 5.5 kW  | 8  | 5.6      | 26 | $4.445.319 |
+| pfv-6.6kw  | 6.6 kW  | 9  | 6.3      | 29 | $5.609.411 |
+| pfv-8.8kw  | 8.8 kW  | 12 | **8.4**  | 39 | $6.014.118 |
+| pfv-10kw   | 10 kW   | 14 | 9.8      | 46 | $6.310.588 |
+| pfv-11kw   | 11 kW   | 15 | **10.5** | 49 | $13.000.000 |
+| pfv-13.9kw | 13.9 kW | 20 | 14.0     | 65 | $16.900.000 |
 
 ### Con batería
-| ID | kWp | Batería | Precio ref. |
-|---|---|---|---|
-| pfv-2.2kw-battery  | 2.2 | 5 kWh  | $4.140.000 |
-| pfv-3.3kw-battery  | 3.3 | 5 kWh  | $5.460.000 |
-| pfv-5.5kw-battery  | 5.5 | 10 kWh | $9.600.000 |
-| pfv-8.8kw-battery  | 8.8 | 10 kWh | $13.560.000 |
-| pfv-11kw-battery   | 11  | 15 kWh | $17.700.000 |
+| ID | Nombre comercial | Paneles | kWp reales | m² | Precio ref. |
+|---|---|---|---|---|---|
+| pfv-2.2kw-battery | 2.2 kW | 3  | 2.1      | 10 | **$439.530** 🔴 |
+| pfv-3.3kw-battery | 3.3 kW | 5  | 3.5      | 16 | $6.138.352 |
+| pfv-5.5kw-battery | 5.5 kW | 8  | 5.6      | 26 | $6.908.000 |
+| pfv-8.8kw-battery | 8.8 kW | 12 | **8.4**  | 39 | $8.250.000 |
+| pfv-11kw-battery  | 11 kW  | 15 | **10.5** | 49 | $13.703.300 |
 
-**Panel estándar:** 550 Wp, 2,5 m² · **Precio base:** ~$1.200.000/kWp
+En **negrita** los kits cuyo nombre comercial difiere de lo real en más de 0,25 kW:
+el informe los muestra como *PFV 8,8 kW (8,4 kW)*. El resto es redondeo comercial y
+no se muestra. 🔴 = precio a corregir, ver "PARA RETOMAR".
+
+**Precio:** `base_price_clp` se **recalcula al guardar** como `costo_proveedor_clp ×
+(1 + margen_pct/100)`. Editar cualquier campo de un kit reescribe su precio; si el
+costo del proveedor está mal, el precio se corrompe en silencio.
+
 **Módulo de batería (escenario C):** 5 kWh, $1.500.000 CLP (hasta 6 módulos = 30 kWh)
 
 ### Empresas — Dimensionamiento continuo

@@ -128,7 +128,12 @@
       "Bash(grep -n \"stage === \\\\|^  //\\\\|^  return\\\\|^}\" components/simulator/BillOCRUpload.tsx)",
       "Bash(grep -n \"{/\\\\* ──\" components/simulator/SimulationReportHtml.tsx)",
       "Bash(command -v pdftoppm magick convert gswin64c gs)",
-      "Read(//c/Program Files/**)"
+      "Read(//c/Program Files/**)",
+      "mcp__plugin_vercel_vercel__list_deployments",
+      "Bash(netstat -ano)",
+      "Bash('+x.sku+')",
+      "Bash(node --env-file=.env.local -e ' *)",
+      "Read(//tmp/**)"
     ]
   }
 }
