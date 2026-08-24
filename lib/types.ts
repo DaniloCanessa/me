@@ -283,9 +283,31 @@ export interface SimulatorInput {
 
 // ─── Kit fotovoltaico ─────────────────────────────────────────────────────────
 
+/** Panel del catálogo. La potencia de los paneles cambia rápido (550 → 700 W…),
+ *  así que el panel es una entidad propia y los kits apuntan a uno. */
+export interface SolarPanel {
+  id: string;
+  nombre: string;
+  potenciaW: number;
+  pesoKg: number | null;
+  anchoMm: number;
+  largoMm: number;
+  espesorMm: number | null;
+}
+
 export interface SolarKit {
   id: string;
+  /** Potencia REAL, derivada de paneles × potencia del panel cuando el kit
+   *  tiene uno asignado. Es la que usan la generación, el payback y el filtro
+   *  contra el empalme. */
   sizekWp: number;
+  /** Potencia del NOMBRE COMERCIAL, que puede haber quedado atrás respecto de
+   *  los componentes: el kit "8,8 kW" hoy son 12 paneles de 700 W = 8,4 kWp.
+   *  Solo se usa para rotular; nunca para calcular. */
+  nominalKWp?: number;
+  /** Panel asignado. Ausente en kits del respaldo en código y en los de empresa,
+   *  que se dimensionan al vuelo. */
+  panel?: SolarPanel;
   includesBattery: boolean;
   batteryCapacityKWh?: number;
   panelCount: number;

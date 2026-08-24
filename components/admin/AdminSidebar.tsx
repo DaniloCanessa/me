@@ -19,6 +19,7 @@ const NAV_MAIN = [
 
 const NAV_CONFIG = [
   { href: '/admin/products', label: 'Productos',     icon: '☀️' },
+  { href: '/admin/paneles',  label: 'Paneles',       icon: '🔆' },
   { href: '/admin/config',   label: 'Configuración', icon: '⚙️' },
 ];
 
