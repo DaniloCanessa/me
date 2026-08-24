@@ -7,9 +7,12 @@ import {
   toggleProductActive,
   deleteProduct,
 } from '@/app/admin/products/actions';
+import { requiredSurfaceM2 } from '@/lib/constants';
+import type { SolarPanel } from '@/lib/types';
 
 interface Product {
   id: string;
+  panel_id?: string | null;
   name: string;
   sku: string;
   category: string;
@@ -55,29 +58,50 @@ function clp(n: number) {
 
 // ─── Formulario de specs según categoría ─────────────────────────────────────
 
-function SolarKitSpecs({ specs }: { specs?: Record<string, unknown> }) {
+function SolarKitSpecs({ specs, panel }: { specs?: Record<string, unknown>; panel?: SolarPanel | null }) {
+  // Igual que en la ficha completa: la cantidad de paneles es lo único editable
+  // y la potencia real y los m² se derivan del panel asignado al kit.
+  const [paneles, setPaneles] = useState<string>(String(specs?.panelCount ?? ''));
+  const n = parseInt(paneles) || 0;
+  const kWpReal = panel ? Math.round((n * panel.potenciaW) / 10) / 100 : null;
+  const m2      = panel ? requiredSurfaceM2(n, panel) : null;
+
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="text-xs text-gray-500 mb-1 block">Potencia (kWp)</span>
+          <span className="text-xs text-gray-500 mb-1 block">kW del nombre comercial</span>
           <input name="sizekWp" type="number" step="0.1" required
             defaultValue={specs?.sizekWp as number ?? ''}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
         </label>
         <label className="block">
           <span className="text-xs text-gray-500 mb-1 block">Cantidad de paneles</span>
-          <input name="panelCount" type="number" step="1" required
-            defaultValue={specs?.panelCount as number ?? ''}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-        </label>
-        <label className="block">
-          <span className="text-xs text-gray-500 mb-1 block">Área (m²)</span>
-          <input name="areaM2" type="number" step="0.5" required
-            defaultValue={specs?.areaM2 as number ?? ''}
+          <input name="panelCount" type="number" step="1" min="0" required
+            value={paneles} onChange={(e) => setPaneles(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
         </label>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="block">
+          <span className="text-xs text-gray-500 mb-1 block">Potencia real (kWp)</span>
+          <div className="w-full border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm font-semibold text-gray-900">
+            {kWpReal ?? '—'}
+          </div>
+        </div>
+        <div className="block">
+          <span className="text-xs text-gray-500 mb-1 block">Superficie (m²)</span>
+          <div className="w-full border border-gray-200 bg-white rounded-lg px-3 py-2 text-sm font-semibold text-gray-900">
+            {m2 ?? '—'}
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-1">
+        {panel
+          ? `Calculado con ${panel.nombre} de ${panel.potenciaW} W (${panel.largoMm} × ${panel.anchoMm} mm).`
+          : 'Este kit no tiene panel asignado, así que no se puede calcular.'}{' '}
+        <a href="/admin/paneles" className="text-[#1d65c5] font-semibold hover:underline">Paneles ↗</a>
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-xs text-gray-500 mb-1 block">¿Incluye batería?</span>
@@ -128,11 +152,14 @@ function BatterySpecs({ specs }: { specs?: Record<string, unknown> }) {
 
 function ProductModal({
   product,
+  panels,
   onClose,
   onSave,
   isPending,
 }: {
   product: Product | null;
+  /** Catálogo de paneles: de aquí sale el del kit para calcular kWp y m². */
+  panels: SolarPanel[];
   onClose: () => void;
   onSave: (formData: FormData) => void;
   isPending: boolean;
@@ -220,7 +247,9 @@ function ProductModal({
           {/* Specs dinámicos */}
           <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Especificaciones técnicas</p>
-            {category === 'solar_kit' && <SolarKitSpecs specs={product?.specs} />}
+            {category === 'solar_kit' && (
+              <SolarKitSpecs specs={product?.specs} panel={panels.find((p) => p.id === product?.panel_id) ?? null} />
+            )}
             {category === 'battery'   && <BatterySpecs  specs={product?.specs} />}
             {!['solar_kit', 'battery'].includes(category) && (
               <p className="text-xs text-gray-400">Sin specs adicionales para esta categoría.</p>
@@ -326,7 +355,7 @@ function ProductModal({
 
 // ─── Tabla principal ──────────────────────────────────────────────────────────
 
-export default function ProductsManager({ products }: { products: Product[] }) {
+export default function ProductsManager({ products, panels }: { products: Product[]; panels: SolarPanel[] }) {
   const [modalProduct, setModalProduct] = useState<Product | null | 'new'>('new' as never);
   const [showModal, setShowModal]       = useState(false);
 
@@ -378,6 +407,7 @@ export default function ProductsManager({ products }: { products: Product[] }) {
       {showModal && (
         <ProductModal
           product={modalProduct as Product | null}
+          panels={panels}
           onClose={closeModal}
           onSave={handleSave}
           isPending={isPending}

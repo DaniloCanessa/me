@@ -2,13 +2,40 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { requiredSurfaceM2 } from '@/lib/constants';
+import type { SolarPanel } from '@/lib/types';
 
-function buildSpecs(formData: FormData, category: string) {
+/** Panel asociado al kit, para derivar la superficie al guardar. */
+async function panelDeKit(productId: string | null): Promise<SolarPanel | null> {
+  if (!productId) return null;
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from('products')
+    .select('solar_panels ( id, nombre, potencia_w, peso_kg, ancho_mm, largo_mm, espesor_mm )')
+    .eq('id', productId)
+    .single();
+  const rel = (data as { solar_panels?: unknown } | null)?.solar_panels;
+  const r = (Array.isArray(rel) ? rel[0] : rel) as Record<string, number | string | null> | undefined;
+  if (!r) return null;
+  return {
+    id: String(r.id), nombre: String(r.nombre), potenciaW: Number(r.potencia_w),
+    pesoKg: r.peso_kg == null ? null : Number(r.peso_kg),
+    anchoMm: Number(r.ancho_mm), largoMm: Number(r.largo_mm),
+    espesorMm: r.espesor_mm == null ? null : Number(r.espesor_mm),
+  };
+}
+
+function buildSpecs(formData: FormData, category: string, panel?: SolarPanel | null) {
   if (category === 'solar_kit') {
+    const panelCount = parseInt(formData.get('panelCount') as string) || 0;
     return {
+      // El kWp del formulario es el del NOMBRE COMERCIAL. La potencia real se
+      // deriva del panel al leer el catálogo, no se guarda duplicada aquí.
       sizekWp:          parseFloat(formData.get('sizekWp') as string) || 0,
-      panelCount:       parseInt(formData.get('panelCount') as string) || 0,
-      areaM2:           parseFloat(formData.get('areaM2') as string) || 0,
+      panelCount,
+      // La superficie deja de tecleare: sale de las medidas del panel. Sin
+      // panel asignado cae a las de un 550 W, que es el respaldo histórico.
+      areaM2:           requiredSurfaceM2(panelCount, panel),
       includesBattery:  formData.get('includesBattery') === 'true',
       batteryCapacityKWh: formData.get('batteryCapacityKWh')
         ? parseFloat(formData.get('batteryCapacityKWh') as string)
@@ -36,7 +63,7 @@ export async function createProduct(formData: FormData) {
     category,
     customer_type:          formData.get('customer_type') as string,
     proveedor:              (formData.get('proveedor') as string) || null,
-    specs:                  buildSpecs(formData, category),
+    specs:                  buildSpecs(formData, category, null),
     costo_proveedor_clp:    parseFloat(formData.get('costo_proveedor_clp') as string) || 0,
     margen_pct:             margenRaw ? parseFloat(margenRaw) : null,
     base_price_clp:         parseFloat(formData.get('base_price_clp') as string) || 0,
@@ -57,13 +84,14 @@ export async function updateProduct(id: string, formData: FormData) {
   const db = getSupabaseAdmin();
 
   const margenRaw = formData.get('margen_pct') as string;
+  const panel = category === 'solar_kit' ? await panelDeKit(id) : null;
   const { error } = await db.from('products').update({
     name:                   formData.get('name') as string,
     sku:                    formData.get('sku') as string,
     category,
     customer_type:          formData.get('customer_type') as string,
     proveedor:              (formData.get('proveedor') as string) || null,
-    specs:                  buildSpecs(formData, category),
+    specs:                  buildSpecs(formData, category, panel),
     costo_proveedor_clp:    parseFloat(formData.get('costo_proveedor_clp') as string) || 0,
     margen_pct:             margenRaw ? parseFloat(margenRaw) : null,
     base_price_clp:         parseFloat(formData.get('base_price_clp') as string) || 0,

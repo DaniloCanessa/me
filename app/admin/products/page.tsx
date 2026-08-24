@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import ProductsManager from '@/components/admin/ProductsManager';
+import { getPanels } from '@/lib/db/panels';
+import type { SolarPanel } from '@/lib/types';
 
 export default async function ProductsPage() {
   const db = getSupabaseAdmin();
+
+  // Los paneles alimentan el cálculo en vivo de kWp y m² al editar un kit.
+  // Si la tabla no existe todavía, el catálogo igual tiene que poder abrirse:
+  // el formulario simplemente no calcula y lo dice.
+  let panels: SolarPanel[] = [];
+  try { panels = await getPanels(); } catch { panels = []; }
 
   // Supabase devuelve máximo 1000 filas por request: paginamos para traer
   // el catálogo completo (los solar_kit son la última categoría alfabética
@@ -38,7 +46,7 @@ export default async function ProductsPage() {
           ↑ Importar desde Excel
         </Link>
       </div>
-      <ProductsManager products={data ?? []} />
+      <ProductsManager products={data ?? []} panels={panels} />
     </div>
   );
 }
