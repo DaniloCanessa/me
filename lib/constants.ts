@@ -84,13 +84,51 @@ export const SOLAR_DEFAULTS = {
 };
 
 /**
+ * Los kW con que se NOMBRA un kit. Los nombres comerciales se mantienen aunque
+ * cambie la tecnología del panel: el kit "PFV 8,8 kW" pasó de 16 × 550 W a
+ * 12 × 700 W y hoy son 8,4 kWp reales, pero se sigue llamando igual.
+ *
+ * Usar esto para rotular el producto (tarjetas de escenario, cotización) y
+ * `kit.sizekWp` para todo lo que hable de energía, que es la potencia real.
+ */
+export function kitNombreKW(kit: { nominalKWp?: number; sizekWp: number }): number {
+  return kit.nominalKWp ?? kit.sizekWp;
+}
+
+/**
+ * Diferencia (kW) a partir de la cual el informe muestra la potencia real junto
+ * al nombre comercial.
+ *
+ * Por debajo es redondeo: 18 paneles × 550 W = 9,9 kW y el kit se llama
+ * "10 kW"; agregar "(9,9 kW)" es ruido. Por encima hay una divergencia que el
+ * cliente nota al multiplicar lo que lee en el mismo recuadro: 12 × 700 W =
+ * 8,4 kW en el kit llamado "8,8 kW".
+ */
+export const KWP_TOLERANCIA_NOMBRE = 0.25;
+
+/** True si conviene mostrar la potencia real además del nombre comercial. */
+export function mostrarPotenciaReal(kit: { nominalKWp?: number; sizekWp: number }): boolean {
+  if (kit.nominalKWp == null) return false;
+  return Math.abs(kit.nominalKWp - kit.sizekWp) > KWP_TOLERANCIA_NOMBRE;
+}
+
+/**
  * Superficie de montaje necesaria (m²) para instalar N paneles.
  * Se calcula con las dimensiones reales del panel más 2 cm de separación por
  * lado (alto y ancho), que es el espacio mínimo entre paneles/estructura.
+ *
+ * Si el kit tiene un panel del catálogo se usan SUS medidas; el respaldo son
+ * las de un panel de 550 W, que es lo único que había antes de que el panel
+ * fuera una entidad configurable.
  */
-export function requiredSurfaceM2(panelCount: number): number {
+export function requiredSurfaceM2(
+  panelCount: number,
+  panel?: { anchoMm: number; largoMm: number } | null,
+): number {
   const { panelHeightM, panelWidthM, panelSideMarginM } = SOLAR_DEFAULTS;
-  const perPanelM2 = (panelHeightM + 2 * panelSideMarginM) * (panelWidthM + 2 * panelSideMarginM);
+  const altoM  = panel ? panel.largoMm / 1000 : panelHeightM;
+  const anchoM = panel ? panel.anchoMm / 1000 : panelWidthM;
+  const perPanelM2 = (altoM + 2 * panelSideMarginM) * (anchoM + 2 * panelSideMarginM);
   return Math.round(panelCount * perPanelM2);
 }
 

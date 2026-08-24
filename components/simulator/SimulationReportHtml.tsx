@@ -5,7 +5,7 @@ import type {
   BusinessContact,
   SimulatorResult,
 } from '@/lib/types';
-import { SOLAR_DEFAULTS, CHILE_BT1, requiredSurfaceM2 } from '@/lib/constants';
+import { SOLAR_DEFAULTS, CHILE_BT1, requiredSurfaceM2, kitNombreKW, mostrarPotenciaReal } from '@/lib/constants';
 import { runTariffAnalysis } from '@/lib/tariffAnalysis';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -288,6 +288,15 @@ export default function SimulationReportHtml({
 
   const { kit, batteryCapacityKWh, energyBalance, financial, environmental, region } = recommended;
 
+  // Potencia comercial vs real. El nombre de los kits se mantiene aunque la
+  // tecnología del panel cambie (12 × 700 W = 8,4 kW se sigue llamando "8,8"),
+  // así que se muestran las dos cuando no coinciden. `kit.sizekWp` es SIEMPRE
+  // la real: es la que alimenta la generación y el payback.
+  const potenciaComercial   = kitNombreKW(kit);
+  const potenciaRealDifiere = mostrarPotenciaReal(kit);
+  const etiquetaKW          = `${potenciaComercial} kW`;
+  const potenciaPanelW      = kit.panel?.potenciaW ?? SOLAR_DEFAULTS.panelWattage;
+
   // Lo que paga hoy: la cuenta simulada menos lo que aportan los equipos que
   // todavía no tiene, al mismo precio por kWh que usa el resto del informe.
   const precioKWh = recommended.input.energyPrice?.kWhPriceCLP ?? CHILE_BT1.referenceKWhPriceCLP;
@@ -515,19 +524,28 @@ export default function SimulationReportHtml({
             >
               Recomendado
             </div>
+            {/* El nombre comercial se conserva y la potencia real va entre
+                paréntesis cuando difiere: el kit "8,8 kW" son 12 paneles de
+                700 W = 8,4 kWp, y el cliente que multiplica lo que lee más
+                abajo tiene que llegar al mismo número. */}
             <div style={{ fontSize: 24, fontWeight: 700, color: C.brand, lineHeight: 1.1 }}>
-              PFV {kit.sizekWp} kW
+              PFV {etiquetaKW}
+              {potenciaRealDifiere && (
+                <span style={{ fontSize: 15, fontWeight: 600, color: C.gray }}> ({kit.sizekWp} kW)</span>
+              )}
             </div>
             <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 9 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>{kit.panelCount} paneles</div>
-              <div style={{ fontSize: 9, color: C.gray, marginTop: 1 }}>de {SOLAR_DEFAULTS.panelWattage} W cada uno</div>
+              <div style={{ fontSize: 9, color: C.gray, marginTop: 1 }}>
+                de {potenciaPanelW} W cada uno{kit.panel ? ` · ${kit.panel.nombre}` : ''}
+              </div>
             </div>
             {/* Superficie y batería comparten fila: apiladas, el escenario con
                 batería crecía lo suficiente para empujar el precio fuera de la
                 página. Así el recuadro mide igual con o sin batería. */}
             <div style={{ marginTop: 10, display: 'flex', gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>{requiredSurfaceM2(kit.panelCount)} m²</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>{requiredSurfaceM2(kit.panelCount, kit.panel)} m²</div>
                 <div style={{ fontSize: 9, color: C.gray, marginTop: 1 }}>de superficie</div>
               </div>
               {batteryCapacityKWh > 0 && (
@@ -711,7 +729,7 @@ export default function SimulationReportHtml({
                       Escenario {key}
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, textAlign: 'center', marginBottom: 2 }}>
-                      PFV {r!.kit.sizekWp} kW
+                      PFV {kitNombreKW(r!.kit)} kW
                     </div>
                     <div style={{ fontSize: 9, color: C.gray, textAlign: 'center', marginBottom: 10 }}>
                       {r!.batteryCapacityKWh > 0

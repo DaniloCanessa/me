@@ -16,7 +16,7 @@ import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBat
 import { getRegionById } from '@/lib/regions';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
-import { CHILE_BT1, SOLAR_DEFAULTS, DFL4, requiredSurfaceM2 } from '@/lib/constants';
+import { CHILE_BT1, SOLAR_DEFAULTS, DFL4, requiredSurfaceM2, kitNombreKW, mostrarPotenciaReal } from '@/lib/constants';
 import QuoteFromSimulation from './QuoteFromSimulation';
 import SaveSimulation from './SaveSimulation';
 import type { BoletaArchivadaLocal } from './BillOCRUpload';
@@ -1019,7 +1019,7 @@ export default function StepResults({ state, config, catalog, adminMode = false,
       paybackYears:      r.financial.paybackYears,
       coveragePercent:   r.energyBalance.coveragePercent,
       panelCount:        r.kit.panelCount,
-      areaM2:            requiredSurfaceM2(r.kit.panelCount),
+      areaM2:            requiredSurfaceM2(r.kit.panelCount, r.kit.panel),
       batteryKWh:        r.batteryCapacityKWh > 0 ? r.batteryCapacityKWh : undefined,
     });
 
@@ -1404,9 +1404,9 @@ export default function StepResults({ state, config, catalog, adminMode = false,
               .filter((s) => s !== 'B' || activeScenarios.kitB !== null)
               .map((s) => {
                 const meta = {
-                  A: { title: `PFV ${activeScenarios.kitA.sizekWp} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'A' ? 'Recomendado' : 'Kit mayor', badgeColor: effectiveRecommended === 'A' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
-                  B: { title: `PFV ${activeScenarios.kitB?.sizekWp} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'B' ? 'Recomendado' : 'Más económico', badgeColor: effectiveRecommended === 'B' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
-                  C: { title: `PFV ${activeScenarios.C.kit.sizekWp} kW`, sub: 'Con baterías', badge: effectiveRecommended === 'C' ? 'Recomendado' : 'Con baterías', badgeColor: effectiveRecommended === 'C' ? 'bg-[#1d65c5]' : 'bg-amber-500' },
+                  A: { title: `PFV ${kitNombreKW(activeScenarios.kitA)} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'A' ? 'Recomendado' : 'Kit mayor', badgeColor: effectiveRecommended === 'A' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
+                  B: { title: `PFV ${activeScenarios.kitB ? kitNombreKW(activeScenarios.kitB) : "—"} kW`, sub: 'Sin batería', badge: effectiveRecommended === 'B' ? 'Recomendado' : 'Más económico', badgeColor: effectiveRecommended === 'B' ? 'bg-[#1d65c5]' : 'bg-gray-500' },
+                  C: { title: `PFV ${kitNombreKW(activeScenarios.C.kit)} kW`, sub: 'Con baterías', badge: effectiveRecommended === 'C' ? 'Recomendado' : 'Con baterías', badgeColor: effectiveRecommended === 'C' ? 'bg-[#1d65c5]' : 'bg-amber-500' },
                 }[s];
                 const isActive = effectiveScenario === s;
                 const activeBorder = s === 'C' ? 'border-amber-400 bg-amber-500' : 'border-[#389fe0] bg-[#1d65c5]';
@@ -1494,8 +1494,8 @@ export default function StepResults({ state, config, catalog, adminMode = false,
                 value={batteryPlant}
                 onChange={setBatteryPlant}
                 options={[
-                  { value: 'recommended', label: `Recomendada · ${activeScenarios.kitA.sizekWp} kW` },
-                  { value: 'economic',    label: `Más económica · ${activeScenarios.kitB.sizekWp} kW` },
+                  { value: 'recommended', label: `Recomendada · ${kitNombreKW(activeScenarios.kitA)} kW` },
+                  { value: 'economic',    label: `Más económica · ${kitNombreKW(activeScenarios.kitB)} kW` },
                 ]}
               />
             </div>
@@ -1579,9 +1579,20 @@ export default function StepResults({ state, config, catalog, adminMode = false,
                   ? (effectiveRecommended === 'B' ? 'Recomendado' : 'Opción económica')
                   : 'Recomendado'}
             </span>
-            <p className="font-semibold text-gray-900 mt-1.5">PFV {activeResult.kit.sizekWp} kW</p>
+            {/* Nombre comercial + potencia real entre paréntesis cuando el
+                panel del kit no da el número del nombre (12 × 700 W = 8,4 kW
+                en el kit llamado "8,8"). El cálculo usa siempre la real. */}
+            <p className="font-semibold text-gray-900 mt-1.5">
+              PFV {kitNombreKW(activeResult.kit)} kW
+              {mostrarPotenciaReal(activeResult.kit) && (
+                <span className="font-medium text-gray-500"> ({activeResult.kit.sizekWp} kW)</span>
+              )}
+            </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {activeResult.kit.panelCount} paneles · {requiredSurfaceM2(activeResult.kit.panelCount)} m² de superficie
+              {activeResult.kit.panelCount} paneles
+              {activeResult.kit.panel && ` de ${activeResult.kit.panel.potenciaW} W`}
+              {' · '}
+              {requiredSurfaceM2(activeResult.kit.panelCount, activeResult.kit.panel)} m² de superficie
               {activeResult.batteryCapacityKWh > 0 && (
                 <> · {activeResult.batteryCapacityKWh} kWh batería</>
               )}
@@ -1658,8 +1669,8 @@ export default function StepResults({ state, config, catalog, adminMode = false,
             escenario={isResidential ? effectiveScenario : 'empresa'}
             escenarioLabel={
               activeResult.batteryCapacityKWh > 0
-                ? `PFV ${activeResult.kit.sizekWp} kW con ${activeResult.batteryCapacityKWh} kWh de batería`
-                : `PFV ${activeResult.kit.sizekWp} kW sin batería`
+                ? `PFV ${kitNombreKW(activeResult.kit)} kW con ${activeResult.batteryCapacityKWh} kWh de batería`
+                : `PFV ${kitNombreKW(activeResult.kit)} kW sin batería`
             }
             kitSizeKWp={activeResult.kit.sizekWp}
             kitPanelCount={activeResult.kit.panelCount}
@@ -1693,7 +1704,7 @@ export default function StepResults({ state, config, catalog, adminMode = false,
               Este sistema generará ~<strong>{Math.round(activeResult.energyBalance.totalProductionKWh / activeResult.energyBalance.totalConsumptionKWh * 100)}%</strong> de tu consumo anual.
               El excedente se inyecta a la red al 50% del valor de compra, lo que alarga el retorno de inversión.
               {isResidential && activeScenarios?.kitB
-                ? ` Considera el kit B de ${activeScenarios.kitB.sizekWp} kW, que cubre mejor tu consumo real con mejor retorno.`
+                ? ` Considera el kit B de ${kitNombreKW(activeScenarios.kitB)} kW, que cubre mejor tu consumo real con mejor retorno.`
                 : ' Si no planeas agregar equipos eléctricos próximamente, considera un sistema de menor tamaño.'}
             </p>
           </div>
