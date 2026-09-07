@@ -537,7 +537,7 @@ export default function SimulationReportHtml({
             <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 9 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: C.dark }}>{kit.panelCount} paneles</div>
               <div style={{ fontSize: 9, color: C.gray, marginTop: 1 }}>
-                de {potenciaPanelW} W cada uno{kit.panel ? ` · ${kit.panel.nombre}` : ''}
+                de {potenciaPanelW} W cada uno
               </div>
             </div>
             {/* Superficie y batería comparten fila: apiladas, el escenario con
