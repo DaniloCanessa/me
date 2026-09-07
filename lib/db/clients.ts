@@ -116,3 +116,49 @@ export async function getClientsForSimulator(): Promise<SimulatorClientOption[]>
     simulations:   simsPorCliente.get(c.id) ?? [],
   }));
 }
+
+// ─── Anti-duplicados al guardar desde el simulador ───────────────────────────
+//
+// Guardar una simulación o crear una cotización pueden crear la ficha, así que
+// antes hay que decidir si el nombre que se escribió a mano ya existe en el
+// CRM. El email es el dato más confiable, pero **no alcanza por sí solo**: en
+// el back-office es normal poner el correo propio cuando no se tiene el del
+// cliente, y con la regla anterior ("mismo email = mismo cliente") todo lo del
+// tercero quedaba colgando de la ficha del dueño del correo — la simulación de
+// William Sarmiento terminó bajo Danilo Canessa (7 sep 2026). Ahora el email
+// solo cuenta si el nombre además calza; si no, son dos personas distintas.
+
+const normNombre = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** ¿Es plausible que ambos nombres sean la misma persona? */
+export function mismoNombre(a: string, b: string): boolean {
+  const x = normNombre(a);
+  const y = normNombre(b);
+  if (!x || !y) return false;
+  // Uno contenido en el otro cubre "William Sarmiento" vs "William Sarmiento
+  // Pérez" o la razón social escrita a medias, sin unir a dos personas que solo
+  // comparten el correo.
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+export async function findClienteExistente(
+  nombre: string,
+  email?: string | null,
+): Promise<string | null> {
+  const db = getSupabaseAdmin();
+  const { data } = await db.from('clients').select('id, nombre, email');
+  const filas = (data ?? []) as Array<{ id: string; nombre: string; email: string | null }>;
+  const mail = (email ?? '').trim().toLowerCase();
+
+  // 1) Email + nombre compatible: es la misma persona.
+  if (mail) {
+    const porEmail = filas.find(
+      (c) => (c.email ?? '').trim().toLowerCase() === mail && mismoNombre(c.nombre, nombre));
+    if (porEmail) return porEmail.id;
+  }
+  // 2) Nombre exacto: escribió el nombre en vez de elegirlo de la lista.
+  const porNombre = filas.find((c) => normNombre(c.nombre) === normNombre(nombre));
+  return porNombre?.id ?? null;
+}

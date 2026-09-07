@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getAdminUser } from '@/lib/auth';
 import { findSimulacionDeLaMismaBoleta, type SimulacionPrevia } from '@/lib/db/simulations';
+import { findClienteExistente } from '@/lib/db/clients';
 import type { SimulationClientData } from '@/app/admin/quotes/actions';
 
 // ─── Guardar una simulación ──────────────────────────────────────────────────
@@ -64,8 +65,6 @@ export type GuardarSimulacionResult = {
   duplicada?: SimulacionPrevia;
 };
 
-const norm = (s: string) => s.trim().toLowerCase();
-
 export async function guardarSimulacion(p: GuardarSimulacionPayload): Promise<GuardarSimulacionResult> {
   const db = getSupabaseAdmin();
   const d = p.clientData;
@@ -74,14 +73,9 @@ export async function guardarSimulacion(p: GuardarSimulacionPayload): Promise<Gu
   // ── Cliente ────────────────────────────────────────────────────────────────
   let clientId = p.clientId ?? null;
   if (!clientId) {
-    // Mismo criterio anti-duplicados que la cotización: primero por email, que
-    // es lo más confiable, y si no por nombre exacto.
-    const { data: existentes } = await db.from('clients').select('id, nombre, email');
-    const match = ((existentes ?? []) as Array<{ id: string; nombre: string; email: string | null }>)
-      .find((c) =>
-        (d.email && c.email && norm(c.email) === norm(d.email)) ||
-        norm(c.nombre) === norm(d.nombre));
-    if (match) clientId = match.id;
+    // Mismo criterio anti-duplicados que la cotización: email + nombre
+    // compatible, o nombre exacto. Ver `findClienteExistente`.
+    clientId = await findClienteExistente(d.nombre, d.email);
   }
 
   if (!clientId) {

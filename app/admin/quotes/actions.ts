@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { findClienteExistente } from '@/lib/db/clients';
 
 export async function deleteQuotes(ids: string[]) {
   if (!ids.length) return { ok: true };
@@ -246,15 +247,10 @@ export async function createQuoteFromSimulation(p: SimulationQuotePayload) {
     if (!d?.nombre) return { error: 'Falta el nombre del cliente' };
 
     // Antes de crear: si escribió el nombre a mano en vez de elegirlo de la
-    // lista, el cliente puede existir igual. Se busca por email (lo más
-    // confiable) y, si no hay, por nombre exacto — así no se duplica la ficha.
-    const { data: existentes } = await db.from('clients').select('id, nombre, email');
-    const norm = (s: string) => s.trim().toLowerCase();
-    const match = ((existentes ?? []) as Array<{ id: string; nombre: string; email: string | null }>)
-      .find((c) =>
-        (d.email && c.email && norm(c.email) === norm(d.email)) ||
-        norm(c.nombre) === norm(d.nombre));
-    if (match) clientId = match.id;
+    // lista, el cliente puede existir igual. Se busca por email + nombre
+    // compatible y, si no, por nombre exacto — así no se duplica la ficha ni se
+    // cuelga esta cotización de otra persona que comparte el correo.
+    clientId = await findClienteExistente(d.nombre, d.email);
   }
 
   if (!clientId && d) {
