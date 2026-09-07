@@ -2,10 +2,17 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { getAdminUser } from '@/lib/auth';
 
 export async function createClient(formData: FormData) {
   const db = getSupabaseAdmin();
+  // Quien atiende al cliente: lo que se eligió en el formulario y, si no se
+  // tocó, quien está con la sesión abierta — que es quien lo está dando de
+  // alta. Con un solo usuario da igual, pero deja de dar igual al primer
+  // vendedor que entre.
+  const admin = await getAdminUser();
   const { error, data } = await db.from('clients').insert({
+    assigned_to: (formData.get('assigned_to') as string) || admin?.sub || null,
     nombre:     formData.get('nombre') as string,
     rut:        (formData.get('rut') as string) || null,
     empresa:    (formData.get('empresa') as string) || null,
@@ -33,9 +40,22 @@ export async function updateClient(id: string, formData: FormData) {
     telefono:   (formData.get('telefono') as string) || null,
     email:      (formData.get('email') as string) || null,
     notas:      (formData.get('notas') as string) || null,
+    assigned_to: (formData.get('assigned_to') as string) || null,
     updated_at: new Date().toISOString(),
   }).eq('id', id);
 
+  if (error) return { error: error.message };
+  revalidatePath('/admin/clients');
+  revalidatePath(`/admin/clients/${id}`);
+  return { ok: true };
+}
+
+/** Cambia quién atiende al cliente. `null` lo deja sin asignar. */
+export async function assignClient(id: string, userId: string | null) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('clients')
+    .update({ assigned_to: userId, updated_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/admin/clients');
   revalidatePath(`/admin/clients/${id}`);
@@ -76,6 +96,8 @@ export async function convertLeadToClient(leadId: string) {
       atencion_a: (lead as Record<string, unknown>).company_name ? (lead.contact_name ?? null) : null,
       ciudad:     lead.city ?? null,
       source:     'simulador',
+      // El lead ya venía con vendedor: se lo lleva a la ficha del cliente.
+      assigned_to: lead.assigned_to ?? (await getAdminUser())?.sub ?? null,
     })
     .select('id')
     .single();

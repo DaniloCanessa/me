@@ -1,4 +1,6 @@
 import { getClients } from '@/lib/db/clients';
+import { getUsers } from '@/lib/db/users';
+import { getAdminUser } from '@/lib/auth';
 import ClientsManager from '@/components/admin/ClientsManager';
 
 export default async function ClientsPage({
@@ -7,7 +9,7 @@ export default async function ClientsPage({
   searchParams: Promise<{ from?: string }>;
 }) {
   const { from } = await searchParams;
-  const clients   = await getClients();
+  const [clients, users, admin] = await Promise.all([getClients(), getUsers(), getAdminUser()]);
   const fromQuotes = from === 'quotes';
 
   return (
@@ -18,7 +20,12 @@ export default async function ClientsPage({
           {clients.length} cliente{clients.length !== 1 ? 's' : ''}
         </p>
       </div>
-      <ClientsManager clients={clients} fromQuotes={fromQuotes} />
+      <ClientsManager
+        clients={clients}
+        users={users.filter((u) => u.is_active).map((u) => ({ id: u.id, name: u.name }))}
+        currentUserId={admin?.sub ?? null}
+        fromQuotes={fromQuotes}
+      />
     </div>
   );
 }

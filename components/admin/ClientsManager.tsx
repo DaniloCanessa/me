@@ -3,7 +3,10 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Client } from '@/lib/types';
-import { createClient, deleteClient } from '@/app/admin/clients/actions';
+import { createClient, deleteClient, assignClient } from '@/app/admin/clients/actions';
+
+/** Vendedores disponibles para "Atendido por". */
+export type UserOption = { id: string; name: string };
 
 const SOURCE_LABELS: Record<string, string> = {
   simulador: 'Simulador',
@@ -17,9 +20,13 @@ const SOURCE_LABELS: Record<string, string> = {
 function ClientModal({
   onClose,
   isPending,
+  users,
+  currentUserId,
 }: {
   onClose: () => void;
   isPending: boolean;
+  users: UserOption[];
+  currentUserId: string | null;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -68,12 +75,22 @@ function ClientModal({
               <input name="ciudad" type="text"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
             </label>
-            <label className="block col-span-2">
+            <label className="block">
               <span className="text-xs text-gray-500 mb-1 block">Origen</span>
               <select name="source" defaultValue="manual"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]">
                 {Object.entries(SOURCE_LABELS).map(([v, l]) => (
                   <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs text-gray-500 mb-1 block">Atendido por</span>
+              <select name="assigned_to" defaultValue={currentUserId ?? ''}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]">
+                <option value="">Sin asignar</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
             </label>
@@ -99,10 +116,30 @@ function ClientModal({
   );
 }
 
-export default function ClientsManager({ clients, fromQuotes = false }: { clients: Client[]; fromQuotes?: boolean }) {
+export default function ClientsManager({
+  clients,
+  users = [],
+  currentUserId = null,
+  fromQuotes = false,
+}: {
+  clients: Client[];
+  users?: UserOption[];
+  currentUserId?: string | null;
+  fromQuotes?: boolean;
+}) {
   const [showModal, setShowModal]    = useState(false);
   const [search, setSearch]          = useState('');
   const [isPending, startTransition] = useTransition();
+  // Cambiar el vendedor se ve al instante: el select no espera al revalidate.
+  const [asignados, setAsignados]    = useState<Record<string, string>>({});
+
+  const asignadoDe = (c: Client) => asignados[c.id] ?? c.assigned_to ?? '';
+  const nombreDe   = (id: string) => users.find((u) => u.id === id)?.name ?? null;
+
+  function handleAssign(clientId: string, userId: string) {
+    setAsignados((prev) => ({ ...prev, [clientId]: userId }));
+    startTransition(async () => { await assignClient(clientId, userId || null); });
+  }
 
   const filtered = clients.filter((c) => {
     const q = search.toLowerCase();
@@ -122,7 +159,12 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
   return (
     <>
       {showModal && (
-        <ClientModal onClose={() => setShowModal(false)} isPending={isPending} />
+        <ClientModal
+          onClose={() => setShowModal(false)}
+          isPending={isPending}
+          users={users}
+          currentUserId={currentUserId}
+        />
       )}
       {fromQuotes && (
         <div className="mb-4 px-4 py-3 bg-[#389fe0]/8 border border-[#389fe0]/20 rounded-xl text-sm text-[#1d65c5] flex items-center gap-2">
@@ -190,6 +232,12 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
                       {c.telefono && <span>{c.telefono}</span>}
                       {c.ciudad && <span>{c.ciudad}</span>}
                     </div>
+                    <p className="mt-1">
+                      Atiende:{' '}
+                      <span className={nombreDe(asignadoDe(c)) ? 'text-gray-700 font-medium' : 'text-gray-400'}>
+                        {nombreDe(asignadoDe(c)) ?? 'sin asignar'}
+                      </span>
+                    </p>
                   </div>
                   <div className="mt-2 text-right">
                     {fromQuotes ? (
@@ -214,6 +262,7 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Contacto</th>
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ciudad</th>
                   <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Origen</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Atendido por</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
@@ -254,6 +303,22 @@ export default function ClientsManager({ clients, fromQuotes = false }: { client
                         {c.lead_id && (
                           <span className="ml-1.5 text-[10px] text-gray-400">+ lead</span>
                         )}
+                      </td>
+                      {/* Se edita desde la lista: reasignar una cartera entera
+                          no debería obligar a entrar ficha por ficha. */}
+                      <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={asignadoDe(c)}
+                          onChange={(e) => handleAssign(c.id, e.target.value)}
+                          className={`text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white max-w-40 focus:outline-none focus:border-[#389fe0] ${
+                            asignadoDe(c) ? 'text-gray-700' : 'text-gray-400'
+                          }`}
+                        >
+                          <option value="">Sin asignar</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {fromQuotes ? (

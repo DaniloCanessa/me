@@ -8,6 +8,7 @@ import type { Client, Installation, Activity, Quote } from '@/lib/types';
 import type { ProjectRow } from '@/lib/db/projects';
 import { updateClient, addActivity, addInstallation, updateInstallation, deleteClient } from '@/app/admin/clients/actions';
 import { deleteQuotes } from '@/app/admin/quotes/actions';
+import type { UserOption } from '@/components/admin/ClientsManager';
 
 const ACTIVITY_ICONS: Record<string, string> = {
   llamada: '📞', visita: '🏠', email: '✉️',
@@ -51,6 +52,7 @@ export default function ClientDetail({
   projects,
   simulations,
   billUrls,
+  users = [],
 }: {
   client: Client;
   activities: Activity[];
@@ -58,6 +60,7 @@ export default function ClientDetail({
   projects: ProjectRow[];
   simulations: SimulationRow[];
   billUrls: Record<string, string>;
+  users?: UserOption[];
 }) {
   const router = useRouter();
   const [tab, setTab]                = useState<'info' | 'instalaciones' | 'actividades' | 'cotizaciones' | 'simulaciones' | 'proyectos'>('info');
@@ -142,6 +145,8 @@ export default function ClientDetail({
                   ['Email', client.email ?? '—'],
                   ['Teléfono', client.telefono ?? '—'],
                   ['Ciudad', client.ciudad ?? '—'],
+                  ['Atendido por',
+                    users.find((u) => u.id === client.assigned_to)?.name ?? 'Sin asignar'],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-gray-400 mb-0.5">{label}</p>
@@ -189,6 +194,16 @@ export default function ClientDetail({
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
                   </label>
                 ))}
+                <label className="block col-span-2">
+                  <span className="text-xs text-gray-500 mb-1 block">Atendido por</span>
+                  <select name="assigned_to" defaultValue={client.assigned_to ?? ''}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]">
+                    <option value="">Sin asignar</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="block col-span-2">
                   <span className="text-xs text-gray-500 mb-1 block">Notas</span>
                   <textarea name="notas" rows={3} defaultValue={client.notas ?? ''}

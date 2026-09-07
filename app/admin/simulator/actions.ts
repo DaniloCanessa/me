@@ -79,14 +79,17 @@ export async function guardarSimulacion(p: GuardarSimulacionPayload): Promise<Gu
   }
 
   if (!clientId) {
+    // Quien simula es quien atiende: la ficha nace con vendedor asignado.
+    const admin = await getAdminUser();
     const { data: nuevo, error } = await db.from('clients').insert({
-      nombre:     d.nombre,
-      empresa:    d.empresa ?? null,
-      atencion_a: d.atencionA ?? null,
-      email:      d.email || null,
-      telefono:   d.telefono || null,
-      ciudad:     d.ciudad || null,
-      source:     'simulador',
+      nombre:      d.nombre,
+      empresa:     d.empresa ?? null,
+      atencion_a:  d.atencionA ?? null,
+      email:       d.email || null,
+      telefono:    d.telefono || null,
+      ciudad:      d.ciudad || null,
+      source:      'simulador',
+      assigned_to: admin?.sub ?? null,
     }).select('id').single();
     if (error) return { error: 'No se pudo crear el cliente: ' + error.message };
     clientId = nuevo.id as string;

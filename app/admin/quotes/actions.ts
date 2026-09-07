@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { findClienteExistente } from '@/lib/db/clients';
+import { getAdminUser } from '@/lib/auth';
 
 export async function deleteQuotes(ids: string[]) {
   if (!ids.length) return { ok: true };
@@ -254,14 +255,17 @@ export async function createQuoteFromSimulation(p: SimulationQuotePayload) {
   }
 
   if (!clientId && d) {
+    // Quien cotiza es quien atiende: la ficha nace con vendedor asignado.
+    const admin = await getAdminUser();
     const { data: nuevo, error: errCliente } = await db.from('clients').insert({
-      nombre:     d.nombre,
-      empresa:    d.empresa ?? null,
-      atencion_a: d.atencionA ?? null,
-      email:      d.email || null,
-      telefono:   d.telefono || null,
-      ciudad:     d.ciudad || null,
-      source:     'simulador',
+      nombre:      d.nombre,
+      empresa:     d.empresa ?? null,
+      atencion_a:  d.atencionA ?? null,
+      email:       d.email || null,
+      telefono:    d.telefono || null,
+      ciudad:      d.ciudad || null,
+      source:      'simulador',
+      assigned_to: admin?.sub ?? null,
     }).select('id').single();
     if (errCliente) return { error: 'No se pudo crear el cliente: ' + errCliente.message };
     clientId = nuevo.id as string;

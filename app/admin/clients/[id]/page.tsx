@@ -4,16 +4,18 @@ import { getQuotesByClient } from '@/lib/db/quotes';
 import { getProjectsByClient } from '@/lib/db/projects';
 import { getClientSimulations } from '@/lib/db/simulations';
 import { getBillSignedUrl } from '@/lib/db/bills';
+import { getUsers } from '@/lib/db/users';
 import ClientDetail from '@/components/admin/ClientDetail';
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [client, activities, quotes, projects, simulations] = await Promise.all([
+  const [client, activities, quotes, projects, simulations, users] = await Promise.all([
     getClient(id),
     getClientActivities(id),
     getQuotesByClient(id),
     getProjectsByClient(id),
     getClientSimulations(id),
+    getUsers(),
   ]);
 
   if (!client) notFound();
@@ -35,6 +37,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       projects={projects}
       simulations={simulations}
       billUrls={billUrls}
+      users={users.filter((u) => u.is_active).map((u) => ({ id: u.id, name: u.name }))}
     />
   );
 }
