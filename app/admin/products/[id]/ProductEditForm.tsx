@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { updateProduct } from '../actions';
 import { requiredSurfaceM2 } from '@/lib/constants';
+import CostosInternos from '@/components/admin/CostosInternos';
 import type { SolarPanel } from '@/lib/types';
 
 export interface Product {
@@ -21,10 +22,6 @@ export interface Product {
   is_active: boolean;
   sort_order: number;
   notes: string | null;
-}
-
-function clp(n: number) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
 function SolarKitSpecs({ specs, panel }: { specs?: Record<string, unknown>; panel?: SolarPanel | null }) {
@@ -136,15 +133,9 @@ function BatterySpecs({ specs }: { specs?: Record<string, unknown> }) {
 
 export default function ProductEditForm({ product, panel, onSaved }: { product: Product; panel?: SolarPanel | null; onSaved?: () => void }) {
   const [category,  setCategory]  = useState(product.category);
-  const [costo,     setCosto]     = useState(product.costo_proveedor_clp);
-  const [margenStr, setMargenStr] = useState(String(product.margen_pct ?? 30));
   const [saved,     setSaved]     = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const margen       = parseFloat(margenStr) || 0;
-  const precioNeto   = Math.round(costo * (1 + margen / 100));
-  const precioConIva = Math.round(precioNeto * 1.19);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -221,40 +212,11 @@ export default function ProductEditForm({ product, panel, onSaved }: { product: 
         </div>
       )}
 
-      <div className="bg-amber-50 rounded-xl p-4 flex flex-col gap-3">
-        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Costos internos</p>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs text-gray-500 mb-1 block">Costo proveedor neto (CLP) *</span>
-            <input
-              type="text" inputMode="numeric" required
-              value={costo > 0 ? new Intl.NumberFormat('es-CL').format(costo) : ''}
-              onChange={e => setCosto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0] bg-white"
-              placeholder="0" />
-            <input type="hidden" name="costo_proveedor_clp" value={costo} />
-          </label>
-          <label className="block">
-            <span className="text-xs text-gray-500 mb-1 block">Margen %</span>
-            <input type="number" step="0.1" min="0" max="100"
-              value={margenStr}
-              onChange={e => setMargenStr(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#389fe0] bg-white" />
-            <input type="hidden" name="margen_pct" value={margen} />
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-amber-100">
-          <div>
-            <p className="text-xs text-amber-600 mb-1">Precio venta s/IVA</p>
-            <p className="text-sm font-bold text-amber-800 tabular-nums">{clp(precioNeto)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-amber-600 mb-1">Precio venta c/IVA</p>
-            <p className="text-sm font-bold text-amber-800 tabular-nums">{clp(precioConIva)}</p>
-          </div>
-        </div>
-        <input type="hidden" name="base_price_clp" value={precioNeto} />
-      </div>
+      <CostosInternos
+        precioGuardado={product.base_price_clp}
+        costoInicial={product.costo_proveedor_clp}
+        margenInicial={product.margen_pct}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
