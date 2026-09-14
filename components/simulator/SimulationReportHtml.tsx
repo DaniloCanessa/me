@@ -241,6 +241,19 @@ function KVStack({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Dos datos cortos en un mismo renglón. La ficha del cliente de EMPRESA lleva
+// dos campos más que la residencial (potencia contratada y tensión) y, apilados,
+// empujaban el recuadro del kit fuera de la página 1: el pie quedaba escrito
+// encima del precio. Emparejarlos devuelve las dos líneas que faltaban.
+function KVStackPair({ a, b }: { a: { label: string; value: string }; b: { label: string; value: string } }) {
+  return (
+    <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ flex: 1, minWidth: 0 }}><KVStack label={a.label} value={a.value} /></div>
+      <div style={{ flex: 1, minWidth: 0 }}><KVStack label={b.label} value={b.value} /></div>
+    </div>
+  );
+}
+
 function KVRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -295,7 +308,12 @@ export default function SimulationReportHtml({
   const potenciaComercial   = kitNombreKW(kit);
   const potenciaRealDifiere = mostrarPotenciaReal(kit);
   const etiquetaKW          = `${potenciaComercial} kW`;
-  const potenciaPanelW      = kit.panel?.potenciaW ?? SOLAR_DEFAULTS.panelWattage;
+  // Los kits de empresa se arman al vuelo: si no traen panel del catálogo, el
+  // dato bueno es el de `/admin/config`, no la constante del código — el
+  // informe llegó a decir "57 paneles de 550 W" en una planta de 39,9 kW.
+  const potenciaPanelW      = kit.panel?.potenciaW
+    ?? recommended.input.panelWattageWp
+    ?? SOLAR_DEFAULTS.panelWattage;
 
   // Lo que paga hoy: la cuenta simulada menos lo que aportan los equipos que
   // todavía no tiene, al mismo precio por kWh que usa el resto del informe.
@@ -393,7 +411,12 @@ export default function SimulationReportHtml({
         {/* Difuminado hacia la izquierda, para que el texto siempre se lea */}
         <div style={{
           position: 'absolute', inset: 0,
-          backgroundImage: 'linear-gradient(90deg, #0c2c54 0%, rgba(12,44,84,0.92) 26%, rgba(20,70,130,0.45) 55%, rgba(26,90,168,0.10) 100%)',
+          // La foto arranca en el 38% del ancho y ese borde es un canto duro. Para
+          // que no se note, el degradado va OPACO hasta el 40% —se lo come
+          // entero— y recién ahí empieza a abrir. Y con nueve paradas en vez de
+          // cuatro: con pocas, el salto de opacidad se lee como una banda
+          // vertical al rasterizar con html2canvas.
+          backgroundImage: 'linear-gradient(90deg, #0c2c54 0%, #0c2c54 40%, rgba(12,44,84,0.93) 46%, rgba(13,52,98,0.78) 52%, rgba(15,58,110,0.60) 58%, rgba(17,64,120,0.44) 64%, rgba(19,72,134,0.32) 72%, rgba(22,80,148,0.21) 82%, rgba(24,86,158,0.15) 91%, rgba(26,90,168,0.10) 100%)',
         }} />
 
         <div style={{ position: 'relative' }}>
@@ -435,8 +458,10 @@ export default function SimulationReportHtml({
             </div>
             <KVStack label="Nombre / Razón social" value={name} />
             {contactPerson && <KVStack label="Persona de contacto" value={contactPerson} />}
-            <KVStack label="Tipo de cliente" value={isBusiness ? 'Empresa' : 'Residencial'} />
-            <KVStack label="Teléfono" value={phone} />
+            <KVStackPair
+              a={{ label: 'Tipo de cliente', value: isBusiness ? 'Empresa' : 'Residencial' }}
+              b={{ label: 'Teléfono', value: phone }}
+            />
             <KVStack label="Email" value={email} />
           </div>
 
@@ -458,14 +483,19 @@ export default function SimulationReportHtml({
             </div>
             <KVStack label="Distribuidora" value={supply.distribuidora ?? 'No especificada'} />
             <KVStack label="Tarifa" value={supply.tarifa === 'unknown' ? 'BT1 (referencia)' : supply.tarifa} />
-            {isBusiness && supply.potenciaContratadaKW != null && (
-              <KVStack label="Potencia contratada" value={`${supply.potenciaContratadaKW} kW`} />
-            )}
             {isBusiness && (
-              <KVStack label="Tensión de suministro" value={supply.tensionSuministro ?? 'No especificada'} />
+              <KVStackPair
+                a={{
+                  label: 'Potencia contratada',
+                  value: supply.potenciaContratadaKW != null ? `${supply.potenciaContratadaKW} kW` : 'No especificada',
+                }}
+                b={{ label: 'Tensión', value: supply.tensionSuministro ?? 'No especificada' }}
+              />
             )}
-            <KVStack label="Consumo promedio" value={`${profile.averageMonthlyKWh} kWh/mes`} />
-            <KVStack label="Consumo anual estimado" value={`${profile.averageMonthlyKWh * 12} kWh/año`} />
+            <KVStackPair
+              a={{ label: 'Consumo promedio', value: `${profile.averageMonthlyKWh} kWh/mes` }}
+              b={{ label: 'Consumo anual', value: `${profile.averageMonthlyKWh * 12} kWh` }}
+            />
           </div>
 
         </div>
