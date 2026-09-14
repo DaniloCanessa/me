@@ -12,7 +12,7 @@ import type {
   TarifaType,
   MonthIndex,
 } from '@/lib/types';
-import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBattery } from '@/lib/calculations';
+import { calcThreeScenarios, runBusinessSimulation, runBusinessSimulationWithBattery, businessSizingRange } from '@/lib/calculations';
 import { getRegionById } from '@/lib/regions';
 import { runTariffAnalysis, type TariffAnalysisResult } from '@/lib/tariffAnalysis';
 import { calcEVCharger, calcEmpalmeLoad, type EmpalmeLoadResult } from '@/lib/consumption';
@@ -855,6 +855,8 @@ export default function StepResults({ state, config, catalog, adminMode = false,
   const [batteryPlant, setBatteryPlant]       = useState<'recommended' | 'economic'>('recommended');
   // Modo interno: override manual del tamaño de la PFV (null = tamaño recomendado).
   const [adminSizeKWp, setAdminSizeKWp]       = useState<number | null>(null);
+  // Empresa: tamaño de planta elegido a mano (null = el que sale del consumo).
+  const [businessSizeKWp, setBusinessSizeKWp] = useState<number | null>(null);
 
   // Tamaños del catálogo (sin batería) disponibles para el selector manual interno.
   const adminKitSizes = useMemo(
@@ -864,6 +866,15 @@ export default function StepResults({ state, config, catalog, adminMode = false,
       .sort((a, b) => a - b),
     [catalog],
   );
+
+  // Panel con que se arma la planta de empresa: el del kit más grande del
+  // catálogo, que es el que la empresa instala hoy. Sin catálogo (respaldo en
+  // código) queda sin panel y se cae a los promedios de `/admin/config`.
+  const businessPanel = useMemo(() => {
+    const conPanel = (catalog ?? []).filter((k) => k.panel);
+    if (!conPanel.length) return undefined;
+    return conPanel.reduce((a, b) => (b.sizekWp > a.sizekWp ? b : a)).panel;
+  }, [catalog]);
 
   const contactName = 'name' in contact
     ? (contact as PersonContact).name
@@ -879,7 +890,13 @@ export default function StepResults({ state, config, catalog, adminMode = false,
     // Consumo real por mes: con equipos futuros y sin ellos (para el toggle base/futuro).
     const futureMap = buildMonthlyConsumption(state, true);
     const baseMap   = buildMonthlyConsumption(state, false);
-    const inp = { ...buildBaseInput(state, config), batteryUsableFraction, monthlyConsumptionByMonth: futureMap };
+    const inp = {
+      ...buildBaseInput(state, config),
+      batteryUsableFraction,
+      monthlyConsumptionByMonth: futureMap,
+      businessPanel,
+      businessSizeKWp: businessSizeKWp ?? undefined,
+    };
     const addKWh = state.futureConsumption?.totalAdditionalMonthlyKWh ?? 0;
     const hasAdd = addKWh > 0;
     // Consumo "base" (sin equipos nuevos): con PFV existente es el residual a cubrir.
@@ -921,7 +938,29 @@ export default function StepResults({ state, config, catalog, adminMode = false,
       businessBaseResult: null,
       recommendedScenario: recommended,
     };
-  }, [state, isResidential, batteryCount, batteryReservePct, businessBattery, adminSizeKWp, batteryPlant]);
+  }, [state, isResidential, batteryCount, batteryReservePct, businessBattery, adminSizeKWp, batteryPlant, businessSizeKWp, businessPanel, catalog, config]);
+
+  // Empresa: hasta dónde se puede crecer. El tope es el empalme (o los 300 kW
+  // de net billing), no el consumo — el excedente se puede inyectar.
+  const businessRange = useMemo(() => {
+    if (isResidential) return null;
+    const region = getRegionById(baseInput.regionId);
+    if (!region) return null;
+    return businessSizingRange(
+      baseInput.monthlyConsumptionKWh,
+      region.annualProductionKWhPerKWp,
+      baseInput.empalmeMaxKW,
+      {
+        businessCoverageTarget: baseInput.businessCoverageTarget,
+        netBillingMaxKWp:       baseInput.netBillingMaxKWp,
+        panelWattage:           baseInput.panelWattageWp,
+        panel:                  businessPanel,
+      },
+    );
+  }, [isResidential, baseInput, businessPanel]);
+
+  // Un paso del slider = un panel, para que no ofrezca tamaños que no existen.
+  const pasoKWp = (businessPanel?.potenciaW ?? baseInput.panelWattageWp ?? SOLAR_DEFAULTS.panelWattage) / 1000;
 
   const hasAdditions = (future?.totalAdditionalMonthlyKWh ?? 0) > 0;
   // Fracción diurna que aplica a este cliente (residencial o empresa).
@@ -1269,6 +1308,81 @@ export default function StepResults({ state, config, catalog, adminMode = false,
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ── Tamaño de la planta (empresa) ──────────────────────────────────── */}
+      {!isResidential && businessRange && businessRange.maxKWp > businessRange.minKWp && (
+        <div className="bg-white rounded-2xl ring-1 ring-[#b0cedd]/30 shadow-[0_1px_3px_rgba(16,40,80,0.04)] p-5 flex flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <p className="text-sm font-semibold text-gray-700">Tamaño de la planta</p>
+            {/* La superficie va junto a los kW y no solo en la ficha del kit: al
+                mover el slider lo primero que hay que saber es si el techo da. */}
+            <div className="text-right">
+              <p className="text-lg font-bold text-[#1d65c5] tabular-nums leading-tight">
+                {activeResult.kit.sizekWp} kW
+              </p>
+              <p className="text-xs text-gray-500 tabular-nums">
+                {requiredSurfaceM2(activeResult.kit.panelCount, activeResult.kit.panel)} m² de techo
+                {' · '}{activeResult.kit.panelCount} paneles
+                {activeResult.kit.panel && ` de ${activeResult.kit.panel.potenciaW} W`}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            El consumo pide <strong>{businessRange.recommendedKWp} kW</strong>
+            {baseInput.empalmeMaxKW != null && (
+              <> y el empalme admite hasta <strong>{businessRange.maxKWp} kW</strong></>
+            )}. Puedes llenar el techo y vender el excedente.
+          </p>
+
+          <input
+            type="range"
+            min={businessRange.minKWp}
+            max={businessRange.maxKWp}
+            step={pasoKWp}
+            value={businessSizeKWp ?? businessRange.recommendedKWp}
+            onChange={(e) => setBusinessSizeKWp(Number(e.target.value))}
+            className="w-full accent-[#1d65c5]"
+          />
+          <div className="flex justify-between text-[10px] text-gray-400 -mt-2 tabular-nums">
+            <span>{businessRange.minKWp} kW</span>
+            <span>{businessRange.maxKWp} kW{baseInput.empalmeMaxKW != null ? ' (empalme)' : ''}</span>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            {([
+              { label: `Recomendada ${businessRange.recommendedKWp} kW`, value: null },
+              { label: `Máxima ${businessRange.maxKWp} kW`,              value: businessRange.maxKWp },
+            ]).map(({ label, value }) => {
+              const isActive = value === null
+                ? businessSizeKWp === null
+                : businessSizeKWp === value;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setBusinessSizeKWp(value)}
+                  className={[
+                    'rounded-xl border-2 px-3 py-2 text-xs font-semibold transition-all',
+                    isActive
+                      ? 'border-[#389fe0] bg-[#1d65c5] text-white shadow-md'
+                      : 'border-gray-300 bg-white text-gray-600 hover:border-[#389fe0]/50 hover:bg-[#f0f8ff]',
+                  ].join(' ')}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeResult.kit.sizekWp > businessRange.recommendedKWp && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠ Sobre los {businessRange.recommendedKWp} kW que pide el consumo, la energía de más se
+              inyecta a la red y se paga al 50% del precio de compra. Sube la inversión y alarga el
+              retorno; conviene cuando hay techo disponible y se busca máxima generación.
+            </p>
+          )}
         </div>
       )}
 

@@ -8,6 +8,7 @@ import type {
   FinancialSummary,
   EnvironmentalSummary,
   MonthIndex,
+  SolarPanel,
 } from './types';
 import {
   KIT_CATALOG,
@@ -17,6 +18,7 @@ import {
   MONTH_NAMES,
   DAYS_IN_MONTH,
   CHILE_BT1,
+  requiredSurfaceM2,
 } from './constants';
 import { getRegionById } from './regions';
 
@@ -70,38 +72,101 @@ export function nextSmallerNoBatteryKit(sizeKWp: number, catalog?: SolarKit[]): 
 
 // ─── Kit empresa (dimensionamiento continuo) ──────────────────────────────────
 
+/** Tamaño mínimo que tiene sentido ofrecer a una empresa. */
+const MIN_BUSINESS_KWP = 5;
+
+export interface BusinessSizingOpts {
+  businessCoverageTarget?: number;
+  netBillingMaxKWp?: number;
+  panelWattage?: number;
+  panelAreaM2?: number;
+  costPerKWpCLP?: number;
+  /** Panel real del catálogo. Con él, la potencia y los m² salen de sus medidas
+   *  en vez de los promedios de `/admin/config` — el mismo criterio que los kits
+   *  residenciales desde la sesión 34. */
+  panel?: SolarPanel;
+  /** Tamaño elegido a mano (kWp). Reemplaza al dimensionado por consumo, acotado
+   *  al techo del empalme y al de net billing. */
+  overrideKWp?: number;
+}
+
+/** Cuántos paneles enteros caben en un objetivo de kWp, y la potencia REAL que
+ *  dan. Los paneles no se cortan: se toma la cantidad más cercana al objetivo y
+ *  se baja si el redondeo pasó el techo (empalme o net billing). */
+function snapToPanels(
+  targetKWp: number,
+  panelWattage: number,
+  techoKWp: number,
+): { panelCount: number; sizekWp: number } {
+  let panelCount = Math.max(1, Math.round((targetKWp * 1000) / panelWattage));
+  while (panelCount > 1 && (panelCount * panelWattage) / 1000 > techoKWp) panelCount--;
+  return { panelCount, sizekWp: Math.round((panelCount * panelWattage) / 10) / 100 };
+}
+
+function businessPanelWattage(opts?: BusinessSizingOpts): number {
+  return opts?.panel?.potenciaW ?? opts?.panelWattage ?? SOLAR_DEFAULTS.panelWattage;
+}
+
+/** Rango de tamaños que admite este cliente: lo que pide el consumo, y hasta
+ *  dónde se puede llegar. El tope no es el consumo sino el empalme —una empresa
+ *  puede querer llenar el techo y vender el excedente—, con el límite del Art.
+ *  149 bis. Los tres valores vienen en potencia real de paneles enteros, para
+ *  que la etiqueta del selector diga lo mismo que después sale en el informe. */
+export function businessSizingRange(
+  monthlyConsumptionKWh: number,
+  annualProductionPerKWp: number,
+  empalmeMaxKW?: number,
+  opts?: BusinessSizingOpts,
+): { recommendedKWp: number; maxKWp: number; minKWp: number; exceedsNetBillingLimit: boolean } {
+  const coverageTarget = opts?.businessCoverageTarget ?? SOLAR_DEFAULTS.businessCoverageTarget;
+  const maxNetKWp      = opts?.netBillingMaxKWp       ?? DFL4.netBillingMaxKWp;
+  const panelWattage   = businessPanelWattage(opts);
+
+  const annualConsumption = monthlyConsumptionKWh * 12;
+  const rawKWp = (annualConsumption * coverageTarget) / annualProductionPerKWp;
+
+  const techoKWp = Math.min(empalmeMaxKW ?? maxNetKWp, maxNetKWp);
+  const maxKWp   = snapToPanels(techoKWp, panelWattage, techoKWp).sizekWp;
+  const recommendedKWp = snapToPanels(Math.min(rawKWp, techoKWp), panelWattage, techoKWp).sizekWp;
+
+  return {
+    recommendedKWp,
+    maxKWp,
+    minKWp: Math.min(snapToPanels(MIN_BUSINESS_KWP, panelWattage, techoKWp).sizekWp, maxKWp),
+    exceedsNetBillingLimit: rawKWp > maxNetKWp,
+  };
+}
+
 export function buildBusinessKit(
   monthlyConsumptionKWh: number,
   annualProductionPerKWp: number,
   empalmeMaxKW?: number,
-  opts?: {
-    businessCoverageTarget?: number;
-    netBillingMaxKWp?: number;
-    panelWattage?: number;
-    panelAreaM2?: number;
-    costPerKWpCLP?: number;
-  },
+  opts?: BusinessSizingOpts,
 ): SolarKit {
-  const coverageTarget  = opts?.businessCoverageTarget ?? SOLAR_DEFAULTS.businessCoverageTarget;
-  const maxNetKWp       = opts?.netBillingMaxKWp       ?? DFL4.netBillingMaxKWp;
-  const panelWattage    = opts?.panelWattage            ?? SOLAR_DEFAULTS.panelWattage;
-  const panelAreaM2     = opts?.panelAreaM2             ?? SOLAR_DEFAULTS.panelAreaM2;
-  const costPerKWp      = opts?.costPerKWpCLP           ?? BUSINESS_DEFAULTS.costPerKWpCLP;
+  const panelWattage = businessPanelWattage(opts);
+  const panelAreaM2  = opts?.panelAreaM2  ?? SOLAR_DEFAULTS.panelAreaM2;
+  const costPerKWp   = opts?.costPerKWpCLP ?? BUSINESS_DEFAULTS.costPerKWpCLP;
 
-  const annualConsumption = monthlyConsumptionKWh * 12;
-  const rawKWp = (annualConsumption * coverageTarget) / annualProductionPerKWp;
-  const uncappedKWp = Math.ceil(rawKWp * 2) / 2;
-  const cappedByEmpalme = empalmeMaxKW != null ? Math.min(uncappedKWp, empalmeMaxKW) : uncappedKWp;
-  // Art. 149 bis DFL4: máximo 300 kW por inmueble para net billing
-  const sizekWp = Math.min(cappedByEmpalme, maxNetKWp);
-  const exceedsNetBillingLimit = uncappedKWp > maxNetKWp;
-  const panelCount = Math.ceil((sizekWp * 1000) / panelWattage);
+  const { recommendedKWp, maxKWp, minKWp, exceedsNetBillingLimit } =
+    businessSizingRange(monthlyConsumptionKWh, annualProductionPerKWp, empalmeMaxKW, opts);
+
+  const targetKWp = opts?.overrideKWp != null
+    ? Math.min(Math.max(opts.overrideKWp, minKWp), maxKWp)
+    : recommendedKWp;
+
+  // Manda la potencia real de los paneles, no el número redondo que se pidió —
+  // el mismo criterio que los kits residenciales.
+  const { panelCount, sizekWp } = snapToPanels(targetKWp, panelWattage, maxKWp);
+
   return {
     id: `business-${sizekWp}kwp`,
     sizekWp,
+    panel: opts?.panel,
     includesBattery: false,
     panelCount,
-    estimatedAreaM2: Math.round(panelCount * panelAreaM2),
+    estimatedAreaM2: opts?.panel
+      ? requiredSurfaceM2(panelCount, opts.panel)
+      : Math.round(panelCount * panelAreaM2),
     priceReferenceCLP: Math.round(sizekWp * costPerKWp),
     exceedsNetBillingLimit,
   };
@@ -362,6 +427,8 @@ function businessOpts(input: SimulatorInput) {
     panelWattage:           input.panelWattageWp,
     panelAreaM2:            input.panelAreaM2,
     costPerKWpCLP:          input.costPerKWpBusinessCLP,
+    panel:                  input.businessPanel,
+    overrideKWp:            input.businessSizeKWp,
   };
 }
 

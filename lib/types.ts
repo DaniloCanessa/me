@@ -279,6 +279,11 @@ export interface SimulatorInput {
   co2FactorKgPerKWh?: number;
   /** Fracción del consumo que ocurre de día. La nocturna se deriva (1 − esta). */
   dayConsumptionRatio?: number;
+  /** Empresa: tamaño de planta elegido a mano (kWp). Sin esto se dimensiona por
+   *  consumo; con esto se puede llegar hasta el tope del empalme. */
+  businessSizeKWp?: number;
+  /** Empresa: panel real con que se arma la planta (potencia y medidas). */
+  businessPanel?: SolarPanel;
 }
 
 // ─── Kit fotovoltaico ─────────────────────────────────────────────────────────
