@@ -6,6 +6,7 @@ import { getAdminUser } from '@/lib/auth';
 import { findSimulacionDeLaMismaBoleta, type SimulacionPrevia } from '@/lib/db/simulations';
 import { findClienteExistente } from '@/lib/db/clients';
 import type { SimulationClientData } from '@/app/admin/quotes/actions';
+import { canonizarCiudad, canonizarComuna } from '@/lib/chile-geo';
 
 // ─── Guardar una simulación ──────────────────────────────────────────────────
 //
@@ -99,8 +100,10 @@ export async function guardarSimulacion(p: GuardarSimulacionPayload): Promise<Gu
   let installationId = p.installationId ?? null;
   const datosInstalacion = {
     direccion:                    d.direccion || null,
-    comuna:                       d.comuna || null,
-    ciudad:                       d.ciudad || null,
+    // El wizard los recibe como texto libre: se guardan con el nombre oficial
+    // cuando existe, para no llenar el CRM de variantes de la misma comuna.
+    comuna:                       d.comuna ? canonizarComuna(d.comuna) ?? d.comuna : null,
+    ciudad:                       d.ciudad ? canonizarCiudad(d.ciudad) ?? d.ciudad : null,
     region_id:                    d.regionId || null,
     customer_type:                d.customerType,
     distribuidora:                d.distribuidora || null,

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { findClienteExistente } from '@/lib/db/clients';
 import { getAdminUser } from '@/lib/auth';
+import { canonizarCiudad, canonizarComuna } from '@/lib/chile-geo';
 
 export async function deleteQuotes(ids: string[]) {
   if (!ids.length) return { ok: true };
@@ -285,8 +286,10 @@ export async function createQuoteFromSimulation(p: SimulationQuotePayload) {
   if (d) {
     const datosInstalacion = {
       direccion:                    d.direccion || null,
-      comuna:                       d.comuna || null,
-      ciudad:                       d.ciudad || null,
+      // El wizard los recibe como texto libre: se guardan con el nombre oficial
+      // cuando existe, para no llenar el CRM de variantes de la misma comuna.
+      comuna:                       d.comuna ? canonizarComuna(d.comuna) ?? d.comuna : null,
+      ciudad:                       d.ciudad ? canonizarCiudad(d.ciudad) ?? d.ciudad : null,
       region_id:                    d.regionId || null,
       customer_type:                d.customerType,
       distribuidora:                d.distribuidora || null,

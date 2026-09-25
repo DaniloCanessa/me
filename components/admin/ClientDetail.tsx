@@ -9,6 +9,8 @@ import type { ProjectRow } from '@/lib/db/projects';
 import { updateClient, addActivity, addInstallation, updateInstallation, deleteClient } from '@/app/admin/clients/actions';
 import { deleteQuotes } from '@/app/admin/quotes/actions';
 import type { UserOption } from '@/components/admin/ClientsManager';
+import GeoFields from '@/components/admin/GeoFields';
+import { nombreRegion } from '@/lib/chile-geo';
 
 const ACTIVITY_ICONS: Record<string, string> = {
   llamada: '📞', visita: '🏠', email: '✉️',
@@ -245,7 +247,7 @@ export default function ClientDetail({
                     {inst.direccion && <div><span className="text-gray-400">Dirección</span><p>{inst.direccion}</p></div>}
                     {inst.comuna && <div><span className="text-gray-400">Comuna</span><p>{inst.comuna}</p></div>}
                     {inst.ciudad && <div><span className="text-gray-400">Ciudad</span><p>{inst.ciudad}</p></div>}
-                    {inst.region_id && <div><span className="text-gray-400">Región</span><p>{inst.region_id}</p></div>}
+                    {inst.region_id && <div><span className="text-gray-400">Región</span><p>{nombreRegion(inst.region_id) ?? inst.region_id}</p></div>}
                     {inst.distribuidora && <div><span className="text-gray-400">Distribuidora</span><p>{inst.distribuidora}</p></div>}
                     {inst.tarifa && <div><span className="text-gray-400">Tarifa</span><p>{inst.tarifa}</p></div>}
                     {inst.amperaje_a && <div><span className="text-gray-400">Empalme</span><p>{inst.amperaje_a} A</p></div>}
@@ -276,16 +278,7 @@ export default function ClientDetail({
                         <input name="direccion" defaultValue={inst.direccion ?? ''}
                           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
                       </label>
-                      <label className="block">
-                        <span className="text-xs text-gray-500 mb-1 block">Comuna</span>
-                        <input name="comuna" defaultValue={inst.comuna ?? ''}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs text-gray-500 mb-1 block">Ciudad</span>
-                        <input name="ciudad" defaultValue={inst.ciudad ?? ''}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-                      </label>
+                      <GeoFields regionId={inst.region_id} comuna={inst.comuna} ciudad={inst.ciudad} />
                       <label className="block">
                         <span className="text-xs text-gray-500 mb-1 block">Tipo</span>
                         <select name="customer_type" defaultValue={inst.customer_type ?? ''}
@@ -360,16 +353,7 @@ export default function ClientDetail({
                     <input name="direccion"
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
                   </label>
-                  <label className="block">
-                    <span className="text-xs text-gray-500 mb-1 block">Comuna</span>
-                    <input name="comuna"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs text-gray-500 mb-1 block">Ciudad</span>
-                    <input name="ciudad"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-                  </label>
+                  <GeoFields />
                   <label className="block">
                     <span className="text-xs text-gray-500 mb-1 block">Tipo</span>
                     <select name="customer_type"

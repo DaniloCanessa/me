@@ -3,6 +3,29 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { getAdminUser } from '@/lib/auth';
+import { canonizarCiudad, canonizarComuna } from '@/lib/chile-geo';
+
+/**
+ * Deja comuna y ciudad con el nombre oficial cuando existe ('SANTIAGO' →
+ * 'Santiago'). Lo que no está en el listado —una localidad chica, lo escrito a
+ * mano— se guarda tal cual, solo sin espacios sobrantes.
+ */
+function ciudadDeFicha(formData: FormData) {
+  const ciudad = ((formData.get('ciudad') as string) || '').trim();
+  if (!ciudad) return null;
+  return canonizarCiudad(ciudad) ?? ciudad;
+}
+
+function geo(formData: FormData) {
+  const limpiar = (campo: string) => ((formData.get(campo) as string) || '').trim() || null;
+  const comuna = limpiar('comuna');
+  const ciudad = limpiar('ciudad');
+  return {
+    comuna: comuna ? canonizarComuna(comuna) ?? comuna : null,
+    ciudad: ciudad ? canonizarCiudad(ciudad) ?? ciudad : null,
+    region_id: limpiar('region_id'),
+  };
+}
 
 export async function createClient(formData: FormData) {
   const db = getSupabaseAdmin();
@@ -17,7 +40,7 @@ export async function createClient(formData: FormData) {
     rut:        (formData.get('rut') as string) || null,
     empresa:    (formData.get('empresa') as string) || null,
     atencion_a: (formData.get('atencion_a') as string) || null,
-    ciudad:     (formData.get('ciudad') as string) || null,
+    ciudad:     ciudadDeFicha(formData),
     telefono: (formData.get('telefono') as string) || null,
     email:    (formData.get('email') as string) || null,
     notas:    (formData.get('notas') as string) || null,
@@ -36,7 +59,7 @@ export async function updateClient(id: string, formData: FormData) {
     rut:        (formData.get('rut') as string) || null,
     empresa:    (formData.get('empresa') as string) || null,
     atencion_a: (formData.get('atencion_a') as string) || null,
-    ciudad:     (formData.get('ciudad') as string) || null,
+    ciudad:     ciudadDeFicha(formData),
     telefono:   (formData.get('telefono') as string) || null,
     email:      (formData.get('email') as string) || null,
     notas:      (formData.get('notas') as string) || null,
@@ -115,7 +138,8 @@ export async function convertLeadToClient(leadId: string) {
     lead_id:                     leadId,
     nombre_instalacion:          'Instalación principal',
     direccion:                   lead.address ?? null,
-    ciudad:                      lead.city ?? null,
+    comuna:                      lead.commune ? canonizarComuna(lead.commune) ?? lead.commune : null,
+    ciudad:                      lead.city ? canonizarCiudad(lead.city) ?? lead.city : null,
     region_id:                   lead.region_id ?? null,
     customer_type:               lead.customer_category ?? null,
     distribuidora:               lead.distribuidora ?? null,
@@ -158,9 +182,7 @@ export async function addInstallation(formData: FormData) {
     client_id:                   clientId,
     nombre_instalacion:          formData.get('nombre_instalacion') as string,
     direccion:                   (formData.get('direccion') as string) || null,
-    comuna:                      (formData.get('comuna') as string) || null,
-    ciudad:                      (formData.get('ciudad') as string) || null,
-    region_id:                   (formData.get('region_id') as string) || null,
+    ...geo(formData),
     customer_type:               (formData.get('customer_type') as string) || null,
     distribuidora:               (formData.get('distribuidora') as string) || null,
     tarifa:                      (formData.get('tarifa') as string) || null,
@@ -178,22 +200,34 @@ export async function addInstallation(formData: FormData) {
 
 export async function updateInstallation(installationId: string, clientId: string, formData: FormData) {
   const db = getSupabaseAdmin();
-  const { error } = await db.from('installations').update({
+
+  // Solo se toca lo que venga en el formulario: el de edición no trae empalme,
+  // potencia contratada, tensión ni notas, y mandarlos en null los borraba.
+  const patch: Record<string, unknown> = {
     nombre_instalacion:           formData.get('nombre_instalacion') as string,
     direccion:                    (formData.get('direccion') as string) || null,
-    comuna:                       (formData.get('comuna') as string) || null,
-    ciudad:                       (formData.get('ciudad') as string) || null,
-    region_id:                    (formData.get('region_id') as string) || null,
+    ...geo(formData),
     customer_type:                (formData.get('customer_type') as string) || null,
     distribuidora:                (formData.get('distribuidora') as string) || null,
     tarifa:                       (formData.get('tarifa') as string) || null,
-    amperaje_a:                   formData.get('amperaje_a') ? parseInt(formData.get('amperaje_a') as string) : null,
-    potencia_contratada_kw:       formData.get('potencia_contratada_kw') ? parseFloat(formData.get('potencia_contratada_kw') as string) : null,
-    tension_suministro:           (formData.get('tension_suministro') as string) || null,
     consumo_promedio_mensual_kwh: formData.get('consumo_kwh') ? parseFloat(formData.get('consumo_kwh') as string) : null,
-    notas:                        (formData.get('notas') as string) || null,
     updated_at:                   new Date().toISOString(),
-  }).eq('id', installationId);
+  };
+  if (formData.has('amperaje_a')) {
+    patch.amperaje_a = formData.get('amperaje_a') ? parseInt(formData.get('amperaje_a') as string) : null;
+  }
+  if (formData.has('potencia_contratada_kw')) {
+    patch.potencia_contratada_kw = formData.get('potencia_contratada_kw')
+      ? parseFloat(formData.get('potencia_contratada_kw') as string) : null;
+  }
+  if (formData.has('tension_suministro')) {
+    patch.tension_suministro = (formData.get('tension_suministro') as string) || null;
+  }
+  if (formData.has('notas')) {
+    patch.notas = (formData.get('notas') as string) || null;
+  }
+
+  const { error } = await db.from('installations').update(patch).eq('id', installationId);
 
   if (error) return { error: error.message };
   revalidatePath(`/admin/clients/${clientId}`);
