@@ -17,6 +17,30 @@ interface Props {
 
 type EmailStatus = 'idle' | 'sending' | 'sent' | 'error';
 
+// Cuánto se agranda la captura respecto al informe en pantalla. Con 2 la página
+// A4 sale a ~190 ppp: más que suficiente para imprimir, y cada punto extra de
+// escala encarece el archivo al cuadrado.
+const ESCALA_CAPTURA = 2;
+
+// El informe va al PDF como imagen, así que el formato de esa imagen ES el peso
+// del archivo. Antes iba en PNG y sin `compress`, y jsPDF guardaba los píxeles
+// en crudo: 1588 × 2246 × 3 bytes = 10,7 MB por página, 21 MB el informe.
+//
+// Se codifica cada página en JPEG y en PNG y se usa la más liviana, que no
+// siempre es la misma: la portada lleva foto y degradados y gana JPEG por lejos
+// (421 KB contra 868 KB), mientras que la página de tablas es casi toda color
+// plano y gana PNG (418 KB contra 445 KB) — y ahí el texto queda sin pérdida.
+// Con 0,95 el JPEG no muestra halos alrededor de las letras a esta resolución.
+const CALIDAD_JPEG = 0.95;
+
+function imagenMasLiviana(canvas: HTMLCanvasElement): { data: string; formato: 'JPEG' | 'PNG' } {
+  const jpeg = canvas.toDataURL('image/jpeg', CALIDAD_JPEG);
+  const png  = canvas.toDataURL('image/png');
+  return jpeg.length <= png.length
+    ? { data: jpeg, formato: 'JPEG' }
+    : { data: png,  formato: 'PNG'  };
+}
+
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function PDFDownloadButton({
@@ -63,20 +87,21 @@ export default function PDFDownloadButton({
     );
     if (paginas.length === 0) throw new Error('El informe no tiene páginas definidas');
 
-    const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
 
     for (let i = 0; i < paginas.length; i++) {
       const canvas = await html2canvas(paginas[i], {
-        scale: 2,
+        scale: ESCALA_CAPTURA,
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
       });
       if (i > 0) pdf.addPage();
       // Cada página del informe ya tiene proporción A4, así que entra completa.
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageH);
+      const img = imagenMasLiviana(canvas);
+      pdf.addImage(img.data, img.formato, 0, 0, pageW, pageH, undefined, 'FAST');
     }
 
     const dataUri = pdf.output('datauristring');
