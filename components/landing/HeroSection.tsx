@@ -26,7 +26,7 @@ export default function HeroSection() {
           playsInline
           className="absolute inset-0 w-full h-full object-cover opacity-65"
         >
-          <source src="/videos/video-poroma.mp4" type="video/mp4" />
+          <source src="/videos/video-carlos-alvarado.mp4" type="video/mp4" />
         </video>
         {/* Capas de gradiente para profundidad y contraste */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#010101]/85 via-[#010101]/35 to-transparent" />
