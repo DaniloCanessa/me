@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { QuoteStatus } from '@/lib/types';
 import { deleteQuotes } from './actions';
+import { fechaEmisionISO, formatFecha } from '@/lib/quote-date';
 
 const STATUS: Record<QuoteStatus, { label: string; color: string }> = {
   draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-600' },
@@ -18,16 +19,13 @@ function clp(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
-function dateStr(d: string) {
-  return new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 type QuoteRow = {
   id: string;
   quote_number: string;
   client_name: string;
   client_email: string;
   created_at: string;
+  fecha_emision: string | null;
   total_clp: number;
   status: QuoteStatus;
 };
@@ -111,7 +109,7 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                   <p className="font-medium text-gray-900 mt-0.5">{q.client_name}</p>
                   {q.client_email && <p className="text-xs text-gray-400 truncate">{q.client_email}</p>}
                   <div className="flex items-center justify-between gap-2 mt-1">
-                    <span className="text-xs text-gray-400">{dateStr(q.created_at)}</span>
+                    <span className="text-xs text-gray-400">{formatFecha(fechaEmisionISO(q), 'short')}</span>
                     <span className="text-sm font-semibold text-gray-900 tabular-nums">{clp(q.total_clp)}</span>
                   </div>
                 </div>
@@ -166,7 +164,7 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                       <p className="font-medium text-gray-900">{q.client_name}</p>
                       {q.client_email && <p className="text-xs text-gray-400">{q.client_email}</p>}
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-gray-500">{dateStr(q.created_at)}</td>
+                    <td className="px-4 py-3.5 text-sm text-gray-500">{formatFecha(fechaEmisionISO(q), 'short')}</td>
                     <td className="px-4 py-3.5 text-right font-semibold text-gray-900 tabular-nums">
                       {clp(q.total_clp)}
                     </td>

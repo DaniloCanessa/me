@@ -62,6 +62,7 @@ export async function updateQuoteHeader(id: string, formData: FormData) {
     notes:           (formData.get('notes') as string) || null,
     client_notes:    (formData.get('client_notes') as string) || null,
     validity_days:   parseInt(formData.get('validity_days') as string) || 10,
+    fecha_emision:   (formData.get('fecha_emision') as string) || null,
     installation_id: (formData.get('installation_id') as string) || null,
     updated_at:      new Date().toISOString(),
   }).eq('id', id);
@@ -181,6 +182,63 @@ async function recalcTotals(quoteId: string) {
     total_clp:    total_con_iva,
     updated_at:   new Date().toISOString(),
   }).eq('id', quoteId);
+}
+
+// Copia una cotización: mismo cliente, mismos datos de contacto y mismos ítems,
+// pero es una cotización nueva — número nuevo (lo asigna la base), borrador,
+// token nuevo y fecha de hoy — para editarla sin tocar la original.
+export async function duplicateQuote(id: string) {
+  const db = getSupabaseAdmin();
+  const { data: orig } = await db.from('quotes').select('*').eq('id', id).single();
+  if (!orig) return { error: 'Cotización no encontrada' };
+
+  const { data: items } = await db
+    .from('quote_items')
+    .select('product_id, description, quantity, costo_proveedor_clp, margen_pct, unit_price_clp, discount_percent, total_clp, sort_order')
+    .eq('quote_id', id)
+    .order('sort_order', { ascending: true });
+
+  const admin = await getAdminUser();
+  const { data: copia, error } = await db
+    .from('quotes')
+    .insert({
+      client_id:       orig.client_id,
+      lead_id:         orig.lead_id,
+      installation_id: orig.installation_id,
+      assigned_to:     admin?.sub ?? orig.assigned_to,
+      status:          'draft',
+      client_name:     orig.client_name,
+      client_email:    orig.client_email,
+      client_phone:    orig.client_phone,
+      client_rut:      orig.client_rut,
+      client_atencion: orig.client_atencion,
+      subtotal_clp:    orig.subtotal_clp,
+      discount_clp:    orig.discount_clp,
+      total_clp:       orig.total_clp,
+      validity_days:   orig.validity_days,
+      client_notes:    orig.client_notes,
+      notes:           `Copia de ${orig.quote_number}`,
+      fecha_emision:   null,           // vale la fecha de creación: hoy
+      token:           crypto.randomUUID(),
+    })
+    .select('id')
+    .single();
+  if (error) return { error: error.message };
+
+  if (items?.length) {
+    const { error: itemsError } = await db.from('quote_items').insert(
+      items.map((i) => ({ ...i, quote_id: copia.id })),
+    );
+    if (itemsError) {
+      // Una copia sin ítems confunde más de lo que ayuda: se deshace.
+      await db.from('quotes').delete().eq('id', copia.id);
+      return { error: 'No se pudieron copiar los ítems: ' + itemsError.message };
+    }
+  }
+
+  revalidatePath('/admin/quotes');
+  if (orig.client_id) revalidatePath(`/admin/clients/${orig.client_id}`);
+  redirect(`/admin/quotes/${copia.id}`);
 }
 
 export async function deleteQuote(id: string) {

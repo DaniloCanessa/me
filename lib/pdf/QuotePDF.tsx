@@ -2,6 +2,7 @@ import {
   Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer';
 import type { Quote, QuoteItem } from '@/lib/types';
+import { fechaEmisionISO, formatFecha, sumarDiasISO } from '@/lib/quote-date';
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
@@ -85,17 +86,6 @@ function clp(n: number) {
   }).format(n);
 }
 
-function dateStr(d: string) {
-  return new Date(d).toLocaleDateString('es-CL', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-}
-
-function validUntilDate(createdAt: string, days: number) {
-  const d = new Date(createdAt);
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
-}
 
 // ─── Fila de ítem ─────────────────────────────────────────────────────────────
 
@@ -139,9 +129,9 @@ export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string })
           {logoSrc && <Image src={logoSrc} style={S.logo} />}
           <View style={S.headerRight}>
             <Text style={S.quoteNumber}>{quote.quote_number}</Text>
-            <Text style={S.headerMeta}>Fecha de emisión: {dateStr(quote.created_at)}</Text>
+            <Text style={S.headerMeta}>Fecha de emisión: {formatFecha(fechaEmisionISO(quote))}</Text>
             <Text style={S.headerMeta}>
-              Válida hasta: {validUntilDate(quote.created_at, quote.validity_days)}
+              Válida hasta: {formatFecha(sumarDiasISO(fechaEmisionISO(quote), quote.validity_days))}
             </Text>
           </View>
         </View>

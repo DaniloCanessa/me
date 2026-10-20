@@ -59,6 +59,7 @@ export default async function QuoteEditorPage({ params }: { params: Promise<{ id
 
   return (
     <QuoteEditor
+      key={quote.id}  // al copiar se navega a otra cotización: el formulario debe rearmarse
       quote={quote}
       products={products}
       installations={installations}

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import type { Quote, QuoteItem, QuoteStatus } from '@/lib/types';
 import {
   upsertQuoteItem, deleteQuoteItem,
-  updateQuoteHeader, updateQuoteStatus, deleteQuote,
+  updateQuoteHeader, updateQuoteStatus, deleteQuote, duplicateQuote,
 } from '@/app/admin/quotes/actions';
 import { createProjectFromQuote } from '@/app/admin/projects/actions';
 import { getProductById } from '@/app/admin/products/actions';
+import { fechaEmisionISO } from '@/lib/quote-date';
 import ProductEditForm, { type Product as FullProduct } from '@/app/admin/products/[id]/ProductEditForm';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -629,6 +630,17 @@ export default function QuoteEditor({
               </button>
             )
           )}
+          <button
+            onClick={() => start(async () => {
+              const r = await duplicateQuote(quote.id);
+              if (r?.error) alert(r.error);
+            })}
+            disabled={isPending}
+            title="Crea una cotización nueva con el mismo cliente e ítems, con fecha de hoy"
+            className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            Copiar cotización
+          </button>
           <a
             href={`/api/admin/quotes/${quote.id}/pdf`}
             target="_blank"
@@ -781,6 +793,11 @@ export default function QuoteEditor({
               action={(fd) => { start(async () => { await updateQuoteHeader(quote.id, fd); }); }}
               className="flex flex-col gap-3"
             >
+              <label className="block">
+                <span className="text-xs text-gray-500 mb-1 block">Fecha</span>
+                <input name="fecha_emision" type="date" required defaultValue={fechaEmisionISO(quote)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
+              </label>
               <label className="block">
                 <span className="text-xs text-gray-500 mb-1 block">Cliente</span>
                 <input name="client_name" type="text" required defaultValue={quote.client_name}

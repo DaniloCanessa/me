@@ -11,6 +11,7 @@ import { deleteQuotes } from '@/app/admin/quotes/actions';
 import type { UserOption } from '@/components/admin/ClientsManager';
 import GeoFields from '@/components/admin/GeoFields';
 import { nombreRegion } from '@/lib/chile-geo';
+import { fechaEmisionISO, formatFecha } from '@/lib/quote-date';
 
 const ACTIVITY_ICONS: Record<string, string> = {
   llamada: '📞', visita: '🏠', email: '✉️',
@@ -545,7 +546,7 @@ export default function ClientDetail({
                     >
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900">{q.quote_number}</p>
-                        <p className="text-xs text-gray-400">{dateStr(q.created_at)}</p>
+                        <p className="text-xs text-gray-400">{formatFecha(fechaEmisionISO(q), 'short')}</p>
                       </div>
                       <p className="font-semibold text-gray-900 shrink-0">{clp(q.total_clp)}</p>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${st.color}`}>

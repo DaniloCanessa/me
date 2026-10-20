@@ -180,6 +180,7 @@ export interface Quote {
   discount_clp: number;
   total_clp: number;
   validity_days: number;
+  fecha_emision: string | null;     // 'YYYY-MM-DD' fijada a mano; null = fecha de creación
   valid_until: string | null;
   notes: string | null;
   client_notes: string | null;
