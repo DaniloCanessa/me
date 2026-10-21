@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Quote, QuoteItem, QuoteStatus } from '@/lib/types';
 import {
@@ -46,6 +46,15 @@ function calcItem(costo: number, margen: number, qty: number, desc: number) {
     subtotal:    Math.round(subtotal),
   };
 }
+
+// Formas de pago frecuentes: al elegir una se escribe como primera línea de las
+// condiciones comerciales (reemplazando la anterior si había otra de la lista).
+const FORMAS_PAGO = [
+  '50% de anticipo al confirmar, 50% contra entrega.',
+  '30% de anticipo al confirmar, 70% contra entrega.',
+  '40% al confirmar, 40% a la llegada de los equipos, 20% contra entrega.',
+  '100% al confirmar la compra.',
+];
 
 const STATUS_MAP: Record<QuoteStatus, { label: string; color: string; next?: QuoteStatus; nextLabel?: string }> = {
   draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-600',   next: 'sent',     nextLabel: 'Enviada' },
@@ -562,6 +571,20 @@ export default function QuoteEditor({
 }) {
   const [isPending, start] = useTransition();
   const [showPanel, setShowPanel] = useState(true);
+  const [condiciones, setCondiciones] = useState(quote.client_notes ?? '');
+  const condicionesRef = useRef<HTMLTextAreaElement>(null);
+  const formaPagoActual = FORMAS_PAGO.find((f) => condiciones.split('\n').includes(f)) ?? '';
+
+  function elegirFormaPago(valor: string) {
+    if (valor === 'otra') {
+      condicionesRef.current?.focus();
+      return;
+    }
+    // Se conserva lo escrito a mano; solo se cambia la forma de pago de la lista.
+    const resto = condiciones.split('\n').filter((l) => !FORMAS_PAGO.includes(l));
+    while (resto.length && !resto[0].trim()) resto.shift();
+    setCondiciones([valor, ...resto].join('\n').trimEnd());
+  }
   const items = quote.items ?? [];
 
   // Totales calculados en tiempo real desde los ítems
@@ -849,7 +872,17 @@ export default function QuoteEditor({
               </label>
               <label className="block">
                 <span className="text-xs text-gray-500 mb-1 block">Condiciones comerciales</span>
-                <textarea name="client_notes" rows={4} defaultValue={quote.client_notes ?? ''}
+                <select
+                  value={formaPagoActual}
+                  onChange={(e) => elegirFormaPago(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mb-2 focus:outline-none focus:border-[#389fe0]"
+                >
+                  <option value="" disabled>Elegir forma de pago…</option>
+                  {FORMAS_PAGO.map((f) => <option key={f} value={f}>{f}</option>)}
+                  <option value="otra">Otra (escribir abajo)</option>
+                </select>
+                <textarea name="client_notes" rows={4} ref={condicionesRef}
+                  value={condiciones} onChange={(e) => setCondiciones(e.target.value)}
                   placeholder="Ej: 50% al confirmar, saldo contra entrega. Garantía 12 meses…"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs resize-none focus:outline-none focus:border-[#389fe0]" />
               </label>
