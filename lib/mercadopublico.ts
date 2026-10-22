@@ -21,10 +21,21 @@ export function normalizeText(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/** Palabras clave activas que calzan dentro del texto dado. */
+/**
+ * Palabras clave que calzan en el texto. La palabra debe aparecer al INICIO de
+ * una palabra del texto: "fotovoltaic" calza con "fotovoltaicos" y "plc" con
+ * "PLC Beckhoff", pero "plc" ya no calza dentro de "CAPLC" ni "HPLC".
+ */
 export function matchKeywords(text: string, keywords: string[]): string[] {
   const norm = normalizeText(text);
-  return keywords.filter((kw) => norm.includes(normalizeText(kw)));
+  return keywords.filter((kw) => {
+    const k = normalizeText(kw).trim();
+    if (!k) return false;
+    for (let i = norm.indexOf(k); i !== -1; i = norm.indexOf(k, i + 1)) {
+      if (i === 0 || !/[a-z0-9ñ]/.test(norm[i - 1])) return true;
+    }
+    return false;
+  });
 }
 
 // ─── Tipos de la API ──────────────────────────────────────────────────────────
