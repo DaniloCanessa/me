@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import type { Tender, TenderKeyword, TenderRecipient, TenderStatus } from '@/lib/types';
+import type { Tender, TenderKeyword, TenderRecipient, TenderSearch, TenderStatus } from '@/lib/types';
 import {
   syncTendersNow,
   updateTenderStatus,
@@ -12,6 +12,10 @@ import {
   addTenderRecipient,
   toggleTenderRecipient,
   deleteTenderRecipient,
+  addTenderSearch,
+  renameTenderSearch,
+  toggleTenderSearch,
+  deleteTenderSearch,
 } from '@/app/admin/licitaciones/actions';
 
 // ─── Constantes UI ────────────────────────────────────────────────────────────
@@ -54,29 +58,259 @@ function formatCLP(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
+// ─── Tarjeta de una búsqueda ──────────────────────────────────────────────────
+// Nombre, activar/desactivar, sus palabras clave y sus correos.
+
+function Chip({
+  label,
+  active,
+  onToggle,
+  onDelete,
+  confirmText,
+}: {
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  confirmText: string;
+}) {
+  return (
+    <span
+      className={[
+        'group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors',
+        active
+          ? 'bg-[#389fe0]/10 text-[#1d65c5] hover:bg-[#389fe0]/20'
+          : 'bg-gray-100 text-gray-400 hover:bg-gray-200',
+      ].join(' ')}
+      onClick={onToggle}
+      title={active ? 'Click para desactivar' : 'Click para activar'}
+    >
+      {label}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (confirm(confirmText)) onDelete();
+        }}
+        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity leading-none"
+        aria-label={`Eliminar ${label}`}
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+function AddForm({
+  placeholder,
+  type,
+  width,
+  onAdd,
+}: {
+  placeholder: string;
+  type: 'text' | 'email';
+  width: string;
+  onAdd: (value: string) => Promise<{ ok: boolean; message?: string }>;
+}) {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, start] = useTransition();
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!value.trim()) return;
+        setError(null);
+        start(async () => {
+          const r = await onAdd(value);
+          if (r.ok) setValue('');
+          else setError(r.message ?? 'Error');
+        });
+      }}
+      className="flex gap-2 items-start"
+    >
+      <div>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setError(null); }}
+          placeholder={placeholder}
+          className={`rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition ${width}`}
+        />
+        {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      </div>
+      <button
+        type="submit"
+        disabled={isPending || !value.trim()}
+        className="px-3 py-1.5 rounded-xl text-sm font-semibold bg-[#389fe0] hover:bg-[#1d65c5] text-white disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
+      >
+        + Agregar
+      </button>
+    </form>
+  );
+}
+
+function SearchCard({
+  search,
+  keywords,
+  recipients,
+  tenderCount,
+}: {
+  search: TenderSearch;
+  keywords: TenderKeyword[];
+  recipients: TenderRecipient[];
+  tenderCount: number;
+}) {
+  const [isPending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [nombre, setNombre] = useState(search.nombre);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const activeRecipients = recipients.filter((r) => r.is_active).length;
+  const activeKeywords = keywords.filter((k) => k.is_active).length;
+
+  return (
+    <div className={`bg-white rounded-2xl border shadow-sm p-5 flex flex-col gap-4 ${search.is_active ? 'border-gray-100' : 'border-dashed border-gray-200 opacity-70'} ${isPending ? 'opacity-60' : ''}`}>
+      {/* Encabezado */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          {editing ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                start(async () => {
+                  const r = await renameTenderSearch(search.id, nombre);
+                  if (r.ok) { setEditing(false); setNameError(null); } else setNameError(r.message ?? 'Error');
+                });
+              }}
+              className="flex gap-2 items-center"
+            >
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                autoFocus
+                className="rounded-lg border border-gray-200 px-2 py-1 text-sm font-semibold text-gray-900 focus:outline-none focus:border-[#389fe0]"
+              />
+              <button type="submit" className="text-xs font-semibold text-[#1d65c5]">Guardar</button>
+              <button type="button" onClick={() => { setEditing(false); setNombre(search.nombre); setNameError(null); }} className="text-xs text-gray-400">Cancelar</button>
+            </form>
+          ) : (
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              {search.nombre}
+              <button type="button" onClick={() => setEditing(true)} className="text-[11px] font-normal text-gray-400 hover:text-[#1d65c5]">
+                renombrar
+              </button>
+            </h2>
+          )}
+          {nameError && <p className="text-[11px] text-red-500 mt-1">{nameError}</p>}
+          <p className="text-xs text-gray-400 mt-0.5">
+            {activeKeywords} palabra{activeKeywords !== 1 ? 's' : ''} activa{activeKeywords !== 1 ? 's' : ''} ·{' '}
+            {activeRecipients} correo{activeRecipients !== 1 ? 's' : ''} · {tenderCount} licitaci{tenderCount !== 1 ? 'ones' : 'ón'} guardada{tenderCount !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => start(async () => { await toggleTenderSearch(search.id, !search.is_active); })}
+            className={[
+              'px-3 py-1 rounded-lg text-xs font-semibold border transition-colors',
+              search.is_active
+                ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                : 'border-gray-200 text-gray-500 hover:text-[#1d65c5]',
+            ].join(' ')}
+            title={search.is_active ? 'Click para pausar esta búsqueda' : 'Click para reactivarla'}
+          >
+            {search.is_active ? '● Activa' : '○ Pausada'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(`¿Eliminar la búsqueda "${search.nombre}" con sus palabras y correos? Las licitaciones ya guardadas se conservan.`)) {
+                start(async () => { await deleteTenderSearch(search.id); });
+              }
+            }}
+            className="px-3 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-400 hover:text-red-500 transition-colors"
+          >
+            Eliminar
+          </button>
+        </div>
+      </div>
+
+      {/* Palabras clave */}
+      <div>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Palabras clave</p>
+          <AddForm placeholder="Nueva palabra clave…" type="text" width="w-48"
+            onAdd={(v) => addTenderKeyword(search.id, v)} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {keywords.map((kw) => (
+            <Chip
+              key={kw.id}
+              label={kw.keyword}
+              active={kw.is_active}
+              onToggle={() => start(async () => { await toggleTenderKeyword(kw.id, !kw.is_active); })}
+              onDelete={() => start(async () => { await deleteTenderKeyword(kw.id); })}
+              confirmText={`¿Eliminar la palabra clave "${kw.keyword}"?`}
+            />
+          ))}
+          {keywords.length === 0 && <p className="text-xs text-gray-400">Sin palabras clave: esta búsqueda no encuentra nada todavía.</p>}
+        </div>
+      </div>
+
+      {/* Correos */}
+      <div>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Correos que reciben el aviso</p>
+          <AddForm placeholder="correo@empresa.cl" type="email" width="w-56"
+            onAdd={(v) => addTenderRecipient(search.id, v)} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {recipients.map((r) => (
+            <Chip
+              key={r.id}
+              label={`✉ ${r.email}`}
+              active={r.is_active}
+              onToggle={() => start(async () => { await toggleTenderRecipient(r.id, !r.is_active); })}
+              onDelete={() => start(async () => { await deleteTenderRecipient(r.id); })}
+              confirmText={`¿Quitar ${r.email} de esta búsqueda?`}
+            />
+          ))}
+          {activeRecipients === 0 && (
+            <p className="text-xs text-amber-600">Sin correos activos: sus licitaciones solo se verán aquí, no llega aviso.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function TendersManager({
   tenders,
+  searches,
   keywords,
   recipients,
 }: {
   tenders: Tender[];
+  searches: TenderSearch[];
   keywords: TenderKeyword[];
   recipients: TenderRecipient[];
 }) {
   const [filter, setFilter] = useState<TenderStatus | 'todas'>('todas');
-  const [newKeyword, setNewKeyword] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [searchFilter, setSearchFilter] = useState<string>('todas');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [isSyncing, startSync] = useTransition();
   const [isPending, startTransition] = useTransition();
 
+  const searchName = new Map(searches.map((s) => [s.id, s.nombre]));
+  const enBusqueda = searchFilter === 'todas'
+    ? tenders
+    : tenders.filter((t) => (t.searches_matched ?? []).includes(searchFilter));
   const newCount = tenders.filter((t) => t.estado_interno === 'nueva').length;
   const visible = filter === 'todas'
-    ? tenders.filter((t) => t.estado_interno !== 'descartada')
-    : tenders.filter((t) => t.estado_interno === filter);
+    ? enBusqueda.filter((t) => t.estado_interno !== 'descartada')
+    : enBusqueda.filter((t) => t.estado_interno === filter);
 
   function handleSync() {
     setSyncMessage(null);
@@ -85,28 +319,9 @@ export default function TendersManager({
       setSyncMessage(
         r.error
           ? `Error: ${r.error}`
-          : `Revisadas ${r.revisadas} publicaciones · ${r.calzaron} calzaron · ${r.nuevas} nuevas${r.emailEnviado ? ' · email enviado' : ''}`,
+          : `Revisadas ${r.revisadas} publicaciones (${r.dudosas} por descripción) · ${r.calzaron} calzaron · ${r.nuevas} nuevas`
+            + r.busquedas.map((b) => ` · ${b.nombre}: ${b.nuevas} nueva${b.nuevas !== 1 ? 's' : ''}${b.emailEnviado ? ' ✉' : ''}`).join(''),
       );
-    });
-  }
-
-  function handleAddKeyword(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newKeyword.trim()) return;
-    startTransition(async () => {
-      await addTenderKeyword(newKeyword);
-      setNewKeyword('');
-    });
-  }
-
-  function handleAddEmail(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newEmail.trim()) return;
-    setEmailError(null);
-    startTransition(async () => {
-      const r = await addTenderRecipient(newEmail);
-      if (r.ok) setNewEmail('');
-      else setEmailError(r.message ?? 'Error');
     });
   }
 
@@ -145,141 +360,63 @@ export default function TendersManager({
         )}
       </div>
 
-      {/* ── Palabras clave ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3">
+      {/* ── Búsquedas ── */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-sm font-semibold text-gray-700">Palabras clave del filtro</h2>
+            <h2 className="text-sm font-semibold text-gray-700">Búsquedas</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Click para activar/desactivar · el match ignora mayúsculas y acentos
+              Cada búsqueda envía su propio correo con sus licitaciones · click en una palabra o correo para activarlo/desactivarlo · el match ignora mayúsculas y acentos
             </p>
           </div>
-          <form onSubmit={handleAddKeyword} className="flex gap-2">
-            <input
-              type="text"
-              value={newKeyword}
-              onChange={(e) => setNewKeyword(e.target.value)}
-              placeholder="Nueva palabra clave…"
-              className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition w-48"
+          <AddForm placeholder="Nombre de la nueva búsqueda…" type="text" width="w-60"
+            onAdd={(v) => addTenderSearch(v)} />
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          {searches.map((s) => (
+            <SearchCard
+              key={s.id}
+              search={s}
+              keywords={keywords.filter((k) => k.search_id === s.id)}
+              recipients={recipients.filter((r) => r.search_id === s.id)}
+              tenderCount={tenders.filter((t) => (t.searches_matched ?? []).includes(s.id)).length}
             />
-            <button
-              type="submit"
-              disabled={isPending || !newKeyword.trim()}
-              className="px-3 py-1.5 rounded-xl text-sm font-semibold bg-[#389fe0] hover:bg-[#1d65c5] text-white disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
-            >
-              + Agregar
-            </button>
-          </form>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {keywords.map((kw) => (
-            <span
-              key={kw.id}
-              className={[
-                'group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors',
-                kw.is_active
-                  ? 'bg-[#389fe0]/10 text-[#1d65c5] hover:bg-[#389fe0]/20'
-                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200',
-              ].join(' ')}
-              onClick={() => startTransition(async () => { await toggleTenderKeyword(kw.id, !kw.is_active); })}
-              title={kw.is_active ? 'Click para desactivar' : 'Click para activar'}
-            >
-              {kw.keyword}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`¿Eliminar la palabra clave "${kw.keyword}"?`)) {
-                    startTransition(async () => { await deleteTenderKeyword(kw.id); });
-                  }
-                }}
-                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity leading-none"
-                aria-label={`Eliminar ${kw.keyword}`}
-              >
-                ×
-              </button>
-            </span>
           ))}
-          {keywords.length === 0 && (
-            <p className="text-xs text-gray-400">
-              No hay palabras clave — ejecuta el SQL de <code>supabase/tenders.sql</code> para crear el seed inicial.
-            </p>
-          )}
         </div>
+        {searches.length === 0 && (
+          <p className="text-xs text-gray-400">
+            No hay búsquedas — ejecuta <code>supabase/tender_searches.sql</code> o crea una arriba.
+          </p>
+        )}
       </div>
 
-      {/* ── Correos de notificación ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700">Correos de notificación</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Reciben el email cuando aparecen licitaciones nuevas · click para activar/desactivar
-            </p>
-          </div>
-          <form onSubmit={handleAddEmail} className="flex gap-2 items-start">
-            <div>
-              <input
-                type="email"
-                value={newEmail}
-                onChange={(e) => { setNewEmail(e.target.value); setEmailError(null); }}
-                placeholder="correo@empresa.cl"
-                className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#389fe0]/50 focus:border-transparent transition w-56"
-              />
-              {emailError && <p className="text-[11px] text-red-500 mt-1">{emailError}</p>}
-            </div>
+      {/* ── Filtro por búsqueda ── */}
+      {searches.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {[{ id: 'todas', nombre: 'Todas las búsquedas' }, ...searches].map((s) => (
             <button
-              type="submit"
-              disabled={isPending || !newEmail.trim()}
-              className="px-3 py-1.5 rounded-xl text-sm font-semibold bg-[#389fe0] hover:bg-[#1d65c5] text-white disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
-            >
-              + Agregar
-            </button>
-          </form>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {recipients.map((r) => (
-            <span
-              key={r.id}
+              key={s.id}
+              type="button"
+              onClick={() => setSearchFilter(s.id)}
               className={[
-                'group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors',
-                r.is_active
-                  ? 'bg-[#389fe0]/10 text-[#1d65c5] hover:bg-[#389fe0]/20'
-                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200',
+                'px-3 py-1 rounded-lg text-xs font-medium transition-colors',
+                searchFilter === s.id
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-400',
               ].join(' ')}
-              onClick={() => startTransition(async () => { await toggleTenderRecipient(r.id, !r.is_active); })}
-              title={r.is_active ? 'Click para desactivar' : 'Click para activar'}
             >
-              ✉ {r.email}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`¿Eliminar el correo ${r.email}?`)) {
-                    startTransition(async () => { await deleteTenderRecipient(r.id); });
-                  }
-                }}
-                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity leading-none"
-                aria-label={`Eliminar ${r.email}`}
-              >
-                ×
-              </button>
-            </span>
+              {s.nombre}
+            </button>
           ))}
-          {recipients.length === 0 && (
-            <p className="text-xs text-gray-400">
-              Sin correos configurados — se usará <code>LEAD_RECIPIENT_EMAIL</code> como respaldo.
-            </p>
-          )}
         </div>
-      </div>
+      )}
 
       {/* ── Filtros ── */}
       <div className="flex gap-2 flex-wrap">
         {FILTERS.map((f) => {
           const count = f.value === 'todas'
-            ? tenders.filter((t) => t.estado_interno !== 'descartada').length
-            : tenders.filter((t) => t.estado_interno === f.value).length;
+            ? enBusqueda.filter((t) => t.estado_interno !== 'descartada').length
+            : enBusqueda.filter((t) => t.estado_interno === f.value).length;
           return (
             <button
               key={f.value}
@@ -365,6 +502,11 @@ export default function TendersManager({
 
                 <div className="flex items-center justify-between gap-3 flex-wrap border-t border-gray-50 pt-3">
                   <div className="flex gap-1.5 flex-wrap">
+                    {(t.searches_matched ?? []).map((id) => searchName.get(id) && (
+                      <span key={id} className="bg-gray-900 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        {searchName.get(id)}
+                      </span>
+                    ))}
                     {t.keywords_matched.map((kw) => (
                       <span key={kw} className="bg-[#dde3e9]/60 text-[#1d65c5] text-[10px] font-medium px-2 py-0.5 rounded-full">
                         {kw}

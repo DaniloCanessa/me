@@ -36,15 +36,61 @@ export async function markAllTendersSeen() {
   return { ok: true };
 }
 
-// ─── Correos de notificación parametrizables ─────────────────────────────────
+// ─── Búsquedas ───────────────────────────────────────────────────────────────
+// Cada búsqueda agrupa sus palabras clave y los correos que reciben su aviso.
 
-export async function addTenderRecipient(email: string) {
+export async function addTenderSearch(nombre: string) {
+  const clean = nombre.trim();
+  if (!clean) return { ok: false, message: 'Ponle un nombre a la búsqueda' };
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_searches').insert({ nombre: clean });
+  if (error) {
+    const message = error.code === '23505' ? 'Ya existe una búsqueda con ese nombre' : error.message;
+    return { ok: false, message };
+  }
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+export async function renameTenderSearch(id: string, nombre: string) {
+  const clean = nombre.trim();
+  if (!clean) return { ok: false, message: 'El nombre no puede quedar vacío' };
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_searches').update({ nombre: clean }).eq('id', id);
+  if (error) {
+    const message = error.code === '23505' ? 'Ya existe una búsqueda con ese nombre' : error.message;
+    return { ok: false, message };
+  }
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+export async function toggleTenderSearch(id: string, isActive: boolean) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_searches').update({ is_active: isActive }).eq('id', id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+/** Borra la búsqueda con sus palabras y correos; las licitaciones ya guardadas se conservan. */
+export async function deleteTenderSearch(id: string) {
+  const db = getSupabaseAdmin();
+  const { error } = await db.from('tender_searches').delete().eq('id', id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath('/admin/licitaciones');
+  return { ok: true };
+}
+
+// ─── Correos de notificación (por búsqueda) ─────────────────────────────────
+
+export async function addTenderRecipient(searchId: string, email: string) {
   const clean = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return { ok: false, message: 'Email inválido' };
   const db = getSupabaseAdmin();
-  const { error } = await db.from('tender_recipients').insert({ email: clean });
+  const { error } = await db.from('tender_recipients').insert({ search_id: searchId, email: clean });
   if (error) {
-    const message = error.code === '23505' ? 'Ese correo ya está en la lista' : error.message;
+    const message = error.code === '23505' ? 'Ese correo ya está en esta búsqueda' : error.message;
     return { ok: false, message };
   }
   revalidatePath('/admin/licitaciones');
@@ -67,15 +113,15 @@ export async function deleteTenderRecipient(id: string) {
   return { ok: true };
 }
 
-// ─── Palabras clave parametrizables ──────────────────────────────────────────
+// ─── Palabras clave (por búsqueda) ──────────────────────────────────────────
 
-export async function addTenderKeyword(keyword: string) {
+export async function addTenderKeyword(searchId: string, keyword: string) {
   const clean = keyword.trim().toLowerCase();
   if (!clean) return { ok: false, message: 'Palabra vacía' };
   const db = getSupabaseAdmin();
-  const { error } = await db.from('tender_keywords').insert({ keyword: clean });
+  const { error } = await db.from('tender_keywords').insert({ search_id: searchId, keyword: clean });
   if (error) {
-    const message = error.code === '23505' ? 'Esa palabra ya está en la lista' : error.message;
+    const message = error.code === '23505' ? 'Esa palabra ya está en esta búsqueda' : error.message;
     return { ok: false, message };
   }
   revalidatePath('/admin/licitaciones');

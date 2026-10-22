@@ -15,14 +15,25 @@ export interface Tender {
   monto_estimado: number | null;
   moneda: string | null;
   keywords_matched: string[];
+  searches_matched: string[];      // ids de las búsquedas (tender_searches) con que calzó
   estado_interno: TenderStatus;
   notificada: boolean;
   created_at: string;
   updated_at: string;
 }
 
+// Búsqueda de licitaciones: un tema con sus propias palabras clave y correos.
+export interface TenderSearch {
+  id: string;
+  nombre: string;
+  is_active: boolean;
+  last_email_date: string | null;  // último día (Chile) en que envió correo
+  created_at: string;
+}
+
 export interface TenderKeyword {
   id: string;
+  search_id: string;
   keyword: string;
   is_active: boolean;
   created_at: string;
@@ -30,6 +41,7 @@ export interface TenderKeyword {
 
 export interface TenderRecipient {
   id: string;
+  search_id: string;
   email: string;
   is_active: boolean;
   created_at: string;

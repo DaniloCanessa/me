@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
-import type { Tender, TenderKeyword, TenderRecipient } from '@/lib/types';
+import type { Tender, TenderKeyword, TenderRecipient, TenderSearch } from '@/lib/types';
 
 export async function getTenders(): Promise<Tender[]> {
   try {
@@ -40,6 +40,20 @@ export async function getTenderKeywords(): Promise<TenderKeyword[]> {
       .order('keyword', { ascending: true });
     if (error) return [];
     return (data ?? []) as TenderKeyword[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getTenderSearches(): Promise<TenderSearch[]> {
+  try {
+    const db = getSupabaseAdmin();
+    const { data, error } = await db
+      .from('tender_searches')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) return [];
+    return (data ?? []) as TenderSearch[];
   } catch {
     return [];
   }
