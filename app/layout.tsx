@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google';
 import './globals.css';
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '@/lib/seo';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import MetaPixel from '@/components/MetaPixel';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <ServiceWorkerRegister />
         {children}
+        <MetaPixel />
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import type {
   WizardState,
   SimulatorInput,
@@ -23,6 +23,7 @@ import type { BoletaArchivadaLocal } from './BillOCRUpload';
 import { formatCLP, formatKWh, formatPayback, formatPercent } from '@/lib/format';
 import { IconCar, IconBattery } from '@/components/landing/icons';
 import dynamic from 'next/dynamic';
+import { trackMeta, trackMetaCustom } from '@/lib/meta-pixel';
 
 const PDFDownloadButton = dynamic(() => import('./PDFDownloadButton'), { ssr: false });
 
@@ -858,6 +859,11 @@ export default function StepResults({ state, config, catalog, adminMode = false,
   // Empresa: tamaño de planta elegido a mano (null = el que sale del consumo).
   const [businessSizeKWp, setBusinessSizeKWp] = useState<number | null>(null);
 
+  // Meta: llegó a ver su simulación (público objetivo para volver a mostrarle anuncios).
+  useEffect(() => {
+    if (!adminMode) trackMetaCustom('SimulacionCompletada', { tipo_cliente: state.customerCategory });
+  }, [adminMode, state.customerCategory]);
+
   // Tamaños del catálogo (sin batería) disponibles para el selector manual interno.
   const adminKitSizes = useMemo(
     () => (catalog ?? [])
@@ -1123,6 +1129,7 @@ export default function StepResults({ state, config, catalog, adminMode = false,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (res.ok) trackMeta('Lead', { content_name: 'Simulador' });
       setCtaState(res.ok ? 'success' : 'error');
     } catch {
       setCtaState('error');
@@ -1168,6 +1175,7 @@ export default function StepResults({ state, config, catalog, adminMode = false,
       const res = await fetch('/api/leads', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       });
+      if (res.ok) trackMeta('Lead', { content_name: 'Simulador — mantención' });
       setCtaState(res.ok ? 'success' : 'error');
     } catch {
       setCtaState('error');

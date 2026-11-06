@@ -10,7 +10,7 @@ export const metadata = pageMetadata({
 
 export default function PrivacidadPage() {
   return (
-    <LegalLayout title="Política de Privacidad" lastUpdated="1 de enero de 2026">
+    <LegalLayout title="Política de Privacidad" lastUpdated="6 de noviembre de 2026">
 
       <section>
         <h2 className="text-lg font-bold text-[#010101] mb-2">1. Marco legal aplicable</h2>
@@ -106,6 +106,7 @@ export default function PrivacidadPage() {
         </p>
         <ul className="list-disc pl-5 text-gray-600 space-y-1">
           <li><strong>Proveedores tecnológicos</strong> (servicios de email, base de datos en la nube, analytics) que actúan como encargados del tratamiento bajo contratos que garantizan el cumplimiento de la Ley N° 21.719.</li>
+          <li><strong>Meta Platforms</strong> (Facebook e Instagram), solo si usted acepta las cookies de medición: datos técnicos de navegación (páginas visitadas, dispositivo, IP) y si completó un formulario o una simulación, sin su nombre, email ni teléfono. Ver punto 11.</li>
           <li><strong>Autoridades públicas</strong> cuando así lo exija la ley o una orden judicial.</li>
         </ul>
         <p className="text-gray-600 mt-2">
@@ -178,8 +179,16 @@ export default function PrivacidadPage() {
         <h2 className="text-lg font-bold text-[#010101] mb-2">11. Cookies y tecnologías similares</h2>
         <p className="text-gray-600">
           Utilizamos cookies estrictamente necesarias para el funcionamiento del sitio. Para cookies analíticas
-          o de seguimiento, solicitamos consentimiento previo. Puede gestionar sus preferencias en la configuración
-          de su navegador. El rechazo de cookies no esenciales no afecta el uso del simulador ni de los formularios.
+          o de seguimiento, solicitamos consentimiento previo mediante el aviso que aparece en su primera visita.
+          El rechazo de cookies no esenciales no afecta el uso del simulador ni de los formularios.
+        </p>
+        <p className="text-gray-600 mt-2">
+          <strong>Píxel de Meta:</strong> si usted acepta, cargamos el píxel de Meta Platforms, que registra las
+          páginas que visita y si envía un formulario de contacto, completa una simulación o nos escribe por WhatsApp.
+          Lo usamos para medir el resultado de nuestros anuncios en Facebook e Instagram y mostrar publicidad a
+          personas interesadas. Meta trata estos datos según su propia política de privacidad y puede transferirlos
+          fuera de Chile. Puede cambiar su decisión en cualquier momento desde el enlace
+          {' '}<strong>«Preferencias de cookies»</strong> al pie de cada página.
         </p>
       </section>
 

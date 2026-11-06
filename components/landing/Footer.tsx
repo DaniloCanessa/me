@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getSocialConfig } from '@/lib/db/config';
 import { IconInstagram, IconFacebook, IconYouTube, IconTikTok } from './icons';
+import CookiePreferencesLink from './CookiePreferencesLink';
 
 export default async function Footer() {
   // URLs configurables en /admin/config (categoría Redes sociales); vacía = oculta
@@ -68,6 +69,7 @@ export default async function Footer() {
               <li><Link href="/terminos" className="hover:text-[#389fe0] transition-colors">Términos y condiciones</Link></li>
               <li><Link href="/privacidad" className="hover:text-[#389fe0] transition-colors">Política de privacidad</Link></li>
               <li><Link href="/devoluciones" className="hover:text-[#389fe0] transition-colors">Política de devoluciones</Link></li>
+              <li><CookiePreferencesLink /></li>
             </ul>
 
             <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mt-8 mb-4">Pagos</p>

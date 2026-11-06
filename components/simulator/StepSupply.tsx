@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { trackMeta } from '@/lib/meta-pixel';
 import type { SVGProps } from 'react';
 import type { BusinessContact, CustomerCategory, PersonContact, PropertyType, SupplyData, TarifaType } from '@/lib/types';
 import {
@@ -93,6 +94,7 @@ export default function StepSupply({ category, initialData, contact, onSubmit }:
             `Ubicación: ${contact.commune}, ${contact.city}.`,
         }),
       });
+      if (res.ok) trackMeta('Lead', { content_name: 'Simulador — departamento' });
       setContactRequest(res.ok ? 'sent' : 'error');
     } catch {
       setContactRequest('error');

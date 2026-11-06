@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { IconMail, IconPin, IconPhone } from './icons';
+import { trackMeta } from '@/lib/meta-pixel';
 
 export default function ContactSection({ showEyebrow = true }: { showEyebrow?: boolean }) {
   const [type, setType] = useState<'natural' | 'business'>('natural');
@@ -18,6 +19,7 @@ export default function ContactSection({ showEyebrow = true }: { showEyebrow?: b
         body: JSON.stringify({ ...form, type }),
       });
       if (!res.ok) throw new Error();
+      trackMeta('Lead', { content_name: 'Formulario de contacto' });
       setStatus('success');
       setForm({ name: '', contactName: '', email: '', phone: '', message: '' });
     } catch {
