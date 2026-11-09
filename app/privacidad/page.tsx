@@ -10,7 +10,7 @@ export const metadata = pageMetadata({
 
 export default function PrivacidadPage() {
   return (
-    <LegalLayout title="Política de Privacidad" lastUpdated="6 de noviembre de 2026">
+    <LegalLayout title="Política de Privacidad" lastUpdated="9 de noviembre de 2026">
 
       <section>
         <h2 className="text-lg font-bold text-[#010101] mb-2">1. Marco legal aplicable</h2>
@@ -106,7 +106,7 @@ export default function PrivacidadPage() {
         </p>
         <ul className="list-disc pl-5 text-gray-600 space-y-1">
           <li><strong>Proveedores tecnológicos</strong> (servicios de email, base de datos en la nube, analytics) que actúan como encargados del tratamiento bajo contratos que garantizan el cumplimiento de la Ley N° 21.719.</li>
-          <li><strong>Meta Platforms</strong> (Facebook e Instagram), solo si usted acepta las cookies de medición: datos técnicos de navegación (páginas visitadas, dispositivo, IP) y si completó un formulario o una simulación, sin su nombre, email ni teléfono. Ver punto 11.</li>
+          <li><strong>Meta Platforms</strong> (Facebook e Instagram), solo si usted acepta las cookies de medición: datos técnicos de navegación (páginas visitadas, dispositivo, IP), si completó un formulario o una simulación y, en ese caso, su email y teléfono cifrados (hash), nunca en texto legible. Ver punto 11.</li>
           <li><strong>Autoridades públicas</strong> cuando así lo exija la ley o una orden judicial.</li>
         </ul>
         <p className="text-gray-600 mt-2">
@@ -185,8 +185,10 @@ export default function PrivacidadPage() {
         <p className="text-gray-600 mt-2">
           <strong>Píxel de Meta:</strong> si usted acepta, cargamos el píxel de Meta Platforms, que registra las
           páginas que visita y si envía un formulario de contacto, completa una simulación o nos escribe por WhatsApp.
-          Lo usamos para medir el resultado de nuestros anuncios en Facebook e Instagram y mostrar publicidad a
-          personas interesadas. Meta trata estos datos según su propia política de privacidad y puede transferirlos
+          Cuando completa un formulario, el píxel también envía su email y teléfono <strong>cifrados (hash)</strong>,
+          que Meta usa solo para reconocer si usted tiene una cuenta en Facebook o Instagram; no recibe esos datos
+          en texto legible. Lo usamos para medir el resultado de nuestros anuncios en Facebook e Instagram y mostrar
+          publicidad a personas interesadas. Si rechaza las cookies, no se envía nada de esto. Meta trata estos datos según su propia política de privacidad y puede transferirlos
           fuera de Chile. Puede cambiar su decisión en cualquier momento desde el enlace
           {' '}<strong>«Preferencias de cookies»</strong> al pie de cada página.
         </p>
