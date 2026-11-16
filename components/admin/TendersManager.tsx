@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import type { Tender, TenderKeyword, TenderRecipient, TenderSearch, TenderStatus } from '@/lib/types';
 import {
   syncTendersNow,
+  backfillTenderSearch,
   updateTenderStatus,
   markAllTendersSeen,
   addTenderKeyword,
@@ -165,6 +166,8 @@ function SearchCard({
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(search.nombre);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [isBackfilling, startBackfill] = useTransition();
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const activeRecipients = recipients.filter((r) => r.is_active).length;
   const activeKeywords = keywords.filter((k) => k.is_active).length;
 
@@ -223,6 +226,33 @@ function SearchCard({
           </button>
           <button
             type="button"
+            disabled={isBackfilling || !search.is_active || activeKeywords === 0}
+            onClick={() => {
+              setBackfillMsg(null);
+              startBackfill(async () => {
+                const r = await backfillTenderSearch(search.id);
+                setBackfillMsg(
+                  !r.ok
+                    ? `Error: ${r.message ?? 'no se pudo buscar'}`
+                    : `Últimos ${r.dias} días: ${r.revisadas} abiertas revisadas · ${r.calzaron} calzaron · ${r.nuevas} nueva${r.nuevas !== 1 ? 's' : ''}`
+                      + (r.yaGuardadas ? ` · ${r.yaGuardadas} ya estaban guardadas` : '')
+                      + (r.omitidas ? ` · ${r.omitidas} quedaron fuera por el tope (vuelve a buscar)` : '')
+                      + (r.emailEnviado ? ' · ✉ aviso enviado' : ''),
+                );
+              });
+            }}
+            className={[
+              'px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+              isBackfilling
+                ? 'border-gray-200 text-gray-400 cursor-wait'
+                : 'border-gray-200 text-gray-600 hover:border-[#389fe0] hover:text-[#1d65c5] disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:text-gray-600',
+            ].join(' ')}
+            title="La revisión diaria solo mira hoy y ayer. Esto revisa por título lo publicado en los últimos 10 días que siga abierto, y avisa a los correos de esta búsqueda."
+          >
+            {isBackfilling ? 'Buscando… (1-3 min)' : '⟲ Últimos 10 días'}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               if (confirm(`¿Eliminar la búsqueda "${search.nombre}" con sus palabras y correos? Las licitaciones ya guardadas se conservan.`)) {
                 start(async () => { await deleteTenderSearch(search.id); });
@@ -234,6 +264,10 @@ function SearchCard({
           </button>
         </div>
       </div>
+
+      {backfillMsg && (
+        <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 -mt-1">{backfillMsg}</p>
+      )}
 
       {/* Palabras clave */}
       <div>

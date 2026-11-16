@@ -1,6 +1,10 @@
 import { getTenders, getTenderKeywords, getTenderRecipients, getTenderSearches } from '@/lib/db/tenders';
 import TendersManager from '@/components/admin/TendersManager';
 
+// Las server actions de esta página ("Sincronizar ahora" y "Buscar en los
+// últimos 10 días") consultan Mercado Público a ~1 req/s y pueden tardar minutos.
+export const maxDuration = 300;
+
 // Licitaciones de Mercado Público que calzan con los servicios de Mercado Energy.
 // La sincronización corre a diario por cron (/api/cron/tenders) y también
 // manualmente desde el botón "Sincronizar ahora".

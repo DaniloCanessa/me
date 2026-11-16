@@ -2,13 +2,20 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
-import { syncTenders } from '@/lib/mercadopublico';
-import type { SyncResult } from '@/lib/mercadopublico';
+import { syncTenders, backfillSearch } from '@/lib/mercadopublico';
+import type { SyncResult, BackfillResult } from '@/lib/mercadopublico';
 import type { TenderStatus } from '@/lib/types';
 
 /** Sincronización manual desde el backoffice (la diaria corre por cron). */
 export async function syncTendersNow(): Promise<SyncResult> {
   const result = await syncTenders();
+  revalidatePath('/admin/licitaciones');
+  return result;
+}
+
+/** Revisa los últimos 10 días para una búsqueda (la diaria solo mira hoy y ayer). */
+export async function backfillTenderSearch(searchId: string): Promise<BackfillResult> {
+  const result = await backfillSearch(searchId);
   revalidatePath('/admin/licitaciones');
   return result;
 }

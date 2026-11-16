@@ -338,6 +338,137 @@ export async function syncTenders(): Promise<SyncResult> {
   };
 }
 
+// ─── Búsqueda hacia atrás (una búsqueda, últimos N días) ─────────────────────
+// La revisión diaria solo mira hoy y ayer: una búsqueda recién creada (o una
+// palabra recién agregada) no ve lo publicado antes. Esto recorre los últimos
+// N días solo por título, para una búsqueda, y avisa a sus correos.
+
+const MAX_BACKFILL_DAYS = 10;
+// Tope de detalles por corrida (~2 s c/u): mantiene la acción bajo 300 s.
+const MAX_BACKFILL_DETALLES = 80;
+
+export interface BackfillResult {
+  ok: boolean;
+  dias: number;
+  revisadas: number;      // publicaciones abiertas revisadas
+  calzaron: number;       // calzaron por título con esta búsqueda
+  nuevas: number;         // insertadas en la BD
+  yaGuardadas: number;    // ya estaban en la BD (se les agrega la etiqueta)
+  omitidas: number;       // quedaron fuera por el tope de detalles
+  emailEnviado: boolean;
+  message?: string;
+}
+
+export async function backfillSearch(searchId: string, dias = MAX_BACKFILL_DAYS): Promise<BackfillResult> {
+  const db = getSupabaseAdmin();
+  dias = Math.min(Math.max(1, Math.floor(dias)), MAX_BACKFILL_DAYS);
+  const base = { ok: false, dias, revisadas: 0, calzaron: 0, nuevas: 0, yaGuardadas: 0, omitidas: 0, emailEnviado: false };
+
+  const { searches, error: loadError } = await loadSearches();
+  if (loadError) return { ...base, message: 'No se pudieron cargar las búsquedas.' };
+  const search = searches.find((s) => s.id === searchId);
+  if (!search) return { ...base, message: 'La búsqueda no existe o está pausada.' };
+  if (search.keywords.length === 0) return { ...base, message: 'La búsqueda no tiene palabras clave activas.' };
+  const conPalabras = searches.filter((s) => s.keywords.length > 0);
+
+  // Listado de los últimos N días (hora de Chile), secuencial por rate limit.
+  const [y, m, d] = hoyChile().split('-').map(Number);
+  const seen = new Map<string, MPListItem>();
+  let fetchOk = false;
+  for (let i = 0; i < dias; i++) {
+    const date = new Date(y, m - 1, d - i);
+    try {
+      const list = await fetchTendersByDate(date);
+      fetchOk = true;
+      list.forEach((item) => { if (!seen.has(item.CodigoExterno)) seen.set(item.CodigoExterno, item); });
+    } catch (err) {
+      console.error('[mercadopublico] backfill: error listando', toDdmmyyyy(date), err);
+    }
+    await sleep(1200);
+  }
+  if (!fetchOk) return { ...base, message: 'La API de Mercado Público no respondió. Intenta más tarde.' };
+
+  const open = Array.from(seen.values())
+    .filter((item) => !item.FechaCierre || new Date(item.FechaCierre).getTime() > Date.now());
+  const calzan = open.filter((item) => matchKeywords(item.Nombre, search.keywords).length > 0);
+
+  // Las ya guardadas: solo se les agrega la etiqueta de esta búsqueda.
+  const existentes = new Map<string, { searches_matched: string[] | null; keywords_matched: string[] | null }>();
+  const codes = calzan.map((c) => c.CodigoExterno);
+  for (let i = 0; i < codes.length; i += 300) {
+    const { data } = await db.from('tenders')
+      .select('codigo_externo, searches_matched, keywords_matched')
+      .in('codigo_externo', codes.slice(i, i + 300));
+    (data ?? []).forEach((r: { codigo_externo: string; searches_matched: string[] | null; keywords_matched: string[] | null }) =>
+      existentes.set(r.codigo_externo, r));
+  }
+  for (const [codigo, row] of existentes) {
+    if ((row.searches_matched ?? []).includes(searchId)) continue;
+    const item = seen.get(codigo)!;
+    const words = new Set([...(row.keywords_matched ?? []), ...matchKeywords(item.Nombre, search.keywords)]);
+    await db.from('tenders').update({
+      searches_matched: [...(row.searches_matched ?? []), searchId],
+      keywords_matched: [...words],
+      updated_at: new Date().toISOString(),
+    }).eq('codigo_externo', codigo);
+  }
+
+  const candidatas = calzan.filter((c) => !existentes.has(c.CodigoExterno));
+  const aRevisar = candidatas.slice(0, MAX_BACKFILL_DETALLES);
+
+  const inserted: Tender[] = [];
+  for (const item of aRevisar) {
+    try {
+      await sleep(1200);
+      const detail = await fetchTenderDetail(item.CodigoExterno);
+      const fullText = `${detail?.Nombre ?? item.Nombre} ${detail?.Descripcion ?? ''}`;
+      const match = matchSearches(fullText, conPalabras);
+      if (!match.ids.includes(searchId)) match.ids.push(searchId); // calzó por título
+      const row = {
+        codigo_externo:    item.CodigoExterno,
+        nombre:            detail?.Nombre ?? item.Nombre,
+        descripcion:       detail?.Descripcion ?? null,
+        organismo:         detail?.Comprador?.NombreOrganismo ?? null,
+        unidad:            detail?.Comprador?.NombreUnidad ?? null,
+        region:            detail?.Comprador?.RegionUnidad ?? null,
+        fecha_publicacion: detail?.Fechas?.FechaPublicacion?.slice(0, 10) ?? null,
+        fecha_cierre:      detail?.Fechas?.FechaCierre ?? item.FechaCierre,
+        estado_mp:         detail?.Estado != null ? String(detail.Estado) : 'Publicada',
+        monto_estimado:    detail?.MontoEstimado ?? null,
+        moneda:            detail?.Moneda ?? null,
+        keywords_matched:  match.words.length ? match.words : matchKeywords(item.Nombre, search.keywords),
+        searches_matched:  match.ids,
+        estado_interno:    'nueva',
+        notificada:        false,
+      };
+      const { error } = await db.from('tenders').insert(row);
+      if (!error) inserted.push(row as unknown as Tender);
+      else console.error('[mercadopublico] backfill: insert error', item.CodigoExterno, error.message);
+    } catch (err) {
+      console.error('[mercadopublico] backfill: error detalle', item.CodigoExterno, err);
+    }
+  }
+
+  let emailEnviado = false;
+  if (inserted.length > 0) {
+    emailEnviado = await notifyNewTenders(search, inserted, `de los últimos ${dias} días`);
+    if (emailEnviado) {
+      await db.from('tenders').update({ notificada: true }).in('codigo_externo', inserted.map((t) => t.codigo_externo));
+    }
+  }
+
+  return {
+    ok: true,
+    dias,
+    revisadas: open.length,
+    calzaron: calzan.length,
+    nuevas: inserted.length,
+    yaGuardadas: existentes.size,
+    omitidas: candidatas.length - aRevisar.length,
+    emailEnviado,
+  };
+}
+
 /** Aviso de "sin novedades" a las búsquedas que aún no enviaron correo hoy. */
 async function sendHeartbeats(
   searches: SearchConfig[],
@@ -410,7 +541,11 @@ async function sendEmail(to: string[], subject: string, html: string): Promise<b
   }
 }
 
-async function notifyNewTenders(search: Pick<SearchConfig, 'nombre' | 'recipients'>, tenders: Tender[]): Promise<boolean> {
+async function notifyNewTenders(
+  search: Pick<SearchConfig, 'nombre' | 'recipients'>,
+  tenders: Tender[],
+  periodo = 'en Mercado Público',
+): Promise<boolean> {
   const rows = tenders.map((t) => `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb">
@@ -424,7 +559,7 @@ async function notifyNewTenders(search: Pick<SearchConfig, 'nombre' | 'recipient
     </tr>`).join('');
 
   const n = tenders.length;
-  const titulo = `${n} licitaci${n === 1 ? 'ón nueva' : 'ones nuevas'} en Mercado Público`;
+  const titulo = `${n} licitaci${n === 1 ? 'ón nueva' : 'ones nuevas'} ${periodo}`;
   const html = emailShell(search.nombre, titulo, `
         <tr><td style="padding:8px 16px 20px">
           <table cellpadding="0" cellspacing="0" width="100%">${rows}</table>
