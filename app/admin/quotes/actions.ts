@@ -155,6 +155,16 @@ export async function upsertQuoteItem(quoteId: string, formData: FormData) {
   return { ok: true };
 }
 
+/** Descripción opcional del ítem que aparece en el PDF; null la quita. */
+export async function updateQuoteItemDetalle(quoteId: string, itemId: string, detalle: string | null) {
+  const db = getSupabaseAdmin();
+  const clean = detalle?.trim() ? detalle.trim() : null;
+  const { error } = await db.from('quote_items').update({ detalle: clean }).eq('id', itemId);
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/quotes/${quoteId}`);
+  return { ok: true };
+}
+
 export async function deleteQuoteItem(quoteId: string, itemId: string) {
   const db = getSupabaseAdmin();
   const { error } = await db.from('quote_items').delete().eq('id', itemId);
@@ -194,7 +204,7 @@ export async function duplicateQuote(id: string) {
 
   const { data: items } = await db
     .from('quote_items')
-    .select('product_id, description, quantity, costo_proveedor_clp, margen_pct, unit_price_clp, discount_percent, total_clp, sort_order')
+    .select('product_id, description, detalle, quantity, costo_proveedor_clp, margen_pct, unit_price_clp, discount_percent, total_clp, sort_order')
     .eq('quote_id', id)
     .order('sort_order', { ascending: true });
 

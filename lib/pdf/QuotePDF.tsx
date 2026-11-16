@@ -42,7 +42,9 @@ const S = StyleSheet.create({
   thDesc2:   { width: 12, textAlign: 'center', fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#64748b' },
   thPrice:   { width: 70, textAlign: 'right', paddingRight: 6, fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#64748b', textTransform: 'uppercase' },
   thTotal:   { width: 74, textAlign: 'right', paddingRight: 6, fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#64748b', textTransform: 'uppercase' },
-  tdDesc:    { flex: 4, paddingHorizontal: 6, fontSize: 8.5, color: '#1e293b' },
+  tdDescWrap: { flex: 4, paddingHorizontal: 6 },
+  tdDescName: { fontSize: 8.5, color: '#1e293b' },
+  tdDetalle:  { fontSize: 7.5, color: '#64748b', marginTop: 2, lineHeight: 1.4 },
   tdQty:     { width: 36, textAlign: 'center', fontSize: 8.5, color: '#475569' },
   tdDesc2:   { width: 12, textAlign: 'center', fontSize: 8, color: '#94a3b8' },
   tdPrice:   { width: 70, textAlign: 'right', paddingRight: 6, fontSize: 8.5, color: '#334155' },
@@ -96,7 +98,10 @@ function ItemRow({ item, index }: { item: QuoteItem; index: number }) {
 
   return (
     <View style={rowStyle}>
-      <Text style={S.tdDesc}>{item.description}</Text>
+      <View style={S.tdDescWrap}>
+        <Text style={S.tdDescName}>{item.description}</Text>
+        {item.detalle ? <Text style={S.tdDetalle}>{item.detalle}</Text> : null}
+      </View>
       <Text style={S.tdQty}>{item.quantity}</Text>
       <Text style={S.tdDesc2}>{item.discount_percent > 0 ? `${item.discount_percent}%` : ''}</Text>
       <Text style={S.tdPrice}>{clp(Math.round(precioDesc))}</Text>

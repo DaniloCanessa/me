@@ -166,6 +166,7 @@ export interface QuoteItem {
   quote_id: string;
   product_id: string | null;
   description: string;
+  detalle?: string | null;      // descripción opcional que aparece en el PDF bajo el nombre
   quantity: number;
   costo_proveedor_clp: number;  // interno — no aparece en PDF
   margen_pct: number;           // interno — no aparece en PDF

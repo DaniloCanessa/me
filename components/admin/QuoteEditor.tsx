@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Quote, QuoteItem, QuoteStatus } from '@/lib/types';
 import {
-  upsertQuoteItem, deleteQuoteItem,
+  upsertQuoteItem, deleteQuoteItem, updateQuoteItemDetalle,
   updateQuoteHeader, updateQuoteStatus, deleteQuote, duplicateQuote,
 } from '@/app/admin/quotes/actions';
 import { createProjectFromQuote } from '@/app/admin/projects/actions';
@@ -88,6 +88,30 @@ function ItemRow({
   const [editing,  setEditing] = useState(false);
   const [isPending, start]     = useTransition();
 
+  // Descripción opcional para el PDF: se activa con el check y se guarda al
+  // salir del cuadro. Desmarcar el check la borra.
+  const [conDetalle,  setConDetalle]  = useState(!!item.detalle);
+  const [detalle,     setDetalle]     = useState(item.detalle ?? '');
+  const [detalleMsg,  setDetalleMsg]  = useState<string | null>(null);
+  const [savingDetalle, startDetalle] = useTransition();
+
+  function saveDetalle(value: string | null) {
+    if ((value?.trim() || null) === (item.detalle ?? null)) return;
+    setDetalleMsg(null);
+    startDetalle(async () => {
+      const r = await updateQuoteItemDetalle(quoteId, item.id, value);
+      setDetalleMsg(r.error ? `Error: ${r.error}` : 'Guardado');
+    });
+  }
+
+  function toggleDetalle(checked: boolean) {
+    setConDetalle(checked);
+    if (!checked) {
+      setDetalle('');
+      saveDetalle(null);
+    }
+  }
+
   const calc = isFreeItem
     ? {
         neto:        freeNeto,
@@ -127,6 +151,32 @@ function ItemRow({
       {/* Producto */}
       <td className="px-3 py-3 text-gray-900">
         <p className="font-medium">{item.description}</p>
+        <label className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-gray-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={conDetalle}
+            onChange={(e) => toggleDetalle(e.target.checked)}
+            disabled={savingDetalle}
+            className="accent-[#389fe0]"
+          />
+          Agregar descripción
+        </label>
+        {conDetalle && (
+          <div className="mt-1.5">
+            <textarea
+              value={detalle}
+              onChange={(e) => { setDetalle(e.target.value); setDetalleMsg(null); }}
+              onBlur={() => saveDetalle(detalle)}
+              rows={3}
+              autoFocus={!item.detalle}
+              placeholder="Ej: Inversor híbrido 5 kW, 10 paneles de 700 W, estructura de aluminio, garantía 10 años…"
+              className="w-full min-w-[220px] text-xs font-normal text-gray-700 border border-gray-200 rounded-lg px-2 py-1.5 resize-y focus:outline-none focus:border-[#389fe0]"
+            />
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {savingDetalle ? 'Guardando…' : detalleMsg ?? 'Aparece en el PDF bajo el nombre del producto · se guarda al salir del cuadro'}
+            </p>
+          </div>
+        )}
       </td>
       {/* Cantidad */}
       <td className="px-2 py-3 text-center">
