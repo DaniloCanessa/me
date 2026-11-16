@@ -35,6 +35,23 @@ function clp(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
 }
 
+/**
+ * Utilidad de un ítem: venta neta (con descuento) − costo, ambos × cantidad.
+ * El % es sobre la VENTA (cuánto de cada peso cobrado es ganancia), no sobre
+ * el costo como el margen con que se arma el precio. Sin costo → null.
+ */
+function utilidadItem(netoUnit: number, costoUnit: number, qty: number, descPct: number) {
+  const venta = netoUnit * qty * (1 - descPct / 100);
+  if (!(costoUnit > 0)) return { venta, costo: 0, utilidad: null as number | null, pctVenta: null as number | null };
+  const costo = costoUnit * qty;
+  const utilidad = venta - costo;
+  return { venta, costo, utilidad, pctVenta: venta > 0 ? (utilidad / venta) * 100 : null };
+}
+
+function pct(n: number) {
+  return `${n.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`;
+}
+
 function calcItem(costo: number, margen: number, qty: number, desc: number) {
   const neto     = costo * (1 + margen / 100);
   const conIva   = neto * 1.19;
@@ -115,11 +132,12 @@ function ItemRow({
   const calc = isFreeItem
     ? {
         neto:        freeNeto,
-        margenPesos: Math.round(freeNeto - item.costo_proveedor_clp),
+        margenPesos: Math.round(freeNeto - costo),
         conIva:      Math.round(freeNeto * 1.19),
         subtotal:    Math.round(freeNeto * 1.19 * qty * (1 - desc / 100)),
       }
     : calcItem(costo, margen, qty, desc);
+  const util = utilidadItem(calc.neto, costo, qty, desc);
 
   function save() {
     const fd = new FormData();
@@ -132,7 +150,8 @@ function ItemRow({
     fd.set('sort_order',         String(sortOrder));
     if (isFreeItem) {
       fd.set('unit_price_direct',   String(Math.round(freeNeto * 1.19)));
-      fd.set('costo_proveedor_clp', '0');
+      // Antes se mandaba '0' y editar un ítem libre borraba su costo en silencio.
+      fd.set('costo_proveedor_clp', String(costo));
       fd.set('margen_pct',          '0');
     } else {
       fd.set('costo_proveedor_clp', String(costo));
@@ -188,18 +207,43 @@ function ItemRow({
           <span className="tabular-nums">{qty}</span>
         )}
       </td>
-      {/* Margen % — interno */}
+      {/* Utilidad — interno. Al editar: margen s/costo (catálogo) o costo (ítem libre). */}
       <td className="px-2 py-3 text-center bg-amber-50/30">
-        {editing && !isFreeItem ? (
-          <input type="number" min="0" max="100" step="0.5" value={margenStr}
-            onChange={(e) => setMargenStr(e.target.value)}
-            className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
+        {editing && (
+          <div className="mb-1">
+            {isFreeItem ? (
+              <label className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] text-amber-700">Costo unit.</span>
+                <input type="text" inputMode="numeric"
+                  value={costo > 0 ? new Intl.NumberFormat('es-CL').format(costo) : ''}
+                  onChange={(e) => setCosto(parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)}
+                  className="w-24 text-right border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]"
+                  placeholder="0" />
+              </label>
+            ) : (
+              <label className="flex flex-col items-center gap-0.5">
+                <span className="text-[10px] text-amber-700">Margen s/costo</span>
+                <input type="number" min="0" max="1000" step="0.5" value={margenStr}
+                  onChange={(e) => setMargenStr(e.target.value)}
+                  className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
+              </label>
+            )}
+          </div>
+        )}
+        {util.utilidad === null ? (
+          <span className="text-[11px] text-gray-400" title="Este ítem no tiene costo cargado: no se puede calcular su utilidad">sin costo</span>
         ) : (
-          <span className="tabular-nums text-amber-700">
-            {isFreeItem && item.costo_proveedor_clp > 0
-              ? `${(((freeNeto - item.costo_proveedor_clp) / item.costo_proveedor_clp) * 100).toFixed(1)}%`
-              : isFreeItem ? '—' : `${margen}%`}
-          </span>
+          <div className="leading-tight">
+            <span className={`tabular-nums font-semibold ${util.utilidad < 0 ? 'text-red-600' : 'text-amber-800'}`}>
+              {clp(Math.round(util.utilidad))}
+            </span>
+            {util.pctVenta !== null && (
+              <span className={`block text-[10px] tabular-nums whitespace-nowrap ${util.utilidad < 0 ? 'text-red-500' : 'text-amber-600'}`}
+                title={`Margen sobre la venta. Sobre el costo: ${pct((util.utilidad / util.costo) * 100)}`}>
+                {pct(util.pctVenta)} s/venta
+              </span>
+            )}
+          </div>
         )}
       </td>
       {/* Desc % */}
@@ -644,6 +688,19 @@ export default function QuoteEditor({
   const iva   = Math.round(subtotalNeto * 0.19);
   const total = Math.round(subtotalNeto * 1.19);
 
+  // Utilidad de la cotización (interno, no va al PDF). Solo suman los ítems
+  // con costo: si se sumara la venta de un ítem sin costo, su precio entero
+  // contaría como ganancia y el margen saldría inflado. Lo que falta se avisa.
+  const utilItems   = items.map((i) => utilidadItem(i.unit_price_clp, i.costo_proveedor_clp, i.quantity, i.discount_percent));
+  const conCosto    = utilItems.filter((u) => u.utilidad !== null);
+  const ventaNeta   = conCosto.reduce((a, u) => a + u.venta, 0);
+  const costoTotal  = conCosto.reduce((a, u) => a + u.costo, 0);
+  const utilidadTot = ventaNeta - costoTotal;
+  const sinCosto    = utilItems.length - conCosto.length;
+  const ventaSinCosto = utilItems.filter((u) => u.utilidad === null).reduce((a, u) => a + u.venta, 0);
+  const pctVentaTot = ventaNeta > 0 ? (utilidadTot / ventaNeta) * 100 : null;
+  const pctCostoTot = costoTotal > 0 ? (utilidadTot / costoTotal) * 100 : null;
+
   const st = STATUS_MAP[quote.status] ?? { label: quote.status, color: 'bg-gray-100 text-gray-600' };
 
   function changeStatus(newStatus: QuoteStatus) {
@@ -752,7 +809,7 @@ export default function QuoteEditor({
                   <tr className="bg-gray-50 border-b border-gray-100 text-left">
                     <th className="px-3 py-2.5 text-gray-500 font-semibold uppercase tracking-wide">Producto</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-center">Cant.</th>
-                    <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-center bg-amber-50/50">Margen %</th>
+                    <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-center bg-amber-50/50">Utilidad</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-center">Desc %</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">P. Unit s/IVA</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-right">Total s/IVA</th>
@@ -773,8 +830,53 @@ export default function QuoteEditor({
             </div>
 
             {/* Totales */}
-            <div className="px-5 py-4 border-t border-gray-100 flex justify-end">
-              <div className="w-64 flex flex-col gap-1.5 text-sm">
+            <div className="px-5 py-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:justify-between gap-4">
+              {/* Utilidad — interno, no aparece en el PDF */}
+              {items.length > 0 && conCosto.length === 0 ? (
+                <div className="w-full sm:w-72 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs">
+                  <p className="font-semibold text-amber-700 uppercase tracking-wide text-[11px] mb-1">
+                    Utilidad <span className="font-normal normal-case text-amber-600">· interno, no sale en el PDF</span>
+                  </p>
+                  <p className="text-red-600">⚠ Ningún ítem tiene costo cargado: no se puede calcular. Cárgalo con Editar.</p>
+                </div>
+              ) : items.length > 0 ? (
+                <div className="w-full sm:w-72 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 flex flex-col gap-1 text-xs">
+                  <p className="font-semibold text-amber-700 uppercase tracking-wide text-[11px] mb-1">
+                    Utilidad <span className="font-normal normal-case text-amber-600">· interno, no sale en el PDF</span>
+                  </p>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Venta neta</span>
+                    <span className="tabular-nums">{clp(Math.round(ventaNeta))}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Costo</span>
+                    <span className="tabular-nums">− {clp(Math.round(costoTotal))}</span>
+                  </div>
+                  <div className={`flex justify-between font-bold text-sm border-t border-amber-200 pt-1.5 mt-0.5 ${utilidadTot < 0 ? 'text-red-600' : 'text-amber-900'}`}>
+                    <span>Utilidad</span>
+                    <span className="tabular-nums">{clp(Math.round(utilidadTot))}</span>
+                  </div>
+                  {pctVentaTot !== null && (
+                    <div className="flex justify-between text-amber-800">
+                      <span>Margen sobre la venta</span>
+                      <span className="tabular-nums font-semibold">{pct(pctVentaTot)}</span>
+                    </div>
+                  )}
+                  {pctCostoTot !== null && (
+                    <div className="flex justify-between text-gray-400">
+                      <span>Sobre el costo</span>
+                      <span className="tabular-nums">{pct(pctCostoTot)}</span>
+                    </div>
+                  )}
+                  {sinCosto > 0 && (
+                    <p className="mt-1 text-[11px] text-red-600">
+                      ⚠ Solo cuenta {conCosto.length} de {utilItems.length} ítems. Falta el costo de {sinCosto} ítem{sinCosto !== 1 ? 's' : ''} ({clp(Math.round(ventaSinCosto))} de venta), que no está en este cálculo. Cárgalo con Editar.
+                    </p>
+                  )}
+                </div>
+              ) : <div />}
+
+              <div className="w-full sm:w-64 flex flex-col gap-1.5 text-sm self-start sm:self-auto">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal neto</span>
                   <span className="tabular-nums">{clp(Math.round(subtotalNeto))}</span>
