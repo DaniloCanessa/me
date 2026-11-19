@@ -96,7 +96,7 @@ function ItemRow({
   const [costo,     setCosto]    = useState(item.costo_proveedor_clp);
   const [margenStr, setMargenStr]= useState(String(item.margen_pct ?? 0));
   const [freeNeto,  setFreeNeto] = useState(item.unit_price_clp);
-  const [qtyStr,    setQtyStr]   = useState(String(item.quantity));
+  const [qtyStr,    setQtyStr]   = useState(String(Math.max(1, Math.round(item.quantity))));
   const [descStr,   setDescStr]  = useState(String(item.discount_percent));
 
   const margen = parseFloat(margenStr) || 0;
@@ -200,8 +200,8 @@ function ItemRow({
       {/* Cantidad */}
       <td className="px-2 py-3 text-center">
         {editing ? (
-          <input type="number" min="0.01" step="0.01" value={qtyStr}
-            onChange={(e) => setQtyStr(e.target.value)}
+          <input type="number" min="1" step="1" inputMode="numeric" value={qtyStr}
+            onChange={(e) => setQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
             className="w-14 text-center border border-gray-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:border-[#389fe0]" />
         ) : (
           <span className="tabular-nums">{qty}</span>
@@ -342,7 +342,7 @@ function AddItemSection({
   const [editProduct,    setEditProduct]    = useState<FullProduct | null>(null);
   const [loadingEdit,    setLoadingEdit]    = useState(false);
 
-  const qty  = parseFloat(qtyStr)  || 1;
+  const qty  = Math.max(1, parseInt(qtyStr) || 1);
   const desc = parseFloat(descStr) || 0;
 
   async function openEditModal() {
@@ -479,8 +479,8 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="1" step="1" value={qtyStr}
-                onChange={(e) => setQtyStr(e.target.value)}
+              <input type="number" min="1" step="1" inputMode="numeric" value={qtyStr}
+                onChange={(e) => setQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 
@@ -548,8 +548,8 @@ function AddItemSection({
             {/* Cantidad */}
             <div>
               <span className="text-[10px] text-gray-400 mb-1 block">Cant.</span>
-              <input type="number" min="1" step="1" value={qtyStr}
-                onChange={(e) => setQtyStr(e.target.value)}
+              <input type="number" min="1" step="1" inputMode="numeric" value={qtyStr}
+                onChange={(e) => setQtyStr(e.target.value.replace(/[^0-9]/g, ''))}
                 className="w-14 text-center border border-gray-200 rounded-lg px-1 py-2 text-xs focus:outline-none focus:border-[#389fe0]" />
             </div>
 

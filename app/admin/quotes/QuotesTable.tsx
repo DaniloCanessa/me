@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { QuoteStatus } from '@/lib/types';
 import { deleteQuotes } from './actions';
 import { fechaEmisionISO, formatFecha } from '@/lib/quote-date';
+import SortableHeader, { useSort } from '@/components/admin/SortableHeader';
 
 const STATUS: Record<QuoteStatus, { label: string; color: string }> = {
   draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-600' },
@@ -30,10 +31,44 @@ type QuoteRow = {
   status: QuoteStatus;
 };
 
-export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
+/** Deja solo letras y dígitos en minúscula: "COT-2026-0012" → "cot20260012". */
+function normalizar(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * ¿El número de cotización calza con lo buscado? Se ignoran guiones/espacios,
+ * y si se escribe solo un número (ej. "12") también calza con el correlativo
+ * sin ceros a la izquierda ("COT-2026-0012").
+ */
+function calzaNumero(quoteNumber: string, query: string) {
+  const q = normalizar(query);
+  if (!q) return true;
+  if (normalizar(quoteNumber).includes(q)) return true;
+  if (/^\d+$/.test(q)) {
+    const partes = quoteNumber.match(/\d+/g) ?? [];
+    return partes.some((p) => String(parseInt(p, 10)) === String(parseInt(q, 10)));
+  }
+  return false;
+}
+
+export default function QuotesTable({ quotes: allQuotes }: { quotes: QuoteRow[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const [query, setQuery] = useState('');
+
+  const filtered = query.trim()
+    ? allQuotes.filter((q) => calzaNumero(q.quote_number, query))
+    : allQuotes;
+
+  const { sorted: quotes, sort, toggle: toggleSort } = useSort(filtered, {
+    numero:  (q) => q.quote_number,
+    cliente: (q) => q.client_name,
+    fecha:   (q) => fechaEmisionISO(q),
+    total:   (q) => q.total_clp,
+    estado:  (q) => STATUS[q.status]?.label ?? q.status,
+  });
 
   const allSelected = quotes.length > 0 && selected.size === quotes.length;
 
@@ -61,6 +96,29 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
   }
 
   return (
+    <>
+    {/* Buscador por número de cotización */}
+    <div className="mb-4 flex items-center gap-3">
+      <div className="relative w-full sm:w-72">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setSelected(new Set()); }}
+          placeholder="Buscar por N° de cotización…"
+          aria-label="Buscar por número de cotización"
+          className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#389fe0] bg-white"
+        />
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+        </svg>
+      </div>
+      {query.trim() && (
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {quotes.length} resultado{quotes.length === 1 ? '' : 's'}
+        </span>
+      )}
+    </div>
+
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       {/* Barra de selección */}
       {selected.size > 0 && (
@@ -80,7 +138,9 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
 
       {quotes.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-gray-400">No hay cotizaciones en esta categoría.</p>
+          <p className="text-sm text-gray-400">
+            {query.trim() ? `No hay cotizaciones con el número "${query.trim()}".` : 'No hay cotizaciones en esta categoría.'}
+          </p>
         </div>
       ) : (
         <>
@@ -131,11 +191,11 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                     className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]"
                   />
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cotización</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Total</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Estado</th>
+                <SortableHeader label="Cotización" sortKey="numero"  sort={sort} onSort={toggleSort} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Cliente"    sortKey="cliente" sort={sort} onSort={toggleSort} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Fecha"      sortKey="fecha"   sort={sort} onSort={toggleSort} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                <SortableHeader label="Total"      sortKey="total"   sort={sort} onSort={toggleSort} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" align="right" />
+                <SortableHeader label="Estado"     sortKey="estado"  sort={sort} onSort={toggleSort} className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" align="center" />
               </tr>
             </thead>
             <tbody>
@@ -182,5 +242,6 @@ export default function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
         </>
       )}
     </div>
+    </>
   );
 }

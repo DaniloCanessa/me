@@ -62,6 +62,7 @@ export async function createProduct(formData: FormData) {
     sku:                    formData.get('sku') as string,
     category,
     customer_type:          formData.get('customer_type') as string,
+    marca:                  ((formData.get('marca') as string) || '').trim() || null,
     proveedor:              (formData.get('proveedor') as string) || null,
     specs:                  buildSpecs(formData, category, null),
     costo_proveedor_clp:    parseFloat(formData.get('costo_proveedor_clp') as string) || 0,
@@ -90,6 +91,7 @@ export async function updateProduct(id: string, formData: FormData) {
     sku:                    formData.get('sku') as string,
     category,
     customer_type:          formData.get('customer_type') as string,
+    marca:                  ((formData.get('marca') as string) || '').trim() || null,
     proveedor:              (formData.get('proveedor') as string) || null,
     specs:                  buildSpecs(formData, category, panel),
     costo_proveedor_clp:    parseFloat(formData.get('costo_proveedor_clp') as string) || 0,
@@ -132,4 +134,76 @@ export async function deleteProduct(id: string) {
   if (error) return { error: error.message };
   revalidatePath('/admin/products');
   return { ok: true };
+}
+
+/**
+ * "✓ Precio vigente": confirma que el costo del proveedor sigue igual.
+ * Solo mueve la fecha de verificación; no toca ningún precio.
+ */
+export async function verifyProductCosts(ids: string[]) {
+  if (!ids.length) return { ok: true, at: null as string | null };
+  const db = getSupabaseAdmin();
+  const at = new Date().toISOString();
+  const { error } = await db.from('products').update({ costo_verificado_at: at }).in('id', ids);
+  if (error) return { error: error.message, at: null as string | null };
+  revalidatePath('/admin/products');
+  return { ok: true, at };
+}
+
+/**
+ * Duplica productos. La copia lleva "(copia)" en el nombre, un SKU nuevo
+ * (SKU-COPIA, SKU-COPIA-2…), stock 0 para no inflar el inventario y queda
+ * INACTIVA para que no aparezca en el simulador hasta que se revise.
+ */
+export async function duplicateProducts(ids: string[]) {
+  if (!ids.length) return { created: [] as Record<string, unknown>[] };
+  const db = getSupabaseAdmin();
+
+  const { data: originals, error } = await db.from('products').select('*').in('id', ids);
+  if (error) return { error: error.message, created: [] as Record<string, unknown>[] };
+
+  // SKUs ya usados, para no chocar con el índice único de sku
+  const { data: skuRows } = await db.from('products').select('sku').ilike('sku', '%-COPIA%');
+  const usados = new Set((skuRows ?? []).map((r) => String(r.sku).toUpperCase()));
+
+  const copias = (originals ?? []).map((o) => {
+    const { id: _id, created_at: _c, updated_at: _u, ...resto } = o as Record<string, unknown>;
+    void _id; void _c; void _u;
+    const base = `${String(o.sku)}-COPIA`;
+    let sku = base;
+    for (let n = 2; usados.has(sku.toUpperCase()); n++) sku = `${base}-${n}`;
+    usados.add(sku.toUpperCase());
+    return { ...resto, name: `${String(o.name)} (copia)`, sku, stock: 0, is_active: false };
+  });
+
+  const { data: created, error: insErr } = await db.from('products').insert(copias).select('*');
+  if (insErr) return { error: insErr.message, created: [] as Record<string, unknown>[] };
+
+  revalidatePath('/admin/products');
+  return { created: (created ?? []) as Record<string, unknown>[] };
+}
+
+/**
+ * Elimina varios productos. Primero intenta en un solo paso; si la base lo
+ * rechaza (ej. un producto usado en una cotización), borra uno por uno para
+ * eliminar los que se pueda e informar cuáles no.
+ */
+export async function deleteProducts(ids: string[]) {
+  if (!ids.length) return { deleted: 0, failed: [] as string[] };
+  const db = getSupabaseAdmin();
+
+  const { error } = await db.from('products').delete().in('id', ids);
+  if (!error) {
+    revalidatePath('/admin/products');
+    return { deleted: ids.length, failed: [] as string[] };
+  }
+
+  let deleted = 0;
+  const failed: string[] = [];
+  for (const id of ids) {
+    const { error: e } = await db.from('products').delete().eq('id', id);
+    if (e) failed.push(id); else deleted++;
+  }
+  revalidatePath('/admin/products');
+  return { deleted, failed };
 }

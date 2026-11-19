@@ -118,7 +118,7 @@ export async function upsertQuoteItem(quoteId: string, formData: FormData) {
   const costo            = parseFloat(formData.get('costo_proveedor_clp') as string) || 0;
   const margenRaw        = formData.get('margen_pct') as string;
   const margen           = margenRaw !== '' && margenRaw !== null ? parseFloat(margenRaw) : 30;
-  const quantity         = parseFloat(formData.get('quantity') as string) || 1;
+  const quantity         = Math.max(1, Math.round(parseFloat(formData.get('quantity') as string) || 1));
   const discount_percent = parseFloat(formData.get('discount_percent') as string) || 0;
   const directPriceIva   = parseFloat(formData.get('unit_price_direct') as string) || 0;
 

@@ -8,6 +8,10 @@ export interface ImportRow {
   sku: string;
   category: string;
   customer_type: string;
+  /** undefined = la planilla no trae columna de marca: no se toca la existente. */
+  marca?: string | null;
+  /** Solo si la planilla trae costo: la lista del proveedor confirma el costo. */
+  costo_verificado_at?: string;
   proveedor: string | null;
   costo_proveedor_clp: number;
   margen_pct: number | null;

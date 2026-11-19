@@ -13,6 +13,7 @@ export interface Product {
   category: string;
   customer_type: string;
   specs: Record<string, unknown>;
+  marca?: string | null;
   proveedor: string | null;
   costo_proveedor_clp: number;
   margen_pct: number | null;
@@ -166,11 +167,19 @@ export default function ProductEditForm({ product, panel, onSaved }: { product: 
         </label>
       </div>
 
-      <label className="block">
-        <span className="text-xs text-gray-500 mb-1 block">Proveedor</span>
-        <input name="proveedor" type="text" defaultValue={product.proveedor ?? ''}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-xs text-gray-500 mb-1 block">Marca</span>
+          <input name="marca" type="text" defaultValue={product.marca ?? ''}
+            placeholder="Ej: Huawei, JA Solar, BYD…"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+        </label>
+        <label className="block">
+          <span className="text-xs text-gray-500 mb-1 block">Proveedor</span>
+          <input name="proveedor" type="text" defaultValue={product.proveedor ?? ''}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+        </label>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">

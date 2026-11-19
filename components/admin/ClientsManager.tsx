@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Client } from '@/lib/types';
 import { createClient, deleteClient, assignClient } from '@/app/admin/clients/actions';
+import SortableHeader, { useSort } from '@/components/admin/SortableHeader';
 
 /** Vendedores disponibles para "Atendido por". */
 export type UserOption = { id: string; name: string };
@@ -151,6 +152,14 @@ export default function ClientsManager({
     );
   });
 
+  const { sorted, sort, toggle: toggleSort } = useSort(filtered, {
+    cliente:  (c) => c.nombre,
+    contacto: (c) => c.email || c.telefono,
+    ciudad:   (c) => c.ciudad,
+    origen:   (c) => SOURCE_LABELS[c.source] ?? c.source,
+    atiende:  (c) => nombreDe(asignadoDe(c)),
+  });
+
   function handleDelete(c: Client) {
     if (!confirm(`¿Eliminar a ${c.nombre}? Se eliminarán también sus instalaciones y actividades.`)) return;
     startTransition(async () => { await deleteClient(c.id); });
@@ -199,7 +208,7 @@ export default function ClientsManager({
           <>
           {/* Tarjetas (móvil) */}
           <div className="md:hidden divide-y divide-gray-100">
-            {filtered.map((c) => {
+            {sorted.map((c) => {
               const quoteHref  = `/admin/quotes/new?client_id=${c.id}`;
               const detailHref = `/admin/clients/${c.id}`;
               return (
@@ -258,16 +267,16 @@ export default function ClientsManager({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Cliente</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Contacto</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ciudad</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Origen</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Atendido por</th>
+                  <SortableHeader label="Cliente"      sortKey="cliente"  sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Contacto"     sortKey="contacto" sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Ciudad"       sortKey="ciudad"   sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Origen"       sortKey="origen"   sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Atendido por" sortKey="atiende"  sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => {
+                {sorted.map((c) => {
                   const quoteHref  = `/admin/quotes/new?client_id=${c.id}`;
                   const detailHref = `/admin/clients/${c.id}`;
                   return (

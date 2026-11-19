@@ -10,7 +10,7 @@ type ConFecha = { fecha_emision?: string | null; created_at: string };
 const TZ = 'America/Santiago';
 
 /** 'YYYY-MM-DD' de un timestamp, en hora de Chile. */
-function isoChile(ts: string | Date): string {
+export function isoChile(ts: string | Date): string {
   return new Date(ts).toLocaleDateString('en-CA', { timeZone: TZ });
 }
 

@@ -6,10 +6,15 @@ import {
   updateProduct,
   toggleProductActive,
   deleteProduct,
+  deleteProducts,
+  duplicateProducts,
+  verifyProductCosts,
 } from '@/app/admin/products/actions';
 import { requiredSurfaceM2 } from '@/lib/constants';
 import type { SolarPanel } from '@/lib/types';
 import CostosInternos from '@/components/admin/CostosInternos';
+import SortableHeader, { useSort } from '@/components/admin/SortableHeader';
+import { isoChile, formatFecha } from '@/lib/quote-date';
 
 interface Product {
   id: string;
@@ -19,6 +24,9 @@ interface Product {
   category: string;
   customer_type: string;
   specs: Record<string, unknown>;
+  marca?: string | null;
+  /** Última vez que se revisó el costo del proveedor (cambió o se confirmó). */
+  costo_verificado_at?: string | null;
   proveedor: string | null;
   costo_proveedor_clp: number;
   margen_pct: number | null;
@@ -52,6 +60,28 @@ const CUSTOMER_LABELS: Record<string, string> = {
   business:    'Empresa',
   both:        'Ambos',
 };
+
+/** 'YYYY-MM-DD' (hora Chile) de la última verificación del costo, o null. */
+function fechaPrecioISO(p: { costo_verificado_at?: string | null }) {
+  return p.costo_verificado_at ? isoChile(p.costo_verificado_at) : null;
+}
+
+/** Días desde la última actualización de precio. */
+function diasDesde(iso: string) {
+  return Math.floor((Date.now() - new Date(`${iso}T12:00:00Z`).getTime()) / 86_400_000);
+}
+
+/** Gris si está al día; ámbar sobre 90 días, para detectar precios viejos. */
+function FechaPrecio({ iso, className = '' }: { iso: string | null; className?: string }) {
+  if (!iso) return <span className={`text-gray-300 ${className}`}>—</span>;
+  const viejo = diasDesde(iso) > 90;
+  return (
+    <span className={`${viejo ? 'text-amber-600' : 'text-gray-500'} ${className}`}
+      title={viejo ? `Costo sin verificar hace ${diasDesde(iso)} días` : undefined}>
+      {formatFecha(iso, 'short')}
+    </span>
+  );
+}
 
 function clp(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
@@ -156,6 +186,8 @@ function ProductModal({
   panels,
   onClose,
   onSave,
+  onDelete,
+  onVerify,
   isPending,
 }: {
   product: Product | null;
@@ -163,6 +195,10 @@ function ProductModal({
   panels: SolarPanel[];
   onClose: () => void;
   onSave: (formData: FormData) => void;
+  /** Solo al editar: elimina el producto desde la ficha. */
+  onDelete?: () => void;
+  /** Solo al editar: confirma que el costo del proveedor sigue vigente. */
+  onVerify?: () => void;
   isPending: boolean;
 }) {
   const [category,   setCategory]  = useState(product?.category ?? 'solar_kit');
@@ -174,6 +210,17 @@ function ProductModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">
             {product ? 'Editar producto' : 'Nuevo producto'}
+            {product && (
+              <span className="block text-xs font-normal text-gray-400 mt-0.5">
+                Costo verificado: <FechaPrecio iso={fechaPrecioISO(product)} />
+                {onVerify && (
+                  <button type="button" onClick={onVerify} disabled={isPending}
+                    className="ml-2 text-[#389fe0] hover:text-[#1d65c5] font-medium disabled:opacity-40">
+                    ✓ Precio vigente
+                  </button>
+                )}
+              </span>
+            )}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
@@ -197,13 +244,21 @@ function ProductModal({
             </label>
           </div>
 
-          {/* Proveedor */}
-          <label className="block">
-            <span className="text-xs text-gray-500 mb-1 block">Proveedor</span>
-            <input name="proveedor" type="text" defaultValue={product?.proveedor ?? ''}
-              placeholder="Ej: Huawei, JA Solar, BYD…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
-          </label>
+          {/* Marca + Proveedor */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs text-gray-500 mb-1 block">Marca</span>
+              <input name="marca" type="text" defaultValue={product?.marca ?? ''}
+                placeholder="Ej: Huawei, JA Solar, BYD…"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+            </label>
+            <label className="block">
+              <span className="text-xs text-gray-500 mb-1 block">Proveedor</span>
+              <input name="proveedor" type="text" defaultValue={product?.proveedor ?? ''}
+                placeholder="A quién se le compra"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#389fe0]" />
+            </label>
+          </div>
 
           {/* Categoría + Tipo cliente */}
           <div className="grid grid-cols-2 gap-3">
@@ -309,6 +364,14 @@ function ProductModal({
               {isPending ? 'Guardando…' : product ? 'Guardar cambios' : 'Crear producto'}
             </button>
           </div>
+          {product && onDelete && (
+            <div className="pt-3 border-t border-gray-100 text-center">
+              <button type="button" onClick={onDelete} disabled={isPending}
+                className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors disabled:opacity-40">
+                Eliminar producto
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>
@@ -324,11 +387,29 @@ export default function ProductsManager({ products, panels }: { products: Produc
   const [filterCat, setFilterCat]       = useState<string>('all');
   const [filterStock, setFilterStock]   = useState<'all' | 'in' | 'out'>('all');
   const [isPending, startTransition]    = useTransition();
-  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [selected, setSelected]         = useState<Set<string>>(new Set());
+  const [search, setSearch]             = useState('');
 
-  const filtered = products
+  // Busca en nombre, SKU, marca, proveedor y notas; todas las palabras deben
+  // aparecer (ej. "huawei 10" → inversores Huawei de 10 kW).
+  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+  const filteredRaw = products
     .filter((p) => filterCat === 'all' || p.category === filterCat)
-    .filter((p) => filterStock === 'all' || (filterStock === 'in' ? p.stock > 0 : p.stock === 0));
+    .filter((p) => filterStock === 'all' || (filterStock === 'in' ? p.stock > 0 : p.stock === 0))
+    .filter((p) => {
+      if (!terms.length) return true;
+      const hay = [p.name, p.sku, p.marca, p.proveedor, p.notes].filter(Boolean).join(' ').toLowerCase();
+      return terms.every((t) => hay.includes(t));
+    });
+
+  const { sorted: filtered, sort, toggle: toggleSort } = useSort(filteredRaw, {
+    producto:  (p) => p.name,
+    marca:     (p) => p.marca,
+    categoria: (p) => CATEGORY_LABELS[p.category] ?? p.category,
+    precio:    (p) => p.base_price_clp,
+    fechaPrecio: (p) => fechaPrecioISO(p),
+    estado:    (p) => (p.is_active ? 'Activo' : 'Inactivo'),
+  });
 
   function openNew() { setModalProduct(null); setShowModal(true); }
   function openEdit(p: Product) { setModalProduct(p); setShowModal(true); }
@@ -347,10 +428,94 @@ export default function ProductsManager({ products, panels }: { products: Produc
     startTransition(async () => { await toggleProductActive(id, !current); });
   }
 
-  function handleDelete(id: string) {
-    if (!confirm('¿Eliminar este producto del catálogo? Esta acción no se puede deshacer.')) return;
-    setDeletingId(id);
-    startTransition(async () => { await deleteProduct(id); setDeletingId(null); });
+  // Eliminar desde la ficha del producto (modal)
+  function handleDeleteFromModal() {
+    const p = modalProduct as Product | null;
+    if (!p) return;
+    if (!confirm(`¿Eliminar "${p.name}" del catálogo? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      const res = await deleteProduct(p.id);
+      if (res?.error) {
+        alert(`No se pudo eliminar: ${res.error}`);
+        return;
+      }
+      setSelected((prev) => { const n = new Set(prev); n.delete(p.id); return n; });
+      closeModal();
+    });
+  }
+
+  // Selección múltiple: "todos" = los visibles con los filtros y la búsqueda actuales
+  const visibleIds   = filtered.map((p) => p.id);
+  const allSelected  = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someSelected = !allSelected && visibleIds.some((id) => selected.has(id));
+  // Solo cuentan los seleccionados que se ven: si cambias el filtro, los que
+  // quedaron ocultos no se eliminan por accidente.
+  const selectedVisible = visibleIds.filter((id) => selected.has(id));
+
+  function toggleAll() {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allSelected) visibleIds.forEach((id) => n.delete(id));
+      else visibleIds.forEach((id) => n.add(id));
+      return n;
+    });
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  // "✓ Precio vigente" desde la ficha
+  function handleVerifyFromModal() {
+    const p = modalProduct as Product | null;
+    if (!p) return;
+    startTransition(async () => {
+      const res = await verifyProductCosts([p.id]);
+      if (res.error) { alert(`No se pudo confirmar: ${res.error}`); return; }
+      setModalProduct({ ...p, costo_verificado_at: res.at });
+    });
+  }
+
+  // "✓ Precio vigente" con varios seleccionados
+  function handleBulkVerify() {
+    const ids = selectedVisible;
+    const n = ids.length;
+    if (n > 1 && !confirm(`¿Confirmar que el costo de ${n} productos sigue vigente?`)) return;
+    startTransition(async () => {
+      const res = await verifyProductCosts(ids);
+      if (res.error) { alert(`No se pudo confirmar: ${res.error}`); return; }
+      setSelected(new Set());
+    });
+  }
+
+  function handleDuplicate() {
+    const ids = selectedVisible;
+    const n = ids.length;
+    if (n > 1 && !confirm(`¿Duplicar ${n} productos? Las copias quedan inactivas y con stock 0.`)) return;
+    startTransition(async () => {
+      const res = await duplicateProducts(ids);
+      if (res.error) { alert(`No se pudo duplicar: ${res.error}`); return; }
+      setSelected(new Set());
+      // Con uno solo, se abre la ficha de la copia para ajustarla de inmediato
+      if (res.created.length === 1) openEdit(res.created[0] as unknown as Product);
+    });
+  }
+
+  function handleBulkDelete() {
+    const ids = selectedVisible;
+    const n = ids.length;
+    if (!confirm(`¿Eliminar ${n} producto${n > 1 ? 's' : ''} del catálogo? Esta acción no se puede deshacer.`)) return;
+    startTransition(async () => {
+      const res = await deleteProducts(ids);
+      setSelected(new Set(res.failed));
+      if (res.failed.length) {
+        alert(`Se eliminaron ${res.deleted}. No se pudieron eliminar ${res.failed.length} (quedan seleccionados). Intenta de nuevo o márcalos como Inactivos.`);
+      }
+    });
   }
 
   // Categorías ordenadas por cantidad de productos
@@ -372,6 +537,8 @@ export default function ProductsManager({ products, panels }: { products: Produc
           panels={panels}
           onClose={closeModal}
           onSave={handleSave}
+          onDelete={modalProduct ? handleDeleteFromModal : undefined}
+          onVerify={modalProduct ? handleVerifyFromModal : undefined}
           isPending={isPending}
         />
       )}
@@ -395,6 +562,18 @@ export default function ProductsManager({ products, panels }: { products: Produc
           className="flex items-center gap-2 bg-[#389fe0] hover:bg-[#1d65c5] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
           + Nuevo producto
         </button>
+      </div>
+
+      {/* Buscador */}
+      <div className="mb-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre, SKU, marca o proveedor…"
+          aria-label="Buscar productos"
+          className="w-full md:w-96 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#389fe0]"
+        />
       </div>
 
       {/* Selector de categoría (móvil) */}
@@ -441,20 +620,65 @@ export default function ProductsManager({ products, panels }: { products: Produc
 
         {/* Tabla de productos */}
         <div className="flex-1 min-w-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* Barra de selección */}
+        {selectedVisible.length > 0 && (
+          <div className="px-5 py-3 bg-[#389fe0]/5 border-b border-[#389fe0]/20 flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-sm text-[#1d65c5] font-medium">
+              {selectedVisible.length} producto{selectedVisible.length > 1 ? 's' : ''} seleccionado{selectedVisible.length > 1 ? 's' : ''}
+            </span>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSelected(new Set())}
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium">
+                Quitar selección
+              </button>
+              <button onClick={handleBulkVerify} disabled={isPending}
+                title="Confirmar que el costo del proveedor sigue vigente"
+                className="border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+                ✓ Precio vigente
+              </button>
+              <button onClick={handleDuplicate} disabled={isPending}
+                className="border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+                Duplicar
+              </button>
+              <button onClick={handleBulkDelete} disabled={isPending}
+                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-sm text-gray-400">No hay productos con estos filtros.</p>
+            <p className="text-sm text-gray-400">
+              {search.trim() ? `Sin resultados para "${search.trim()}".` : 'No hay productos con estos filtros.'}
+            </p>
           </div>
         ) : (
           <>
           {/* Tarjetas (móvil) */}
           <div className="md:hidden divide-y divide-gray-100">
+            <label className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 text-xs text-gray-500">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
+              Seleccionar todos ({filtered.length})
+            </label>
             {filtered.map((p) => (
               <div key={p.id} className={`p-4 ${!p.is_active ? 'opacity-50' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900">{p.name}</p>
-                    <p className="text-xs font-mono text-gray-400 mt-0.5">{p.sku}</p>
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)}
+                    aria-label={`Seleccionar ${p.name}`}
+                    className="mt-1 shrink-0 rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(p)}
+                      className="text-left font-medium text-gray-900 hover:text-[#389fe0] transition-colors break-words"
+                    >
+                      {p.name}
+                    </button>
+                    <p className="text-xs font-mono text-gray-400 mt-0.5 break-all">{p.sku}</p>
+                    {p.marca && <p className="text-xs text-gray-700 font-medium">{p.marca}</p>}
                     {p.proveedor && <p className="text-xs text-gray-500">{p.proveedor}</p>}
                   </div>
                   <button
@@ -471,19 +695,10 @@ export default function ProductsManager({ products, panels }: { products: Produc
                   <span>{CATEGORY_LABELS[p.category] ?? p.category}</span>
                   <span>{CUSTOMER_LABELS[p.customer_type] ?? p.customer_type}</span>
                   <span>Stock: {p.stock}</span>
+                  <span>Costo verif.: <FechaPrecio iso={fechaPrecioISO(p)} /></span>
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   <p className="font-semibold text-gray-900 tabular-nums">{clp(p.base_price_clp)}</p>
-                  <div className="flex gap-4">
-                    <button onClick={() => openEdit(p)} className="text-xs text-[#389fe0] font-medium">Editar</button>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      disabled={deletingId === p.id || isPending}
-                      className="text-xs text-red-400 hover:text-red-600 font-medium disabled:opacity-40"
-                    >
-                      {deletingId === p.id ? '…' : 'Eliminar'}
-                    </button>
-                  </div>
                 </div>
               </div>
             ))}
@@ -494,49 +709,48 @@ export default function ProductsManager({ products, panels }: { products: Produc
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Producto</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Categoría</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Especificaciones</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Precio base</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Estado</th>
-                  <th className="px-5 py-3"></th>
+                  <th className="pl-5 pr-2 py-3 w-8">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                      ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                      aria-label="Seleccionar todos"
+                      className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
+                  </th>
+                  <SortableHeader label="Producto"    sortKey="producto"  sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Marca"       sortKey="marca"     sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Categoría"   sortKey="categoria" sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                  <SortableHeader label="Precio base" sortKey="precio"    sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" align="right" />
+                  <SortableHeader label="Costo verif." sortKey="fechaPrecio" sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap" />
+                  <SortableHeader label="Estado"      sortKey="estado"    sort={sort} onSort={toggleSort} className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" align="center" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((p) => (
                   <tr key={p.id}
-                    className={`border-b border-gray-50 hover:bg-gray-50/40 transition-colors ${!p.is_active ? 'opacity-50' : ''}`}>
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-gray-900">{p.name}</p>
-                      <p className="text-xs font-mono text-gray-400 mt-0.5">{p.sku}</p>
-                      {p.proveedor && <p className="text-xs text-gray-500 mt-0.5">{p.proveedor}</p>}
-                      {p.notes && <p className="text-xs text-gray-400 mt-0.5 italic">{p.notes}</p>}
+                    className={`border-b border-gray-50 transition-colors ${selected.has(p.id) ? 'bg-[#389fe0]/5' : 'hover:bg-gray-50/40'} ${!p.is_active ? 'opacity-50' : ''}`}>
+                    <td className="pl-5 pr-2 py-3.5">
+                      <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)}
+                        aria-label={`Seleccionar ${p.name}`}
+                        className="rounded border-gray-300 text-[#389fe0] focus:ring-[#389fe0]" />
                     </td>
+                    <td className="px-5 py-3.5 max-w-md">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(p)}
+                        title="Editar producto"
+                        className="text-left font-medium text-gray-900 hover:text-[#389fe0] transition-colors break-words"
+                      >
+                        {p.name}
+                      </button>
+                      <p className="text-xs font-mono text-gray-400 mt-0.5 break-all">{p.sku}</p>
+                      {p.proveedor && <p className="text-xs text-gray-500 mt-0.5">{p.proveedor}</p>}
+                      {p.notes && <p className="text-xs text-gray-400 mt-0.5 italic line-clamp-2">{p.notes}</p>}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-gray-700">{p.marca || <span className="text-gray-300">—</span>}</td>
                     <td className="px-5 py-3.5">
                       <span className="text-xs font-medium text-gray-600">
                         {CATEGORY_LABELS[p.category] ?? p.category}
                       </span>
                       <p className="text-xs text-gray-400 mt-0.5">{CUSTOMER_LABELS[p.customer_type] ?? p.customer_type}</p>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-gray-500">
-                      {p.category === 'solar_kit' && (
-                        <span>
-                          {(p.specs as { sizekWp?: number }).sizekWp ?? '?'} kWp ·{' '}
-                          {(p.specs as { panelCount?: number }).panelCount ?? '?'} paneles ·{' '}
-                          {(p.specs as { areaM2?: number }).areaM2 ?? '?'} m²
-                          {(p.specs as { includesBattery?: boolean }).includesBattery && (
-                            <span className="ml-1 text-[#1d65c5]">
-                              + {(p.specs as { batteryCapacityKWh?: number }).batteryCapacityKWh ?? '?'} kWh bat.
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      {p.category === 'battery' && (
-                        <span>
-                          {(p.specs as { capacityKWh?: number }).capacityKWh ?? '?'} kWh ·{' '}
-                          {Math.round(((p.specs as { usableFraction?: number }).usableFraction ?? 0.7) * 100)}% usable
-                        </span>
-                      )}
                     </td>
                     <td className="px-5 py-3.5 text-right tabular-nums whitespace-nowrap">
                       <p className="font-semibold text-gray-900">{clp(p.base_price_clp)}</p>
@@ -551,6 +765,9 @@ export default function ProductsManager({ products, panels }: { products: Produc
                       )}
                       <p className="text-xs text-gray-400">Stock: {p.stock}</p>
                     </td>
+                    <td className="px-5 py-3.5 text-xs whitespace-nowrap">
+                      <FechaPrecio iso={fechaPrecioISO(p)} />
+                    </td>
                     <td className="px-5 py-3.5 text-center">
                       <button
                         onClick={() => handleToggle(p.id, p.is_active)}
@@ -563,23 +780,6 @@ export default function ProductsManager({ products, panels }: { products: Produc
                       >
                         {p.is_active ? 'Activo' : 'Inactivo'}
                       </button>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex gap-3 justify-end">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="text-xs text-[#389fe0] hover:text-[#1d65c5] font-medium transition-colors"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          disabled={deletingId === p.id || isPending}
-                          className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors disabled:opacity-40"
-                        >
-                          {deletingId === p.id ? '…' : 'Eliminar'}
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))}

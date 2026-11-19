@@ -37,7 +37,7 @@ const CUSTOMER_ALIASES: Record<string, string> = {
 // ─── Mapeo de columnas ────────────────────────────────────────────────────────
 
 type FieldKey =
-  | 'name' | 'sku' | 'category' | 'customer_type' | 'proveedor'
+  | 'name' | 'sku' | 'category' | 'customer_type' | 'marca' | 'proveedor'
   | 'costo_proveedor_clp' | 'margen_pct' | 'base_price_clp' | 'installation_price_clp'
   | 'stock' | 'is_active' | 'sort_order' | 'notes' | '(ignorar)';
 
@@ -46,6 +46,7 @@ const FIELD_OPTIONS: { value: FieldKey; label: string; required?: boolean }[] = 
   { value: 'sku',                    label: 'SKU / Código',        required: true },
   { value: 'category',              label: 'Categoría',           required: true },
   { value: 'customer_type',         label: 'Tipo cliente'         },
+  { value: 'marca',                 label: 'Marca'                },
   { value: 'proveedor',             label: 'Proveedor'            },
   { value: 'costo_proveedor_clp',   label: 'Costo proveedor $'    },
   { value: 'margen_pct',            label: 'Margen %'             },
@@ -63,7 +64,8 @@ const COLUMN_AUTO_MAP: Record<string, FieldKey> = {
   sku: 'sku', codigo: 'sku', código: 'sku', code: 'sku', ref: 'sku', referencia: 'sku',
   categoria: 'category', categoría: 'category', category: 'category', tipo: 'category',
   tipo_cliente: 'customer_type', customer_type: 'customer_type', cliente: 'customer_type',
-  proveedor: 'proveedor', supplier: 'proveedor', marca: 'proveedor', fabricante: 'proveedor',
+  proveedor: 'proveedor', supplier: 'proveedor',
+  marca: 'marca', brand: 'marca', fabricante: 'marca',
   costo: 'costo_proveedor_clp', costo_proveedor: 'costo_proveedor_clp', costo_proveedor_clp: 'costo_proveedor_clp',
   margen: 'margen_pct', margen_pct: 'margen_pct', margin: 'margen_pct',
   precio: 'base_price_clp', precio_base: 'base_price_clp', base_price_clp: 'base_price_clp', price: 'base_price_clp',
@@ -164,6 +166,10 @@ export default function ProductImporter() {
 
   function buildRows(): ImportRow[] {
     if (!sheet) return [];
+    // Si la planilla trae costo, importar = verificar el costo de esos productos
+    // aunque no haya cambiado (fecha "costo verificado" del catálogo).
+    const traeCosto = Object.values(mapping).includes('costo_proveedor_clp');
+    const ahora     = new Date().toISOString();
     return sheet.rows.map((raw) => {
       const get = (field: FieldKey) => {
         const col = Object.entries(mapping).find(([, v]) => v === field)?.[0];
@@ -178,8 +184,10 @@ export default function ProductImporter() {
         sku:                    String(get('sku') ?? '').trim(),
         category:               normalizeCategory(categoryRaw),
         customer_type:          customerRaw ? normalizeCustomerType(customerRaw) : 'both',
+        marca:                  get('marca') !== undefined ? String(get('marca') ?? '').trim() || null : undefined,
         proveedor:              get('proveedor') ? String(get('proveedor')).trim() || null : null,
         costo_proveedor_clp:    Math.round(parseNum(get('costo_proveedor_clp'))),
+        ...(traeCosto ? { costo_verificado_at: ahora } : {}),
         margen_pct:             get('margen_pct') !== undefined && get('margen_pct') !== ''
                                   ? parseNum(get('margen_pct')) : null,
         base_price_clp:         Math.round(parseNum(get('base_price_clp'))),
