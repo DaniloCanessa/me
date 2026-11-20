@@ -92,8 +92,9 @@ function clp(n: number) {
 // ─── Fila de ítem ─────────────────────────────────────────────────────────────
 
 function ItemRow({ item, index }: { item: QuoteItem; index: number }) {
-  const precioConIva = item.unit_price_clp * 1.19;
-  const precioDesc   = precioConIva * (1 - item.discount_percent / 100);
+  // Montos NETOS (sin IVA); el IVA se suma una sola vez en los totales
+  const precioDesc   = item.unit_price_clp * (1 - item.discount_percent / 100);
+  const subtotalNeto = precioDesc * item.quantity;
   const rowStyle     = index % 2 === 0 ? S.tableRow : S.tableRowAlt;
 
   return (
@@ -105,7 +106,7 @@ function ItemRow({ item, index }: { item: QuoteItem; index: number }) {
       <Text style={S.tdQty}>{item.quantity}</Text>
       <Text style={S.tdDesc2}>{item.discount_percent > 0 ? `${item.discount_percent}%` : ''}</Text>
       <Text style={S.tdPrice}>{clp(Math.round(precioDesc))}</Text>
-      <Text style={S.tdTotal}>{clp(item.total_clp)}</Text>
+      <Text style={S.tdTotal}>{clp(Math.round(subtotalNeto))}</Text>
     </View>
   );
 }
@@ -154,7 +155,7 @@ export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string })
           <View style={S.colBlock}>
             <Text style={S.colTitle}>Condiciones</Text>
             <Text style={S.colLine}>Validez: {quote.validity_days} días</Text>
-            <Text style={S.colSub}>Precios incluyen IVA 19%</Text>
+            <Text style={S.colSub}>Precios netos, más IVA 19%</Text>
             <Text style={S.colSub}>Pago según acuerdo comercial</Text>
           </View>
         </View>
@@ -164,8 +165,8 @@ export function QuotePDF({ quote, logoSrc }: { quote: Quote; logoSrc?: string })
           <Text style={S.thDesc}>Descripción</Text>
           <Text style={S.thQty}>Cant.</Text>
           <Text style={S.thDesc2}>Desc</Text>
-          <Text style={S.thPrice}>P. unit c/IVA</Text>
-          <Text style={S.thTotal}>Subtotal</Text>
+          <Text style={S.thPrice}>P. unit neto</Text>
+          <Text style={S.thTotal}>Subtotal neto</Text>
         </View>
 
         {items.map((item, i) => (
