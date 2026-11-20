@@ -23,7 +23,8 @@ export async function getQuote(id: string): Promise<Quote | null> {
     .from('quote_items')
     .select('*')
     .eq('quote_id', id)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
 
   return { ...(quote as Quote), items: (items ?? []) as QuoteItem[] };
 }
@@ -41,7 +42,8 @@ export async function getQuoteByToken(token: string): Promise<Quote | null> {
     .from('quote_items')
     .select('*')
     .eq('quote_id', (quote as Quote).id)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
 
   return { ...(quote as Quote), items: (items ?? []) as QuoteItem[] };
 }

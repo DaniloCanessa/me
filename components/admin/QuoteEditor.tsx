@@ -1,15 +1,16 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useOptimistic, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import type { Quote, QuoteItem, QuoteStatus } from '@/lib/types';
 import {
-  upsertQuoteItem, deleteQuoteItem, updateQuoteItemDetalle,
+  upsertQuoteItem, deleteQuoteItem, updateQuoteItemDetalle, moveQuoteItem, reorderQuoteItems,
   updateQuoteHeader, updateQuoteStatus, deleteQuote, duplicateQuote,
 } from '@/app/admin/quotes/actions';
 import { createProjectFromQuote } from '@/app/admin/projects/actions';
 import { getProductById } from '@/app/admin/products/actions';
 import { fechaEmisionISO } from '@/lib/quote-date';
+import { FORMAS_PAGO } from '@/lib/quote-terms';
 import ProductEditForm, { type Product as FullProduct } from '@/app/admin/products/[id]/ProductEditForm';
 
 // ─── Tipos locales ────────────────────────────────────────────────────────────
@@ -64,15 +65,6 @@ function calcItem(costo: number, margen: number, qty: number, desc: number) {
   };
 }
 
-// Formas de pago frecuentes: al elegir una se escribe como primera línea de las
-// condiciones comerciales (reemplazando la anterior si había otra de la lista).
-const FORMAS_PAGO = [
-  '50% de anticipo al confirmar, 50% contra entrega.',
-  '30% de anticipo al confirmar, 70% contra entrega.',
-  '40% al confirmar, 40% a la llegada de los equipos, 20% contra entrega.',
-  '100% al confirmar la compra.',
-];
-
 const STATUS_MAP: Record<QuoteStatus, { label: string; color: string; next?: QuoteStatus; nextLabel?: string }> = {
   draft:    { label: 'Borrador',  color: 'bg-gray-100 text-gray-600',   next: 'sent',     nextLabel: 'Enviada' },
   sent:     { label: 'Enviada',   color: 'bg-blue-100 text-blue-700',   next: 'accepted', nextLabel: 'Aceptada' },
@@ -87,10 +79,26 @@ function ItemRow({
   item,
   quoteId,
   sortOrder,
+  isFirst,
+  isLast,
+  drag,
 }: {
   item: QuoteItem;
   quoteId: string;
   sortOrder: number;
+  isFirst: boolean;
+  isLast: boolean;
+  /** Arrastrar y soltar: lo maneja la tabla (QuoteEditor). */
+  drag: {
+    draggable: boolean;
+    isDragging: boolean;
+    dropLine: 'before' | 'after' | null;
+    onHandleDown: () => void;
+    onDragStart: (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+  };
 }) {
   const isFreeItem = item.product_id === null;
   const [costo,     setCosto]    = useState(item.costo_proveedor_clp);
@@ -160,13 +168,44 @@ function ItemRow({
     start(async () => { await upsertQuoteItem(quoteId, fd); setEditing(false); });
   }
 
+  function move(dir: 'up' | 'down') {
+    start(async () => { await moveQuoteItem(quoteId, item.id, dir); });
+  }
+
   function remove() {
     if (!confirm('¿Eliminar este ítem?')) return;
     start(async () => { await deleteQuoteItem(quoteId, item.id); });
   }
 
   return (
-    <tr className={`border-b border-gray-50 text-sm ${isPending ? 'opacity-50' : ''}`}>
+    <tr
+      draggable={drag.draggable}
+      onDragStart={drag.onDragStart}
+      onDragOver={drag.onDragOver}
+      onDrop={drag.onDrop}
+      onDragEnd={drag.onDragEnd}
+      className={`border-b border-gray-50 text-sm ${isPending || drag.isDragging ? 'opacity-40' : ''} ${
+        drag.dropLine === 'before' ? 'shadow-[inset_0_2px_0_#389fe0]' : drag.dropLine === 'after' ? 'shadow-[inset_0_-2px_0_#389fe0]' : ''
+      }`}
+    >
+      {/* Orden: asa para arrastrar (escritorio) o flechas (móvil, donde arrastrar no funciona) */}
+      <td className="pl-2 pr-0 py-3 align-top">
+        <span
+          onMouseDown={drag.onHandleDown}
+          onMouseUp={drag.onDragEnd}
+          title="Arrastra para cambiar el orden"
+          aria-label="Arrastrar ítem"
+          className="hidden md:flex w-5 h-6 items-center justify-center rounded text-gray-300 hover:text-[#389fe0] hover:bg-blue-50 cursor-grab active:cursor-grabbing select-none text-sm leading-none"
+        >⠿</span>
+        <div className="flex md:hidden flex-col items-center gap-0.5">
+          <button type="button" onClick={() => move('up')} disabled={isFirst || isPending}
+            title="Subir" aria-label="Subir ítem"
+            className="w-5 h-5 rounded text-[10px] text-gray-400 hover:text-[#389fe0] hover:bg-blue-50 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-gray-400">▲</button>
+          <button type="button" onClick={() => move('down')} disabled={isLast || isPending}
+            title="Bajar" aria-label="Bajar ítem"
+            className="w-5 h-5 rounded text-[10px] text-gray-400 hover:text-[#389fe0] hover:bg-blue-50 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-gray-400">▼</button>
+        </div>
+      </td>
       {/* Producto */}
       <td className="px-3 py-3 text-gray-900">
         <p className="font-medium">{item.description}</p>
@@ -681,6 +720,54 @@ export default function QuoteEditor({
   }
   const items = quote.items ?? [];
 
+  // ── Orden de los ítems: arrastrar y soltar ────────────────────────────────
+  // El orden nuevo se ve al instante (optimista) mientras se guarda.
+  const [itemsVista, setItemsVista] = useOptimistic(items);
+  const [, startOrden] = useTransition();
+  const [dragId,  setDragId]  = useState<string | null>(null);
+  const [armadoId, setArmadoId] = useState<string | null>(null); // asa apretada
+  const [drop, setDrop] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+
+  function terminarArrastre() { setDragId(null); setArmadoId(null); setDrop(null); }
+
+  function soltar() {
+    if (!dragId || !drop || dragId === drop.id) { terminarArrastre(); return; }
+    const ids = itemsVista.map((i) => i.id).filter((id) => id !== dragId);
+    let at = ids.indexOf(drop.id);
+    if (drop.pos === 'after') at += 1;
+    ids.splice(at, 0, dragId);
+    terminarArrastre();
+    const nuevo = ids.map((id) => itemsVista.find((i) => i.id === id)!);
+    if (nuevo.every((it, k) => it.id === itemsVista[k].id)) return; // no cambió
+    startOrden(async () => {
+      setItemsVista(nuevo);
+      await reorderQuoteItems(quote.id, ids);
+    });
+  }
+
+  function dragProps(id: string) {
+    return {
+      draggable: armadoId === id,
+      isDragging: dragId === id,
+      dropLine: drop?.id === id && dragId && dragId !== id ? drop.pos : null,
+      onHandleDown: () => setArmadoId(id),
+      onDragStart: (e: React.DragEvent) => {
+        setDragId(id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!dragId) return;
+        e.preventDefault();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const pos = e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+        if (drop?.id !== id || drop.pos !== pos) setDrop({ id, pos });
+      },
+      onDrop: (e: React.DragEvent) => { e.preventDefault(); soltar(); },
+      onDragEnd: terminarArrastre,
+    } as const;
+  }
+
   // Totales calculados en tiempo real desde los ítems
   const subtotalNeto = items.reduce((acc, item) => {
     return acc + item.unit_price_clp * item.quantity * (1 - item.discount_percent / 100);
@@ -807,6 +894,7 @@ export default function QuoteEditor({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-left">
+                    <th className="pl-2 pr-0 py-2.5 w-6"></th>
                     <th className="px-3 py-2.5 text-gray-500 font-semibold uppercase tracking-wide">Producto</th>
                     <th className="px-2 py-2.5 text-gray-500 font-semibold uppercase tracking-wide text-center">Cant.</th>
                     <th className="px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wide text-center bg-amber-50/50">Utilidad</th>
@@ -817,8 +905,10 @@ export default function QuoteEditor({
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item, i) => (
-                    <ItemRow key={item.id} item={item} quoteId={quote.id} sortOrder={i} />
+                  {itemsVista.map((item, i) => (
+                    <ItemRow key={item.id} item={item} quoteId={quote.id} sortOrder={i}
+                      isFirst={i === 0} isLast={i === itemsVista.length - 1}
+                      drag={dragProps(item.id)} />
                   ))}
                 </tbody>
               </table>

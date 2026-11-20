@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { FORMA_PAGO_DEFAULT } from '@/lib/quote-terms';
 import { redirect } from 'next/navigation';
 import { findClienteExistente } from '@/lib/db/clients';
 import { getAdminUser } from '@/lib/auth';
@@ -42,6 +43,7 @@ export async function createQuote(clientId: string, installationId?: string) {
       discount_clp:    0,
       total_clp:       0,
       validity_days:   10,
+      client_notes:    FORMA_PAGO_DEFAULT,
       token:           crypto.randomUUID(),
     })
     .select('id')
@@ -165,6 +167,69 @@ export async function updateQuoteItemDetalle(quoteId: string, itemId: string, de
   return { ok: true };
 }
 
+/**
+ * Guarda el orden completo de los ítems (arrastrar y soltar en el editor).
+ * Solo acepta ids que sean de esta cotización.
+ */
+export async function reorderQuoteItems(quoteId: string, orderedIds: string[]) {
+  const db = getSupabaseAdmin();
+  const { data: items, error } = await db
+    .from('quote_items')
+    .select('id, sort_order')
+    .eq('quote_id', quoteId);
+  if (error) return { error: error.message };
+
+  const actuales = new Map((items ?? []).map((i) => [i.id as string, i.sort_order as number]));
+  const ids = orderedIds.filter((id) => actuales.has(id));
+  // Los que no vinieron (ej. agregados en otra pestaña) quedan al final
+  for (const id of actuales.keys()) if (!ids.includes(id)) ids.push(id);
+
+  const results = await Promise.all(
+    ids
+      .map((id, idx) => ({ id, idx }))
+      .filter(({ id, idx }) => actuales.get(id) !== idx)
+      .map(({ id, idx }) => db.from('quote_items').update({ sort_order: idx }).eq('id', id)),
+  );
+  const fail = results.find((r) => r.error);
+  if (fail?.error) return { error: fail.error.message };
+
+  revalidatePath(`/admin/quotes/${quoteId}`);
+  return { ok: true };
+}
+
+/**
+ * Sube o baja un ítem una posición. Reescribe el sort_order de todos los
+ * ítems (0, 1, 2…) para que no queden empates de cotizaciones antiguas.
+ */
+export async function moveQuoteItem(quoteId: string, itemId: string, dir: 'up' | 'down') {
+  const db = getSupabaseAdmin();
+  const { data: items, error } = await db
+    .from('quote_items')
+    .select('id, sort_order')
+    .eq('quote_id', quoteId)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) return { error: error.message };
+
+  const ids = (items ?? []).map((i) => i.id as string);
+  const from = ids.indexOf(itemId);
+  const to   = dir === 'up' ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= ids.length) return { ok: true };
+  [ids[from], ids[to]] = [ids[to], ids[from]];
+
+  const cambios = ids
+    .map((id, idx) => ({ id, idx }))
+    .filter(({ id, idx }) => (items ?? []).find((i) => i.id === id)?.sort_order !== idx);
+  const results = await Promise.all(
+    cambios.map(({ id, idx }) => db.from('quote_items').update({ sort_order: idx }).eq('id', id)),
+  );
+  const fail = results.find((r) => r.error);
+  if (fail?.error) return { error: fail.error.message };
+
+  revalidatePath(`/admin/quotes/${quoteId}`);
+  return { ok: true };
+}
+
 export async function deleteQuoteItem(quoteId: string, itemId: string) {
   const db = getSupabaseAdmin();
   const { error } = await db.from('quote_items').delete().eq('id', itemId);
@@ -206,7 +271,8 @@ export async function duplicateQuote(id: string) {
     .from('quote_items')
     .select('product_id, description, detalle, quantity, costo_proveedor_clp, margen_pct, unit_price_clp, discount_percent, total_clp, sort_order')
     .eq('quote_id', id)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true });
 
   const admin = await getAdminUser();
   const { data: copia, error } = await db
@@ -436,6 +502,7 @@ export async function createQuoteFromSimulation(p: SimulationQuotePayload) {
       discount_clp:    0,
       total_clp:       totalConIva,
       validity_days:   10,
+      client_notes:    FORMA_PAGO_DEFAULT,
       token:           crypto.randomUUID(),
       notes:           `Generada desde el simulador — escenario ${p.escenario}: ${p.escenarioLabel}`,
     })

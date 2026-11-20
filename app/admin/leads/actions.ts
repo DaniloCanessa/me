@@ -2,6 +2,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { FORMA_PAGO_DEFAULT } from '@/lib/quote-terms';
 import { redirect } from 'next/navigation';
 import type { LeadStatus } from './page';
 
@@ -75,6 +76,7 @@ export async function createQuoteFromLead(leadId: string) {
       discount_clp: 0,
       total_clp:    0,
       validity_days: 10,
+      client_notes: FORMA_PAGO_DEFAULT,
       token:        crypto.randomUUID(),
     })
     .select('id')
@@ -111,6 +113,7 @@ export async function createQuoteFromSimulation(leadId: string) {
       discount_clp:  0,
       total_clp:     0,
       validity_days: 10,
+      client_notes:  FORMA_PAGO_DEFAULT,
       token:         crypto.randomUUID(),
     })
     .select('id')
